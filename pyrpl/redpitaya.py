@@ -64,8 +64,10 @@ defaultparameters = dict(
 
 
 class RedPitaya(object):
-    cls_modules = [rp.HK, rp.AMS, rp.Scope, rp.Sampler, rp.Asg0, rp.Asg1] + \
-                  [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 3 + [rp.Trig] + [ rp.IIR]
+    # cls_modules = [rp.HK, rp.AMS, rp.Scope, rp.Sampler, rp.Asg0, rp.Asg1] + \
+    #               [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 3 + [rp.Trig] + [ rp.IIR]
+    
+    cls_modules = [rp.HK, rp.AmsNouveau, rp.PidNouveau, rp.PidNouveau]
 
     def __init__(self, config=None,  # configfile is needed to store parameters. None simulates one
                  **kwargs):
@@ -294,6 +296,7 @@ class RedPitaya(object):
             if source is not None:
                 self.logger.warning('Desired bitfile "%s" does not exist. Using default file.',
                                     source)
+                raise Exception("Fpga file doesn't exist!")
             source = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'fpga', 'red_pitaya.bin')
         if not os.path.isfile(source):
             raise IOError("Wrong filename",

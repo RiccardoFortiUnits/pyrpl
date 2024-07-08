@@ -140,12 +140,15 @@ do what they are supposed to.
 
 import numpy as np
 from qtpy import QtCore
-from ..attributes import FloatProperty, BoolRegister, FloatRegister, GainRegister, SelectRegister
+from ..attributes import FloatProperty, BoolRegister, FloatRegister, GainRegister, SelectRegister, digitalPinRegister, IntRegister
 from .dsp import PauseRegister
 from ..modules import SignalLauncher
 from . import FilterModule
 from ..widgets.module_widgets import PidWidget
 from ..pyrpl_utils import sorted_dict
+import logging
+
+logger = logging.getLogger(name=__name__)
 
 class IValAttribute(FloatProperty):
     """
@@ -429,7 +432,7 @@ class Pid(FilterModule):
         found in pid._frequency_correction
         """
 
-        frequencies = np.array(frequencies, dtype=complex)
+        frequencies = np.array(frequencies, dtype=np.complex)
         # integrator with one cycle of extra delay
         tf = i / (frequencies * 1j) \
             * np.exp(-1j * 8e-9 * frequency_correction *
@@ -456,8 +459,8 @@ class Pid(FilterModule):
         Transfer function of the eventual extradelay of a pid module
         """
         delay = module_delay_cycle * 8e-9 / frequency_correction + extradelay_s
-        frequencies = np.array(frequencies, dtype=complex)
-        tf = np.ones(len(frequencies), dtype=complex)
+        frequencies = np.array(frequencies, dtype=np.complex)
+        tf = np.ones(len(frequencies), dtype=np.complex)
         tf *= np.exp(-1j * delay * frequencies * 2 * np.pi)
         return tf
 
@@ -468,7 +471,7 @@ class Pid(FilterModule):
         """
         Transfer function of the inputfilter part of a pid module
         """
-        frequencies = np.array(frequencies, dtype=complex)
+        frequencies = np.array(frequencies, dtype=np.complex)
         module_delay = 0
         tf = np.ones(len(frequencies), dtype=complex)
         # input filter modelisation
@@ -487,3 +490,158 @@ class Pid(FilterModule):
         delay = module_delay * 8e-9 / frequency_correction
         tf *= np.exp(-1j * delay * frequencies * 2 * np.pi)
         return tf
+
+class PidNouveau(FilterModule):
+    #todo c'è da fare qualcosa qui?
+    _widget_class = PidWidget
+    _signal_launcher = SignalLauncherPid
+    _setup_attributes = ["input",
+                          "output_direct",
+                          "pidSetPoint",
+                          "p",
+                          "i",
+                          "d",
+                          ]
+    _gui_attributes = _setup_attributes
+
+    # the function is here so the metaclass generates a setup(**kwds) function
+    def _setup(self):
+        """
+        sets up the pid (just setting the attributes is OK).
+        """
+        pass
+
+    _delay = 4
+
+    _PSR = 12  # Register(0x200)
+
+    _ISR = 24  # Register(0x204)
+
+    _DSR = 10  # Register(0x208)
+
+    _GAINBITS = 28  # totalBits_coeffs
+
+    active = BoolRegister(0x0, 0, invert=True, doc="enable/disable the PID")
+    
+    feedbackConfig = SelectRegister(0x4, startBit = 0x0, bits = 2, options={'noFeedback': 0x0, 'negativeFeedback': 0x1, 'positiveFeedback':0x2, 'reverseOutput':0x3},
+                                    doc="simulate a feedback in the PID module (i.e., the output of the PID will be added/subctracted from the input)")
+    useDelay = BoolRegister(0x4,0x2,doc="enable/disable an artificial delay (whose length is determined by the parameter delayLength)")
+    delayLength = FloatRegister(0x4,bits=0xA,startBit=0x3, norm=125e6, min=8e-9, max = 8e-9*600,
+                                doc="time of artificial delay added to the pid module")
+    useFilter = BoolRegister(0x4,0xD,doc="enable/disable an IIR filter (set its coefficients with function setFilter())")
+    useLinearizer = BoolRegister(0x4,0xE,doc="enable/disable a linearizer module (set it with function setLLinearizer())")
+    saturationConfig = SelectRegister(0x4, startBit = 0xf, bits = 2, options={'disabled': 0x0, 'stopAtSaturation': 0x1, 'resetAtSaturation':0x2})
+    useDisableTrigger = BoolRegister(0x4,0x11,doc="enable/disable the possibility to temporarly disable the PID with a signal on a digital pin")
+    disableTriggerPin = digitalPinRegister(0x4, startBit=0x12)
+    pidSetPoint = FloatRegister(0x10, bits=24, norm= 2 **23,
+                              doc="pid setpoint [volts]")
+
+    p = GainRegister(0x14, bits=_GAINBITS, norm= 2 ** _PSR,
+                      doc="pid proportional gain")
+    i = GainRegister(0x18, bits=_GAINBITS, norm= 2 ** _ISR,
+                      doc="pid integral gain")
+    d = GainRegister(0x1C, bits=_GAINBITS, norm= 2 ** _DSR,
+                      doc="pid derivative gain")
+    
+    _filterMaxCoefficients = 8
+    denNumSplit = IntRegister(0x60,4,startBit=0)
+    
+    
+    for i in range(8):    
+        locals()['filterCoefficient' + str(i)] = GainRegister(0x64+i*4,bits=28, startBit=0,norm=2**20)
+        
+        locals()['linearizer_x' + str(i)] = GainRegister(0xA0+i*8,bits=0xF, startBit=0,norm=2**13)
+        locals()['linearizer_q' + str(i)] = GainRegister(0xA0+i*8,bits=0xF, startBit=0xF,norm=2**13)
+        locals()['linearizer_m' + str(i)] = GainRegister(0xA4+i*8,bits=32, startBit=0,norm=2**24)
+    
+    # def setFilter(self, enable = True, numerator = [1], denominator = [1]):
+        
+    #     if len(numerator) + len(denominator) - 1 > self._filterMaxCoefficients:
+    #         logger.error(f"too many coefficients! max allowed: {self._filterMaxCoefficients}")
+    #         return
+        
+    #     def convertToGenericFilterCoefficients(numerator, denominator):
+    #         #y[n] = sum(ai*y[n-i])) + sum(bj*x[n-j]])
+    #         #the generic filter cannot use y[n-1] (it's not fast enough to do it in one cycle), but we can still implement any filter (with an added delay):
+    #         #y[n-1] = sum(ai*y(n-i-1])) + sum(bj*x[n-j-1]]) =>
+    #         #y[n] = sum_{i!=1}(ai*y(n-i])) + sum(bj*x[n-j]]) + a1*(sum(ai*y(n-i-1])) + sum(bj*x[n-j-1]]))
+    #         #the term y[n-1] can be done using the previous values of y and x
+    #         #the structure of coefficients taken by the fpga will be [b0 b1...][a2 a3...]
+    #         b = numerator
+            
+    #         a = denominator #"a0" should always be 1
+    #         if len(a) >= 2:
+    #             a1 = a[1]
+    #             newA = np.array(a[2:] + [0]) + a1 * np.array(a[1:])
+    #             newB = np.array(b + [0]) + np.array([0] + list(a1 * np.array(b)))
+    #         else:
+    #             # a1 = 0;
+    #             newA = np.array([0])
+    #             newB = np.array(b + [0])
+            
+    #         return list(newB) + list(newA)
+    #     numbers = convertToGenericFilterCoefficients(numerator, denominator)
+        
+    #     numbers.extend([0] * (self._filterMaxCoefficients - len(numbers)))
+        
+    #     self.denNumSplit = len(numerator)
+    #     for i in range(self._filterMaxCoefficients):
+    #         self.filterCoefficients[i] = numbers[i]
+    #     self.useFilter = enable
+    
+    def setLLinearizer(self, enable = True, x = [-1, 1], y = [-1, 1]):
+        if(len(x) > self._filterMaxCoefficients+1 or len(y) != len(x)):
+            logger.error(f"incorrect number of coefficients! max allowed: {self._filterMaxCoefficients}, x and y should have the same length")
+            return
+        
+        def segmentedCoefficient(x,y):
+            '''
+                transforms the segmented function (x,y) into the list of ramps y[i](x) = q[i] + ((s[i] - x) * m[i]),
+                s[i] is the start input value of the ramp
+                q[i] is the start output value of the ramp ( y[i](s[i]) = q[i])
+                m[i] is the slope of the ramp
+            '''
+            a = np.array(x[0:len(x)-1])
+            b = np.array(x[1:])
+            c = np.array(y[0:len(y)-1])
+            d = np.array(y[1:])
+            
+            m = (d-c) / (b-a)
+            s = a
+            q = c
+            return (s,q,m)
+        
+        (s,q,m) = segmentedCoefficient(x,y)
+        
+        s = np.append(s,[-1] * (self._filterMaxCoefficients - len(m)))
+        q = np.append(q,[0] * (self._filterMaxCoefficients - len(m)))
+        m = np.append(m,[0] * (self._filterMaxCoefficients - len(m)))
+        
+        for i in range(self._filterMaxCoefficients):
+            setattr(self,'linearizer_x'+str(i), s[i])
+            setattr(self,'linearizer_q'+str(i), q[i])
+            setattr(self,'linearizer_m'+str(i), m[i])
+            
+        self.useLinearizer = enable
+
+    @property
+    def proportional(self):
+        return self.p
+    @proportional.setter
+    def proportional(self, v):
+        self.p = v
+
+    @property
+    def integral(self):
+        return self.i
+    @integral.setter
+    def integral(self, v):
+        self.i = v
+
+    @property
+    def derivative(self):
+        return self.d
+    @derivative.setter
+    def derivative(self, v):
+        self.d = v
+    

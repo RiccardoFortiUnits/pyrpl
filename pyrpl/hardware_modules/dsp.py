@@ -14,6 +14,8 @@ DSP_INPUTS = OrderedDict([
     ('iq1', 6),
     ('iq2', 7),
     ('iq2_2', 14),
+    ('pidnouveau0', 0), # same as pid0
+    ('pidnouveau1', 0x30), # using the free region (0x40600000)
     ('pid0', 0),
     ('pid1', 1),
     ('pid2', 2),

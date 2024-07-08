@@ -192,9 +192,15 @@ class BaseRegister(BaseProperty):
     Interface for basic register of type int. To convert the value between register format and python readable
     format, registers need to implement "from_python" and "to_python" functions"""
     default = None
-    def __init__(self, address, bitmask=None, **kwargs):
+    def __init__(self, address, bitmask=None, bits=None, startBit=None, **kwargs):
+        if address & 0x3 != 0:
+            logger.error("FPGA address 0x%X is not word aligned (not divisible by 4), trying to read from this address will result in a bus error", address)
         self.address = address
         self.bitmask = bitmask
+        self.bits = bits
+        self.startBit = startBit
+        if(startBit is not None):
+            self.bitmask = ((1<<bits)-1)<<startBit
         BaseProperty.__init__(self, **kwargs)
 
     def _writes(self, obj, addr, v):
@@ -217,7 +223,14 @@ class BaseRegister(BaseProperty):
         if self.bitmask is None:
             return self.to_python(obj, obj._read(self.address))
         else:
-            return self.to_python(obj, obj._read(self.address) & self.bitmask)
+            retVal = obj._read(self.address) & self.bitmask
+            if self.startBit is not None: 
+                # try:
+                    retVal >>= self.startBit
+                # except:
+                #     retVal /= (2**self.startBit)
+            retVal = self.to_python(obj, retVal)
+            return retVal
 
     def set_value(self, obj, val):
         """
@@ -227,8 +240,13 @@ class BaseRegister(BaseProperty):
             obj._write(self.address, self.from_python(obj, val))
         else:
             act = obj._read(self.address)
-            new = act & (~self.bitmask) | (int(self.from_python(obj, val)) & self.bitmask)
+            new = act & (~self.bitmask)
+            addValue = int(self.from_python(obj, val))
+            if self.startBit is not None: 
+                addValue <<= self.startBit
+            new |= (addValue & self.bitmask)
             obj._write(self.address, new)
+                
 
     def __set__(self, obj, value):
         """
@@ -288,10 +306,11 @@ class LedProperty(BoolProperty):
 class BoolRegister(BaseRegister, BoolProperty):
     """Inteface for boolean values, 1: True, 0: False.
     invert=True inverts the mapping"""
-    def __init__(self, address, bit=0, bitmask=None, invert=False, **kwargs):
+    def __init__(self, address, bit=0, useBitMask=True, invert=False, **kwargs):
         self.bit = bit
         assert type(invert) == bool
         self.invert = invert
+        bitmask = 1 << bit if useBitMask else None
         BaseRegister.__init__(self, address=address, bitmask=bitmask)
         BoolProperty.__init__(self, **kwargs)
 
@@ -432,12 +451,17 @@ class IntRegister(BaseRegister, IntProperty):
     """
     Register for integer values encoded on less than 32 bits.
     """
-    def __init__(self, address, bits=32, bitmask=None, **kwargs):
+    def __init__(self, address, bits=32, bitmask=None, startBit=None, signed = False, **kwargs):
         self.bits = bits
         self.size = int(np.ceil(float(self.bits) / 32))
-        BaseRegister.__init__(self, address=address, bitmask=bitmask)
-        if not 'min' in kwargs: kwargs['min'] = 0
-        if not 'max' in kwargs: kwargs['max'] = 2**self.bits-1
+        BaseRegister.__init__(self, address=address, bitmask=bitmask, bits=bits, startBit=startBit)
+        if not signed:
+            if not 'min' in kwargs: kwargs['min'] = 0
+            if not 'max' in kwargs: kwargs['max'] = 2**self.bits-1
+        else:
+            if not 'min' in kwargs: kwargs['min'] = -2**(self.bits-1)
+            if not 'max' in kwargs: kwargs['max'] = 2**(self.bits-1)-1
+            
         IntProperty.__init__(self,
                              **kwargs)
 
@@ -518,12 +542,12 @@ class FloatRegister(IntRegister, FloatProperty):
     """Implements a fixed point register, seen like a (signed) float from python"""
     def __init__(self, address,
                  bits=14,  # total number of bits to represent on fpga
-                 bitmask=None,
+                 bitmask=None, startBit=None,
                  norm=1.0,  # fpga value corresponding to 1 in python
                  signed=True,  # otherwise unsigned
                  invert=False,  # if False: FPGA=norm*python, if True: FPGA=norm/python
                  **kwargs):
-        IntRegister.__init__(self, address=address, bits=bits, bitmask=bitmask)
+        IntRegister.__init__(self, address=address, bits=bits, bitmask=bitmask, startBit=startBit)
         self.invert = invert
         self.signed = signed
         self.norm = float(norm)
@@ -1266,10 +1290,13 @@ class SelectRegister(BaseRegister, SelectProperty):
     nevertheless distinguished (allows implementing aliases that may vary
     over time if options is a callable object). """
     def __init__(self, address,
-                 bitmask=None,
+                 bitmask=None, startBit=None, bits = None, 
                  options={},
                  **kwargs):
-        BaseRegister.__init__(self, address=address, bitmask=bitmask)
+        if bits is None and startBit is not None:
+            bits = max(options.values()).bit_length()
+            
+        BaseRegister.__init__(self, address=address, bitmask=bitmask, bits = bits, startBit=startBit)
         SelectProperty.__init__(self, options=options, **kwargs)
 
     def get_default(self, obj):
@@ -1535,3 +1562,38 @@ class DataProperty(BaseProperty):
     Property for a dataset (real or complex), that can be plotted.
     """
     _widget_class = DataAttributeWidget
+
+class digitalPinProperty(StringProperty):
+    """
+    An attribute for digital pins, to convert their string value to an actual number
+    """
+    _widget_class = StringAttributeWidget
+    default = ""
+
+    def validate_and_normalize(self, obj, value):
+        """
+        Convert argument to string
+        """
+        if isinstance(value, str):
+            row = 1 if 'n' in value else 0
+            return row * 8 + int(value.replace('p','').replace('n',''))
+        return int(value)
+    
+
+class digitalPinRegister(BaseRegister, digitalPinProperty):
+    """
+    Register for selecting a digital pin
+    """
+    def __init__(self, address, bits=4, startBit=None, **kwargs):
+        BaseRegister.__init__(self, address=address, bitmask=None, bits=bits, startBit=startBit)
+        digitalPinProperty.__init__(self, **kwargs)
+
+    def to_python(self, obj, value):
+        val = int(value)
+        return str(val & 0x7)+ ('p' if val < 8 else 'n')
+
+    def from_python(self, obj, value):
+        if isinstance(value, str):
+            row = 1 if 'n' in value else 0
+            return row * 8 + int(value.replace('p','').replace('n',''))
+        return int(value)

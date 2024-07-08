@@ -27,9 +27,11 @@ from .hk import HK
 from .scope import Scope
 from .asg import Asg0, Asg1
 from .pid import Pid
+from .pid import PidNouveau
 from .sampler import Sampler
 from .pwm import Pwm
 from .iq import Iq
 from .iir import IIR
 from .ams import AMS
+from .ams import AmsNouveau
 from .trig import Trig
