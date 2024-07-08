@@ -96,7 +96,7 @@ rp = RedPitaya(
     autostart=True,  # autostart the client?
     reloadserver=False,  # reinstall the server at startup if not necessary?
     reloadfpga=True,  # reload the fpga bitfile at startup?
-    filename='fpga//red_pitaya_modified.bin',  # name of the bitfile for the fpga, None is default file
+    filename='../fpga/red_pitaya_modified.bin',  # name of the bitfile for the fpga, None is default file
     serverbinfilename='red_pitaya.bin',  # name of the binfile on the server
     serverdirname = "//opt//pyrpl//",  # server directory for server app and bitfile
     leds_off=True,  # turn off all GPIO lets at startup (improves analog performance)
@@ -111,6 +111,6 @@ rp.pidnouveau0.setLLinearizer(x=[-1,0,1],y=[-1,1,-1])
 
 rp.amsnouveau.staticValue = 1.5
 # rp.amsnouveau.outputSource='ramp'
-rp.amsnouveau.setRamp(True, TriggerType='now', useMultiTriggers = False, IdleConfig = 'endValue')
+rp.amsnouveau.setRamp(True, TriggerType='digitalPin', useMultiTriggers = True, IdleConfig = 'endValue')
 
 # rp.end_all()

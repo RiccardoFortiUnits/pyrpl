@@ -104,7 +104,7 @@ class AmsNouveau(HardwareModule):
             
         self.useLinearizer = enable
     
-    def setRamp(self, enable, edges = [0,1.8,1.8,0.5,0], durations = [1e-5,1e-4,2e-5,1e-4], digitalPinTrigger = '0n',
+    def setRamp(self, enable, edges = [0,1.8,1.8,0.5,0], durations = [1e-5,1e-4,2e-5,1e-4], digitalPinTrigger = '0p',
                 TriggerType = 'digitalPin', IdleConfig = 'endValue', useMultiTriggers = True):
         
         if(len(durations) != len(edges)-1):
