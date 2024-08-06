@@ -1587,7 +1587,7 @@ class digitalPinRegister(BaseRegister, digitalPinProperty):
     def __init__(self, address, bits=4, startBit=None, **kwargs):
         BaseRegister.__init__(self, address=address, bitmask=None, bits=bits, startBit=startBit)
         digitalPinProperty.__init__(self, **kwargs)
-
+        
     def to_python(self, obj, value):
         val = int(value)
         return str(val & 0x7)+ ('p' if val < 8 else 'n')

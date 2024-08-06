@@ -64,12 +64,7 @@ defaultparameters = dict(
 
 
 class RedPitaya(object):
-    # cls_modules = [rp.HK, rp.AMS, rp.Scope, rp.Sampler, rp.Asg0, rp.Asg1] + \
-    #               [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 3 + [rp.Trig] + [ rp.IIR]
-    
-    cls_modules = [rp.HK, rp.AmsNouveau, rp.PidNouveau, rp.PidNouveau]
-
-    def __init__(self, config=None,  # configfile is needed to store parameters. None simulates one
+    def __init__(self, isDefaultFpga = True, config=None,  # configfile is needed to store parameters. None simulates one
                  **kwargs):
         """ this class provides the basic interface to the redpitaya board
 
@@ -104,6 +99,11 @@ class RedPitaya(object):
 
         if you are experiencing problems, try to increase delay, or try
         logging.getLogger().setLevel(logging.DEBUG)"""
+        if(isDefaultFpga):
+            self.cls_modules = [rp.HK, rp.AMS, rp.Scope, rp.Sampler, rp.Asg0, rp.Asg1] + \
+                      [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 3 + [rp.Trig] + [ rp.IIR]
+        else:
+            self.cls_modules = [rp.HK, rp.AmsNouveau, rp.PidNouveau, rp.PidNouveau]
         self.logger = logging.getLogger(name=__name__)
         #self.license()
         # make or retrieve the config file
@@ -320,15 +320,9 @@ class RedPitaya(object):
         self.end()
         self.ssh.ask('killall nginx')
         self.ssh.ask('systemctl stop redpitaya_nginx') # for 0.94 and higher
-        sleep(3) # sleep after stopping service
-        result = self.ssh.ask('cat /root/.version')
-        if result.find('2.') != -1:
-            self.ssh.ask('/opt/redpitaya/sbin/overlay.sh pyrpl')
-            sleep(1)
-        else:
-            self.ssh.ask('cat '
-                + os.path.join(self.parameters['serverdirname'], self.parameters['serverbinfilename'])
-                + ' > //dev//xdevcfg')
+        self.ssh.ask('cat '
+                 + os.path.join(self.parameters['serverdirname'], self.parameters['serverbinfilename'])
+                 + ' > //dev//xdevcfg')
         sleep(self.parameters['delay'])
         self.ssh.ask('rm -f '+ os.path.join(self.parameters['serverdirname'], self.parameters['serverbinfilename']))
         self.ssh.ask("nginx -p //opt//www//")

@@ -1,4 +1,4 @@
-from ..attributes import IntRegister, SelectRegister, IORegister, BoolProperty
+from ..attributes import IntRegister, SelectRegister, IORegister, BoolProperty, BoolRegister, GainRegister, digitalPinRegister
 from ..modules import HardwareModule
 from ..widgets.module_widgets.hk_widget import HkWidget
 import numpy as np
@@ -71,3 +71,51 @@ class HK(HardwareModule):
             #raise ValueError("Index from 0 to 7 expected")
         return getattr(HK, name).outputmode# direction(self,
         # val)
+        
+        
+# class HK_noveau(HK):    
+    for i in range(8):
+        locals()['useFastSwitch' + str(i)] = BoolRegister(0x34,  bit=i+16,
+                                                      doc="positive digital io")
+    
+    fastSwitch_activeTime = GainRegister(0x34, bits=8, startBit=0, norm=125e6, signed = False)
+    fastSwitch_inactiveTime = GainRegister(0x34, bits=8, startBit=8, norm=125e6, signed = False)
+    fastSwitch_triggerPin = digitalPinRegister(0x34, startBit=24)
+    fastSwitch_channelsDelay = GainRegister(0x38, bits=8, startBit=0, norm=125e6, signed = True)
+    
+    def setFastSwitch(self, pin = 0, triggerPin = '1p', activeTime = 1e-6, inactiveTime = 40e-9, channelsDelay = 0):
+        self.fastSwitch_triggerPin = triggerPin
+        setattr(self, 'useFastSwitch' + str(pin), True)
+        setattr(self, 'expansion_P' + str(pin) + "_output", True)
+        setattr(self, 'expansion_N' + str(pin) + "_output", True)
+        
+        self.fastSwitch_activeTime = activeTime
+        self.fastSwitch_inactiveTime = inactiveTime
+        self.fastSwitch_channelsDelay = channelsDelay
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        

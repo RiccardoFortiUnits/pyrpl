@@ -87,7 +87,7 @@ try:
 except:
     pass
 rp = RedPitaya(
-    hostname='169.254.132.112', # the ip or hostname of the board
+    hostname='rp-f0be3a.local', # the ip or hostname of the board
     port=2222,  # port for PyRPL datacommunication
     sshport=22,  # port of ssh server - default 22
     user='root',
@@ -96,7 +96,7 @@ rp = RedPitaya(
     autostart=True,  # autostart the client?
     reloadserver=False,  # reinstall the server at startup if not necessary?
     reloadfpga=True,  # reload the fpga bitfile at startup?
-    filename='../fpga/red_pitaya_modified.bin',  # name of the bitfile for the fpga, None is default file
+    filename='../fpga/red_pitaya_fastSwitch.bin',  # name of the bitfile for the fpga, None is default file
     serverbinfilename='red_pitaya.bin',  # name of the binfile on the server
     serverdirname = "//opt//pyrpl//",  # server directory for server app and bitfile
     leds_off=True,  # turn off all GPIO lets at startup (improves analog performance)
@@ -105,12 +105,16 @@ rp = RedPitaya(
     monitor_server_name='monitor_server',  # name of the server program on redpitaya
     silence_env=False)  # suppress all environment variables that may override the configuration?)
 
-rp.pidnouveau0.p = -1
-rp.pidnouveau0.active = True
-rp.pidnouveau0.setLLinearizer(x=[-1,0,1],y=[-1,1,-1])
+# rp.pidnouveau0.p = -1
+# rp.pidnouveau0.active = True
+# rp.pidnouveau0.setLLinearizer(x=[-1,0,1],y=[-1,1,-1])
 
-rp.amsnouveau.staticValue = 1.5
-# rp.amsnouveau.outputSource='ramp'
-rp.amsnouveau.setRamp(True, TriggerType='digitalPin', useMultiTriggers = True, IdleConfig = 'endValue')
+# rp.amsnouveau.staticValue = 1.5
+# # rp.amsnouveau.outputSource='ramp'
+# rp.amsnouveau.setRamp(True, TriggerType='digitalPin', useMultiTriggers = False, IdleConfig = 'endValue')
+
+# rp.hk.expansion_N0 = True
+# rp.hk.expansion_P0 = True
+rp.hk.setFastSwitch(pin = 0, triggerPin = 1, activeTime = 1e-7, inactiveTime = 5e-7, channelsDelay = 25e-9)
 
 # rp.end_all()
