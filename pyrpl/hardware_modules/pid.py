@@ -546,48 +546,12 @@ class PidNouveau(FilterModule):
     _filterMaxCoefficients = 8
     denNumSplit = IntRegister(0x60,4,startBit=0)
     
-    
     for i in range(8):    
         locals()['filterCoefficient' + str(i)] = GainRegister(0x64+i*4,bits=28, startBit=0,norm=2**20)
         
         locals()['linearizer_x' + str(i)] = GainRegister(0xA0+i*8,bits=0xF, startBit=0,norm=2**13)
         locals()['linearizer_q' + str(i)] = GainRegister(0xA0+i*8,bits=0xF, startBit=0xF,norm=2**13)
         locals()['linearizer_m' + str(i)] = GainRegister(0xA4+i*8,bits=32, startBit=0,norm=2**24)
-    
-    # def setFilter(self, enable = True, numerator = [1], denominator = [1]):
-        
-    #     if len(numerator) + len(denominator) - 1 > self._filterMaxCoefficients:
-    #         logger.error(f"too many coefficients! max allowed: {self._filterMaxCoefficients}")
-    #         return
-        
-    #     def convertToGenericFilterCoefficients(numerator, denominator):
-    #         #y[n] = sum(ai*y[n-i])) + sum(bj*x[n-j]])
-    #         #the generic filter cannot use y[n-1] (it's not fast enough to do it in one cycle), but we can still implement any filter (with an added delay):
-    #         #y[n-1] = sum(ai*y(n-i-1])) + sum(bj*x[n-j-1]]) =>
-    #         #y[n] = sum_{i!=1}(ai*y(n-i])) + sum(bj*x[n-j]]) + a1*(sum(ai*y(n-i-1])) + sum(bj*x[n-j-1]]))
-    #         #the term y[n-1] can be done using the previous values of y and x
-    #         #the structure of coefficients taken by the fpga will be [b0 b1...][a2 a3...]
-    #         b = numerator
-            
-    #         a = denominator #"a0" should always be 1
-    #         if len(a) >= 2:
-    #             a1 = a[1]
-    #             newA = np.array(a[2:] + [0]) + a1 * np.array(a[1:])
-    #             newB = np.array(b + [0]) + np.array([0] + list(a1 * np.array(b)))
-    #         else:
-    #             # a1 = 0;
-    #             newA = np.array([0])
-    #             newB = np.array(b + [0])
-            
-    #         return list(newB) + list(newA)
-    #     numbers = convertToGenericFilterCoefficients(numerator, denominator)
-        
-    #     numbers.extend([0] * (self._filterMaxCoefficients - len(numbers)))
-        
-    #     self.denNumSplit = len(numerator)
-    #     for i in range(self._filterMaxCoefficients):
-    #         self.filterCoefficients[i] = numbers[i]
-    #     self.useFilter = enable
     
     def setLLinearizer(self, enable = True, x = [-1, 1], y = [-1, 1]):
         if(len(x) > self._filterMaxCoefficients+1 or len(y) != len(x)):

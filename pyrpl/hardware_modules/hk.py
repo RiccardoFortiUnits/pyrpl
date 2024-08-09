@@ -19,7 +19,12 @@ class HK(HardwareModule):
                         ['expansion_P' + str(i) for i in range(8)] + \
                         ['expansion_P' + str(i) + '_output' for i in range(8)]+ \
                         ['expansion_N' + str(i) for i in range(8)] + \
-                        ['expansion_N' + str(i) + '_output' for i in range(8)]
+                        ['expansion_N' + str(i) + '_output' for i in range(8)] + \
+                        ['fastSwitch_activeTime'] + \
+                        ['fastSwitch_inactiveTime'] + \
+                        ['fastSwitch_triggerPin'] + \
+                        ['fastSwitch_channelsDelay'] + \
+                        ['useFastSwitch' + str(i) for i in range(8)]
     _gui_attributes =  _setup_attributes
     addr_base = 0x40000000
     # We need all attributes to be there when the interpreter is done reading the class (for metaclass to workout)

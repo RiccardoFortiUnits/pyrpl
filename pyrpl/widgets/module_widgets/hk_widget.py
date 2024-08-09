@@ -46,11 +46,23 @@ class HkWidget(ModuleWidget):
                 self.attribute_layout.removeWidget(direction_widget)
                 lay.addWidget(val_widget)
                 lay.addWidget(direction_widget)
-
-
+            switch_widget = self.attribute_widgets['useFastSwitch' + str(i)]
+            self.attribute_layout.removeWidget(switch_widget)
+            lay.addWidget(switch_widget)
 
         self.attribute_layout.setStretch(0,0)
         self.attribute_layout.addStretch(1)
+
+        self.lay_h2 = QtWidgets.QHBoxLayout()
+        self.main_lay.addLayout(self.lay_h2)
+        for el in  ['fastSwitch_activeTime', 'fastSwitch_inactiveTime', 'fastSwitch_triggerPin', 'fastSwitch_channelsDelay']:
+            widget = self.attribute_widgets[el]
+            self.attribute_layout.removeWidget(widget)
+            self.lay_h2.addWidget(widget)
+        self.lay_h2.setStretch(0,0)
+        self.lay_h2.addStretch(1)
+        
+
 
     def refresh(self):
         for i in range(8):

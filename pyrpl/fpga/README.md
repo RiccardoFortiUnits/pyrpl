@@ -1,3 +1,7 @@
+red_pitaya.bin: Current fpga with fast switch (developed by Riccardo Fortis at UniTS, for ArQuS Lab)
+red_pitaya_original.bin: original pyrpl fpga
+
+
 # Directory structure
 
 |  path           | contents
