@@ -40,7 +40,6 @@ from ...errors import NotReadyError
 from .base_module_widget import ModuleWidget
 from .acquisition_module_widget import AcquisitionModuleWidget
 
-
 class ScopeWidget(AcquisitionModuleWidget):
     """
     Widget for scope
@@ -63,6 +62,7 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.layout_ch1 = QtWidgets.QHBoxLayout()
         self.layout_ch2 = QtWidgets.QHBoxLayout()
         self.layout_math = QtWidgets.QHBoxLayout()
+        self.layout_additional= QtWidgets.QHBoxLayout()
         self.layout_channels.addLayout(self.layout_ch1)
         self.layout_channels.addLayout(self.layout_ch2)
         self.layout_channels.addLayout(self.layout_math)
@@ -147,6 +147,18 @@ class ScopeWidget(AcquisitionModuleWidget):
         #aws['curve_name'].setMaximumWidth(250)
         self.main_layout.addLayout(self.button_layout)
 
+        additionalScopeParams = [
+            "asg0_offset",
+            "pid0_setpoint",
+            "pid0_min_voltage",
+            "pid0_max_voltage",
+            "pid0_p",
+            "pid0_i"
+        ]
+        for param in additionalScopeParams:
+            self.attribute_layout.removeWidget(aws[param])
+            self.layout_additional.addWidget(aws[param])
+        self.main_layout.addLayout(self.layout_additional)
         #self.button_single.clicked.connect(self.run_single_clicked)
         #self.button_continuous.clicked.connect(self.run_continuous_clicked)
         #self.button_save.clicked.connect(self.save_clicked)
