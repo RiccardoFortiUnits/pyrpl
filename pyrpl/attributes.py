@@ -1575,7 +1575,7 @@ class digitalPinProperty(StringProperty):
         Convert argument to string
         """
         if isinstance(value, str):
-            row = 1 if 'n' in value else 0
+            row = 1 if 'p' in value else 0
             return row * 8 + int(value.replace('p','').replace('n',''))
         return int(value)
     
@@ -1590,10 +1590,10 @@ class digitalPinRegister(BaseRegister, digitalPinProperty):
         
     def to_python(self, obj, value):
         val = int(value)
-        return str(val & 0x7)+ ('p' if val < 8 else 'n')
+        return str(val & 0x7)+ ('n' if val < 8 else 'p')
 
     def from_python(self, obj, value):
         if isinstance(value, str):
-            row = 1 if 'n' in value else 0
+            row = 1 if 'p' in value else 0
             return row * 8 + int(value.replace('p','').replace('n',''))
         return int(value)

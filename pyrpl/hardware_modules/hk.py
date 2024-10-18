@@ -80,13 +80,17 @@ class HK(HardwareModule):
         
 # class HK_noveau(HK):    
     for i in range(8):
+        locals()['expansion_N' + str(i) + "_followTrigger"] = BoolRegister(0x34, bit=i,
+                                                      doc="if 0, the ouput will follow expansion_N"+str(i)+"_output, otherwise, it will follow the value of fastSwitch_triggerPin")
+        locals()['expansion_P' + str(i) + "_followTrigger"] = BoolRegister(0x34, bit=i+8,
+                                                      doc="if 0, the ouput will follow expansion_P"+str(i)+"_output, otherwise, it will follow the value of fastSwitch_triggerPin")
         locals()['useFastSwitch' + str(i)] = BoolRegister(0x34,  bit=i+16,
-                                                      doc="positive digital io")
+                                                      doc=f"if 1, pins N{i} and P{i} will execute an alternate switch")
     
-    fastSwitch_activeTime = GainRegister(0x34, bits=8, startBit=0, norm=125e6, signed = False)
-    fastSwitch_inactiveTime = GainRegister(0x34, bits=8, startBit=8, norm=125e6, signed = False)
-    fastSwitch_triggerPin = digitalPinRegister(0x34, startBit=24)
-    fastSwitch_channelsDelay = GainRegister(0x38, bits=8, startBit=0, norm=125e6, signed = True)
+    fastSwitch_activeTime = GainRegister(0x38, bits=8, startBit=0, norm=125e6, signed = False)
+    fastSwitch_inactiveTime = GainRegister(0x38, bits=8, startBit=8, norm=125e6, signed = False)
+    fastSwitch_triggerPin = digitalPinRegister(0x38, startBit=16)
+    fastSwitch_channelsDelay = GainRegister(0x3C, bits=8, startBit=0, norm=125e6, signed = True)
     
     def setFastSwitch(self, pin = 0, triggerPin = '1p', activeTime = 1e-6, inactiveTime = 40e-9, channelsDelay = 0):
         self.fastSwitch_triggerPin = triggerPin
