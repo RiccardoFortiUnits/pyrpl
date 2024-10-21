@@ -18,8 +18,10 @@ class HK(HardwareModule):
     _setup_attributes = ["led"] + \
                         ['expansion_P' + str(i) for i in range(8)] + \
                         ['expansion_P' + str(i) + '_output' for i in range(8)]+ \
+                        ['expansion_P' + str(i) + '_followTrigger' for i in range(8)] + \
                         ['expansion_N' + str(i) for i in range(8)] + \
                         ['expansion_N' + str(i) + '_output' for i in range(8)] + \
+                        ['expansion_N' + str(i) + '_followTrigger' for i in range(8)] + \
                         ['fastSwitch_activeTime'] + \
                         ['fastSwitch_inactiveTime'] + \
                         ['fastSwitch_triggerPin'] + \

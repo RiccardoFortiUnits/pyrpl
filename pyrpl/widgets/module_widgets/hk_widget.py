@@ -42,10 +42,14 @@ class HkWidget(ModuleWidget):
                 val_widget = self.attribute_widgets['expansion_' + sign + str(i)]
                 direction_widget = self.attribute_widgets['expansion_' + sign +
                                                           str(i) + '_output']
+                followTrigger_widget = self.attribute_widgets['expansion_' + sign +
+                                                          str(i) + '_followTrigger']
                 self.attribute_layout.removeWidget(val_widget)
                 self.attribute_layout.removeWidget(direction_widget)
+                self.attribute_layout.removeWidget(followTrigger_widget)
                 lay.addWidget(val_widget)
                 lay.addWidget(direction_widget)
+                lay.addWidget(followTrigger_widget)
             switch_widget = self.attribute_widgets['useFastSwitch' + str(i)]
             self.attribute_layout.removeWidget(switch_widget)
             lay.addWidget(switch_widget)
