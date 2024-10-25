@@ -1,0 +1,7 @@
+0.7
+2020.1
+May 27 2020
+20:09:33
+C:/Git/pyrpl/pyrpl/fpga/project/pyrpl.ip_user_files/ipstatic/axi_infrastructure_v1_1/hdl/verilog/axi_infrastructure_v1_1_0_header.vh,1722862786,verilog,,,,,,,,,,,,
+C:/Git/pyrpl/pyrpl/fpga/project/pyrpl.ip_user_files/ipstatic/axi_register_slice_v2_1/hdl/verilog/axi_register_slice_v2_1_axi_register_slice.v,1722862786,verilog,,,C:/Git/pyrpl/pyrpl/fpga/project/pyrpl.ip_user_files/ipstatic/axi_infrastructure_v1_1/hdl/verilog/axi_infrastructure_v1_1_0_header.vh,axi_register_slice_v2_1_7_axi_register_slice,,,../../../../pyrpl.ip_user_files/ipstatic/axi_infrastructure_v1_1/hdl/verilog;../../../../pyrpl.ip_user_files/ipstatic/processing_system7_bfm_v2_0/hdl,,,,,
+C:/Git/pyrpl/pyrpl/fpga/project/pyrpl.ip_user_files/ipstatic/axi_register_slice_v2_1/hdl/verilog/axi_register_slice_v2_1_axic_register_slice.v,1722862786,verilog,,C:/Git/pyrpl/pyrpl/fpga/project/pyrpl.ip_user_files/ipstatic/axi_register_slice_v2_1/hdl/verilog/axi_register_slice_v2_1_axi_register_slice.v,,axi_register_slice_v2_1_7_axic_register_slice,,,../../../../pyrpl.ip_user_files/ipstatic/axi_infrastructure_v1_1/hdl/verilog;../../../../pyrpl.ip_user_files/ipstatic/processing_system7_bfm_v2_0/hdl,,,,,

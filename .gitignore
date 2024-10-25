@@ -44,8 +44,8 @@ pyrpl/fpga/*.dmp
 pyrpl/.idea
 
 # Vivado project-related stuff
-pyrpl/fpga/project/.*
-pyrpl/fpga/project/
+#pyrpl/fpga/project/.*
+#pyrpl/fpga/project/
 *.jou
 
 #fpga-related

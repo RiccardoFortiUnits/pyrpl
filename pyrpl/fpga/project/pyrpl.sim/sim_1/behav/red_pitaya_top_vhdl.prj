@@ -1,0 +1,25 @@
+# compile vhdl design source files
+vhdl fifo_generator_v13_0_1  "../../../pyrpl.ip_user_files/ipstatic/fifo_generator_v13_0/simulation/fifo_generator_vhdl_beh.vhd"
+vhdl fifo_generator_v13_0_1  "../../../pyrpl.ip_user_files/ipstatic/fifo_generator_v13_0/hdl/fifo_generator_v13_0_rfs.vhd"
+vhdl lib_cdc_v1_0_2  "../../../pyrpl.ip_user_files/ipstatic/lib_cdc_v1_0/hdl/src/vhdl/cdc_sync.vhd"
+vhdl proc_sys_reset_v5_0_8  "../../../pyrpl.ip_user_files/ipstatic/proc_sys_reset_v5_0/hdl/src/vhdl/upcnt_n.vhd"
+vhdl proc_sys_reset_v5_0_8  "../../../pyrpl.ip_user_files/ipstatic/proc_sys_reset_v5_0/hdl/src/vhdl/sequence_psr.vhd"
+vhdl proc_sys_reset_v5_0_8  "../../../pyrpl.ip_user_files/ipstatic/proc_sys_reset_v5_0/hdl/src/vhdl/lpf.vhd"
+vhdl proc_sys_reset_v5_0_8  "../../../pyrpl.ip_user_files/ipstatic/proc_sys_reset_v5_0/hdl/src/vhdl/proc_sys_reset.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_proc_sys_reset_0/sim/system_proc_sys_reset_0.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/proc_common_v3_20_a/hdl/src/vhdl/system_xadc_0_conv_funs_pkg.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/proc_common_v3_20_a/hdl/src/vhdl/system_xadc_0_proc_common_pkg.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/proc_common_v3_20_a/hdl/src/vhdl/system_xadc_0_ipif_pkg.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/proc_common_v3_20_a/hdl/src/vhdl/system_xadc_0_family_support.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/proc_common_v3_20_a/hdl/src/vhdl/system_xadc_0_family.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/proc_common_v3_20_a/hdl/src/vhdl/system_xadc_0_soft_reset.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/proc_common_v3_20_a/hdl/src/vhdl/system_xadc_0_pselect_f.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/axi_lite_ipif_v1_01_a/hdl/src/vhdl/system_xadc_0_address_decoder.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/axi_lite_ipif_v1_01_a/hdl/src/vhdl/system_xadc_0_slave_attachment.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/interrupt_control_v2_01_a/hdl/src/vhdl/system_xadc_0_interrupt_control.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/axi_lite_ipif_v1_01_a/hdl/src/vhdl/system_xadc_0_axi_lite_ipif.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/system_xadc_0_xadc_core_drp.vhd"
+vhdl xil_defaultlib  "../../../pyrpl.ip_user_files/bd/system/ip/system_xadc_0/system_xadc_0_axi_xadc.vhd"
+
+# Do not sort compile order
+nosort

@@ -1,0 +1,6 @@
+0.7
+2020.1
+May 27 2020
+20:09:33
+C:/Git/pyrpl/pyrpl/fpga/project/pyrpl.ip_user_files/ipstatic/fifo_generator_v13_0/hdl/fifo_generator_v13_0_rfs.vhd,1722862786,vhdl,,,,axi_reg_slice;bin_cntr;bram_fifo_rstlogic;bram_sync_reg;builtin_extdepth;builtin_extdepth_low_latency;builtin_extdepth_v6;builtin_prim;builtin_prim_v6;builtin_top;builtin_top_v6;clk_x_pntrs_builtin;delay;fifo_generator_top;fifo_generator_v13_0_1;fifo_generator_v13_0_1_builtin;fifo_generator_v13_0_1_pkg;fifo_generator_v13_0_1_synth;input_blk;logic_builtin;output_blk;rd_pe_as;rd_pe_ss;reset_blk_ramfifo;reset_builtin;shft_ram;shft_wrapper;synchronizer_ff;wr_pf_as;wr_pf_ss,,,,,,,,
+C:/Git/pyrpl/pyrpl/fpga/project/pyrpl.ip_user_files/ipstatic/fifo_generator_v13_0/simulation/fifo_generator_vhdl_beh.vhd,1722862786,vhdl,C:/Git/pyrpl/pyrpl/fpga/project/pyrpl.ip_user_files/ipstatic/fifo_generator_v13_0/hdl/fifo_generator_v13_0_rfs.vhd,,,fifo_generator_v13_0_1_axic_reg_slice;fifo_generator_v13_0_1_bhv_as;fifo_generator_v13_0_1_bhv_preload0;fifo_generator_v13_0_1_bhv_ss;fifo_generator_v13_0_1_conv;fifo_generator_vhdl_beh,,,,,,,,
