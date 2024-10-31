@@ -51,8 +51,8 @@ should not be used.
 *************************************************************/
 
 
-module red_pitaya_dsp #(
-	parameter MODULES = 8
+(* use_dsp = "yes" *) module red_pitaya_dsp #(
+   parameter MODULES = 9
 )
 (
    // signals
@@ -86,13 +86,22 @@ module red_pitaya_dsp #(
    input                 sys_ren         ,  //!< bus read enable
    output reg [ 32-1: 0] sys_rdata   ,  //!< bus read data
    output reg            sys_err         ,  //!< bus error indicator
-   output reg            sys_ack            //!< bus acknowledge signal
+   output reg            sys_ack         ,   //!< bus acknowledge signal
+
+   input      [ 14 -1:0] peak_a,
+   input      [ 32 -1:0] peak_a_index,
+   input                 peak_a_valid,
+   input      [ 14 -1:0] peak_b,
+   input      [ 32 -1:0] peak_b_index,
+   input                 peak_b_valid
 );
 
 localparam EXTRAMODULES = 2; //need two extra control registers for scope/asg
-localparam EXTRAINPUTS = 4; //four extra input signals for dac(2)/adc(2)
+localparam EXTRAINPUTS = 8; //four extra input signals for dac(2)/adc(2), plus ADC peaks and peak positions
 localparam EXTRAOUTPUTS = 2; //two extra output signals for pwm channels
-localparam LOG_MODULES = 4;// ceil(log2(EXTRAINPUTS+EXTRAOUTPUTS+MODULES))
+localparam LOG_INPUT_MODULES = $clog2(EXTRAINPUTS+EXTRAMODULES+MODULES);
+localparam LOG_OUTPUT_MODULES = $clog2(EXTRAMODULES+MODULES);//the EXTRAOUTPUTS cannot be put on the DAC output, so we don't consider it. 
+                                                               //This value is used in combination with output_direct and output_select
 
 //Module numbers
 localparam PID0  = 'd0; //formerly PID11
@@ -104,8 +113,9 @@ localparam IIR   = 'd4; //IIR filter to connect in series to PID module
 localparam IQ0   = 'd5; //for PDH signal generation
 localparam IQ1   = 'd6; //for NA functionality
 localparam IQ2   = 'd7; //for PFD error signal
+localparam IQ2_1 = 'd8; 
 //localparam CUSTOM1 = 'd8; //available slots
-localparam NONE = 2**LOG_MODULES-1; //code for no module; only used to switch off PWM outputs
+localparam NONE = 2**LOG_INPUT_MODULES-1; //code for no module; only used to switch off PWM outputs
 
 //EXTRAMODULE numbers
 localparam ASG1   = MODULES; //scope and asg can have the same number
@@ -117,8 +127,12 @@ localparam ADC1  = MODULES+2;
 localparam ADC2  = MODULES+3;
 localparam DAC1  = MODULES+4;
 localparam DAC2  = MODULES+5;
+localparam PEAK1  = MODULES+6;
+localparam PEAK2  = MODULES+7;
+localparam PEAK_IDX1  = MODULES+8;
+localparam PEAK_IDX2  = MODULES+9;
 //EXTRAOUTPUT numbers
-localparam PWM0  = MODULES+2;
+localparam PWM0  = MODULES+2; //they can have the same indexes as the extra inputs
 localparam PWM1  = MODULES+3;
 localparam PWM3  = MODULES+4;
 localparam PWM4  = MODULES+5;
@@ -134,7 +148,7 @@ localparam OFF  = 2'b00;
 // extraoutputs are treated like extramodules that do not provide their own output_signal
 wire [14-1:0] input_signal [MODULES+EXTRAMODULES+EXTRAOUTPUTS-1:0];
 // the selected input signal NUMBER of each module
-reg [LOG_MODULES-1:0] input_select [MODULES+EXTRAMODULES+EXTRAOUTPUTS-1:0];
+reg [LOG_INPUT_MODULES-1:0] input_select [MODULES+EXTRAMODULES+EXTRAOUTPUTS-1:0];
 
 // the output of each module for internal routing, including 'virtual outputs' for the EXTRAINPUTS
 wire [14-1:0] output_signal [MODULES+EXTRAMODULES+EXTRAINPUTS-1+1:0];
@@ -166,6 +180,10 @@ assign output_signal[ADC1] = dat_a_i;
 assign output_signal[ADC2] = dat_b_i;
 assign output_signal[DAC1] = dat_a_o;
 assign output_signal[DAC2] = dat_b_o;
+assign output_signal[PEAK1] = peak_a;
+assign output_signal[PEAK2] = peak_b;
+assign output_signal[PEAK_IDX1] = peak_a_index >> 3;
+assign output_signal[PEAK_IDX2] = peak_b_index >> 3;
 
 //connect only two pwm to internal signals (should be enough)
 assign pwm0 = (input_select[PWM0] == NONE) ? 14'h0 : output_signal[input_select[PWM0]];
@@ -173,13 +191,13 @@ assign pwm1 = (input_select[PWM1] == NONE) ? 14'h0 : output_signal[input_select[
 assign pwm2 = 14'b0;
 assign pwm3 = 14'b0;
 
-reg  signed [   14+LOG_MODULES-1: 0] sum1; 
-reg  signed [   14+LOG_MODULES-1: 0] sum2; 
+reg  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum1; 
+reg  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum2; 
 
 wire dac_a_saturated; //high when dac_a is saturated
 wire dac_b_saturated; //high when dac_b is saturated
 
-integer i;
+integer i, y;
 genvar j;
 
 //select inputs
@@ -195,39 +213,62 @@ endgenerate
 //presum... 8 = 0+1, 9=2+3, 10=4+5 etc... => end result in presum[CHANNELS-1-1] 
 //right now we have an extra delay to go into sum, just to make sure that the slack is maximally positive
 
-localparam CHANNELS = 2**LOG_MODULES; //not the same as MODULES+EXTRAMODULES
-reg  signed [   14+LOG_MODULES-1: 0] presum1 [CHANNELS-1-1:0]; 
-reg  signed [   14+LOG_MODULES-1: 0] presum2 [CHANNELS-1-1:0]; 
+localparam CHANNELS = 2**LOG_OUTPUT_MODULES; //not the same as MODULES+EXTRAMODULES
+wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] presum1 [(CHANNELS<<1)-1 -1:0]; 
+wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] presum2 [(CHANNELS<<1)-1 -1:0]; 
+reg  signed [   14+LOG_OUTPUT_MODULES-1: 0] presum1_reg [(CHANNELS<<1)-1 -1:CHANNELS];
+reg  signed [   14+LOG_OUTPUT_MODULES-1: 0] presum2_reg [(CHANNELS<<1)-1 -1:CHANNELS]; 
+
+generate
+     //first, put all the signals to be added at the start of presum
+     for (j=0;j<MODULES+EXTRAMODULES;j=j+1) begin
+        assign presum1[j] = output_select[j]&OUT1 ? {{LOG_OUTPUT_MODULES{output_direct[j][14-1]}},output_direct[j]} : {14+LOG_OUTPUT_MODULES{1'b0}};
+        assign presum2[j] = output_select[j]&OUT2 ? {{LOG_OUTPUT_MODULES{output_direct[j][14-1]}},output_direct[j]} : {14+LOG_OUTPUT_MODULES{1'b0}};
+     end
+        //unused channels are left to 0 (we might not have a full tree, so some branches are unused)
+     for (j=MODULES+EXTRAMODULES;j<CHANNELS;j=j+1) begin
+        assign presum1[j] = {14+LOG_OUTPUT_MODULES{1'b0}};
+        assign presum2[j] = {14+LOG_OUTPUT_MODULES{1'b0}};
+     end
+    
+      //for the rest of the tree, we do the sum with presumX_reg, and just copy its value in presumX
+     for (j=CHANNELS;j<(CHANNELS<<1)-1;j=j+1) begin
+        assign presum1[j] = presum1_reg[j];
+        assign presum2[j] = presum2_reg[j];
+     end
+endgenerate
 
 always @(posedge clk_i) begin
    if (rstn_i == 1'b0) begin
-     for (i=0;i<CHANNELS;i=i+1) begin
-        presum1[i] <= {14+LOG_MODULES{1'b0}};
-        presum2[i] <= {14+LOG_MODULES{1'b0}};
+     for (i=CHANNELS;i<(CHANNELS<<1)-1;i=i+1) begin
+        presum1_reg[i] <= {14+LOG_OUTPUT_MODULES{1'b0}};
+        presum2_reg[i] <= {14+LOG_OUTPUT_MODULES{1'b0}};
      end
-     sum1 <= {14+LOG_MODULES{1'b0}};
-     sum2 <= {14+LOG_MODULES{1'b0}};
+     sum1 <= {14+LOG_OUTPUT_MODULES{1'b0}};
+     sum2 <= {14+LOG_OUTPUT_MODULES{1'b0}};
    end
    else begin
-     //first sum pairs if they are set to be summed
-     for (i=0;i<(MODULES+EXTRAMODULES)/2;i=i+1) begin
-        presum1[i] <= ({14+LOG_MODULES{(|(output_select[2*i]&OUT1))}} & {{LOG_MODULES{output_direct[2*i][14-1]}},output_direct[2*i]}) + ({14+LOG_MODULES{(|(output_select[2*i+1]&OUT1))}} & {{LOG_MODULES{output_direct[2*i+1][14-1]}},output_direct[2*i+1]});
-        presum2[i] <= ({14+LOG_MODULES{(|(output_select[2*i]&OUT2))}} & {{LOG_MODULES{output_direct[2*i][14-1]}},output_direct[2*i]}) + ({14+LOG_MODULES{(|(output_select[2*i+1]&OUT2))}} & {{LOG_MODULES{output_direct[2*i+1][14-1]}},output_direct[2*i+1]});
-     end
-     //then sum the sums of pairs to go up the tree
-     for (i=0;i<CHANNELS/2-1;i=i+1) begin
-        presum1[8+i] <= presum1[2*i]+presum1[2*i+1];
-        presum2[8+i] <= presum2[2*i]+presum2[2*i+1];
-     end
+
+      //sum in pairs to go up the tree   
+      for(i=CHANNELS;i>0;i=i>>1)begin
+        for (y = 0; y < (i>>1); y = y + 1) begin
+            presum1_reg[(CHANNELS<<1)-i+y] <= presum1[(CHANNELS<<1)-i-(y<<1) - 2] + presum1[(CHANNELS<<1)-i-(y<<1) - 1];
+            presum2_reg[(CHANNELS<<1)-i+y] <= presum2[(CHANNELS<<1)-i-(y<<1) - 2] + presum2[(CHANNELS<<1)-i-(y<<1) - 1];
+        end
+      end
+     // for (i=0;i<CHANNELS/2-1;i=i+1) begin
+     //    presum1[8+i] <= presum1[2*i]+presum1[2*i+1];
+     //    presum2[8+i] <= presum2[2*i]+presum2[2*i+1];
+     // end
      //finally add some (probably unnecessary) delay
-     sum1 <= presum1[CHANNELS-1-1];
-     sum2 <= presum2[CHANNELS-1-1];
+     sum1 <= presum1[(CHANNELS<<1)-1 -1];
+     sum2 <= presum2[(CHANNELS<<1)-1 -1];
    end
 end
 
 //saturation of outputs
 red_pitaya_saturate #(
-    .BITS_IN (14+LOG_MODULES), 
+    .BITS_IN (14+LOG_OUTPUT_MODULES), 
     .SHIFT(0), 
     .BITS_OUT(14)
     ) dac_saturate [1:0] (
@@ -276,8 +317,8 @@ always @(posedge clk_i) begin
    end
    else begin
       if (sys_wen) begin
-         if (sys_addr[16-1:0]==16'h00)     input_select[sys_addr[16+LOG_MODULES-1:16]] <= sys_wdata[ LOG_MODULES-1:0];
-         if (sys_addr[16-1:0]==16'h04)    output_select[sys_addr[16+LOG_MODULES-1:16]] <= sys_wdata[ 2-1:0];
+         if (sys_addr[16-1:0]==16'h00)     input_select[sys_addr[16+LOG_INPUT_MODULES-1:16]] <= sys_wdata[ LOG_INPUT_MODULES-1:0];
+         if (sys_addr[16-1:0]==16'h04)    output_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]] <= sys_wdata[ 2-1:0];
          if (sys_addr[16-1:0]==16'h0C)                                            sync <= sys_wdata[MODULES-1:0];
       end
    end
@@ -292,13 +333,13 @@ if (rstn_i == 1'b0) begin
 end else begin
    sys_err <= 1'b0 ;
    casez (sys_addr[16-1:0])
-      20'h00 : begin sys_ack <= sys_en;          sys_rdata <= {{32- LOG_MODULES{1'b0}},input_select[sys_addr[16+LOG_MODULES-1:16]]}; end 
-	  20'h04 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},output_select[sys_addr[16+LOG_MODULES-1:16]]}; end
-	  20'h08 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},dat_b_saturated,dac_a_saturated}; end
-	  20'h0C : begin sys_ack <= sys_en;          sys_rdata <= {{32-MODULES{1'b0}},sync} ; end
-      20'h10 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 14{1'b0}},output_signal[sys_addr[16+LOG_MODULES-1:16]]} ; end
+      20'h00 : begin sys_ack <= sys_en;          sys_rdata <= {{32- LOG_OUTPUT_MODULES{1'b0}},input_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]}; end 
+     20'h04 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},output_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]}; end
+     20'h08 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},dat_b_saturated,dac_a_saturated}; end
+     20'h0C : begin sys_ack <= sys_en;          sys_rdata <= {{32-MODULES{1'b0}},sync} ; end
+      20'h10 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 14{1'b0}},output_signal[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]} ; end
 
-     default : begin sys_ack <= module_ack[sys_addr[16+LOG_MODULES-1:16]];    sys_rdata <=  module_rdata[sys_addr[16+LOG_MODULES-1:16]]  ; end
+     default : begin sys_ack <= module_ack[sys_addr[16+LOG_OUTPUT_MODULES-1:16]];    sys_rdata <=  module_rdata[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]  ; end
    endcase
 end
 
@@ -325,15 +366,15 @@ generate for (j = 0; j < 3; j = j+1) begin
      .sync_i       (  sync[j]        ),  // syncronization of different dsp modules
      .dat_i        (  input_signal [j] ),  // input data
      .dat_o        (  output_direct[j]),  // output data
-	 .diff_dat_i   (  diff_input_signal[j] ),  // input data for differential mode
-	 .diff_dat_o   (  diff_output_signal[j] ),  // output data for differential mode
+    .diff_dat_i   (  diff_input_signal[j] ),  // input data for differential mode
+    .diff_dat_o   (  diff_output_signal[j] ),  // output data for differential mode
 
-	 //communincation with PS
-	 .addr ( sys_addr[16-1:0] ),
-	 .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-	 .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-	 .ack  ( module_ack[j] ),
-	 .rdata (module_rdata[j]),
+    //communincation with PS
+    .addr ( sys_addr[16-1:0] ),
+    .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+    .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+    .ack  ( module_ack[j] ),
+    .rdata (module_rdata[j]),
      .wdata (sys_wdata)
    );
    assign output_signal[j] = output_direct[j];
@@ -353,12 +394,12 @@ generate for (j = 3; j < 4; j = j+1) begin
      .phase1_i     (  asg1phase_i ),  // phase input
      .trig_o       (  trig_signal ),
 
-	 //communincation with PS
-	 .addr ( sys_addr[16-1:0] ),
-	 .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-	 .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-	 .ack  ( module_ack[j] ),
-	 .rdata (module_rdata[j]),
+    //communincation with PS
+    .addr ( sys_addr[16-1:0] ),
+    .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+    .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+    .ack  ( module_ack[j] ),
+    .rdata (module_rdata[j]),
      .wdata (sys_wdata)
    );
 end
@@ -368,21 +409,21 @@ assign trig_o = trig_signal;
 //IIR module 
 generate for (j = 4; j < 5; j = j+1) begin
     red_pitaya_iir_block iir (
-	     // data
-	     .clk_i        (  clk_i          ),  // clock
-	     .rstn_i       (  rstn_i         ),  // reset - active low
-	     .dat_i        (  input_signal [j] ),  // input data
-	     .dat_o        (  output_direct[j]),  // output data
+        // data
+        .clk_i        (  clk_i          ),  // clock
+        .rstn_i       (  rstn_i         ),  // reset - active low
+        .dat_i        (  input_signal [j] ),  // input data
+        .dat_o        (  output_direct[j]),  // output data
 
-		 //communincation with PS
-		 .addr ( sys_addr[16-1:0] ),
-		 .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-		 .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-		 .ack  ( module_ack[j] ),
-		 .rdata (module_rdata[j]),
-	     .wdata (sys_wdata)
+       //communincation with PS
+       .addr ( sys_addr[16-1:0] ),
+       .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+       .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+       .ack  ( module_ack[j] ),
+       .rdata (module_rdata[j]),
+        .wdata (sys_wdata)
       );
-	  assign output_signal[j] = output_direct[j];
+     assign output_signal[j] = output_direct[j];
 end endgenerate
 
 
@@ -391,30 +432,30 @@ generate for (j = 5; j < 7; j = j+1) begin
     red_pitaya_iq_block 
       iq
       (
-	     // data
-	     .clk_i        (  clk_i          ),  // clock
-	     .rstn_i       (  rstn_i         ),  // reset - active low
+        // data
+        .clk_i        (  clk_i          ),  // clock
+        .rstn_i       (  rstn_i         ),  // reset - active low
          .sync_i       (  sync[j]        ),  // syncronization of different dsp modules
-	     .dat_i        (  input_signal [j] ),  // input data
-	     .dat_o        (  output_direct[j]),  // output data
-		 .signal_o     (  output_signal[j]),  // output signal
+        .dat_i        (  input_signal [j] ),  // input data
+        .dat_o        (  output_direct[j]),  // output data
+       .signal_o     (  output_signal[j]),  // output signal
 
          // not using 2nd quadrature for most iq's: multipliers will be
          // synthesized away by Vivado
          //.signal2_o  (  output_signal[j*2]),  // output signal
 
-		 //communincation with PS
-		 .addr ( sys_addr[16-1:0] ),
-		 .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-		 .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-		 .ack  ( module_ack[j] ),
-		 .rdata (module_rdata[j]),
-	     .wdata (sys_wdata)
+       //communincation with PS
+       .addr ( sys_addr[16-1:0] ),
+       .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+       .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+       .ack  ( module_ack[j] ),
+       .rdata (module_rdata[j]),
+        .wdata (sys_wdata)
       );
 end endgenerate
 
 // IQ with two outputs
-generate for (j = 7; j < 8; j = j+1) begin
+generate for (j = 7; j < 8; j = j+2) begin
     red_pitaya_iq_block   #( .QUADRATUREFILTERSTAGES(4) )
       iq_2_outputs
       (
@@ -425,7 +466,7 @@ generate for (j = 7; j < 8; j = j+1) begin
          .dat_i        (  input_signal [j] ),  // input data
          .dat_o        (  output_direct[j]),  // output data
          .signal_o     (  output_signal[j]),  // output signal
-         .signal2_o    (  output_signal[j*2]),  // output signal 2
+         .signal2_o    (  output_signal[j+1]),  // output signal 2
 
          //communincation with PS
          .addr ( sys_addr[16-1:0] ),

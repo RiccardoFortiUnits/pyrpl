@@ -3,29 +3,33 @@ from ..attributes import BoolRegister, SelectProperty, SelectProperty, SelectReg
 from ..modules import HardwareModule, SignalModule
 from ..pyrpl_utils import sorted_dict, recursive_getattr, recursive_setattr
 from ..errors import ExpectedPyrplError
+import math
 
 # order here determines the order in the GUI etc.
 DSP_INPUTS = OrderedDict([
-    ('in1', 10), #same as asg
-    ('in2', 11),
-    ('out1', 12),
-    ('out2', 13),
+    ('in1', 11), #same as asg
+    ('in2', 12),
+    ('out1', 13),
+    ('out2', 14),
+    ('peak1', 15), #same as asg
+    ('peak2', 16),
+    ('peakIndex1', 17),
+    ('peakIndex2', 18),
     ('iq0', 5),
     ('iq1', 6),
     ('iq2', 7),
-    ('iq2_2', 14),
-    ('pidnouveau0', 0), # same as pid0
-    ('pidnouveau1', 0x30), # using the free region (0x40600000)
+    ('iq2_2', 8),
     ('pid0', 0),
     ('pid1', 1),
     ('pid2', 2),
-    ('asg0', 8),
-    ('asg1', 9),
+    ('asg0', 9),
+    ('asg1', 10),
     ('trig', 3),
     ('iir', 4),
     # ('scope0', 8), #same as asg0 by design
     # ('scope1', 9), #same as asg1 by design
-    ('off', 15)])
+    ('off', 0)])
+DSP_INPUTS['off'] = 2**math.ceil(math.log2(max(DSP_INPUTS.values()))) - 1
 
 def all_inputs_keys(instance):
     """ collects all available logical inputs, composed of all

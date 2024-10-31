@@ -430,6 +430,9 @@ wire    [14-1: 0] to_scope_a;
 wire    [14-1: 0] to_scope_b;
 wire dsp_trigger;
 
+wire [14 -1:0] peak_a, peak_b;
+wire peak_a_valid, peak_b_valid;
+wire [32 -1:0] peak_a_index, peak_b_index;
 
 red_pitaya_scope i_scope (
   // ADC
@@ -464,7 +467,16 @@ red_pitaya_scope i_scope (
   .sys_ren         (  sys_ren[1]                 ),  // read enable
   .sys_rdata       (  sys_rdata[ 1*32+31: 1*32]  ),  // read data
   .sys_err         (  sys_err[1]                 ),  // error indicator
-  .sys_ack         (  sys_ack[1]                 )   // acknowledge signal
+  .sys_ack         (  sys_ack[1]                 ),   // acknowledge signal
+
+  //peak detection
+   .peak_a         (peak_a),
+   .peak_a_index   (peak_a_index),
+   .peak_a_valid   (peak_a_valid),
+
+   .peak_b         (peak_b),
+   .peak_b_index   (peak_b_index),
+   .peak_b_valid   (peak_b_valid)
 );
 
 //---------------------------------------------------------------------------------
@@ -496,6 +508,7 @@ red_pitaya_asg i_asg (
 
 //---------------------------------------------------------------------------------
 //  DSP module
+wire  [ 14-1: 0] pwm_signals[4-1:0];
 
 red_pitaya_dsp i_dsp (
    // signals
@@ -527,7 +540,15 @@ red_pitaya_dsp i_dsp (
   .sys_ren         (  sys_ren[3]                 ),  // read enable
   .sys_rdata       (  sys_rdata[ 3*32+31: 3*32]  ),  // read data
   .sys_err         (  sys_err[3]                 ),  // error indicator
-  .sys_ack         (  sys_ack[3]                 )   // acknowledge signal
+  .sys_ack         (  sys_ack[3]                 ),   // acknowledge signal
+
+   .peak_a         (peak_a),
+   .peak_a_index   (peak_a_index),
+   .peak_a_valid   (peak_a_valid),
+
+   .peak_b         (peak_b),
+   .peak_b_index   (peak_b_index),
+   .peak_b_valid   (peak_b_valid)
 );
 
 // the ams module has been obsoleted by PWM control via DSP module (outputs)
@@ -566,7 +587,6 @@ red_pitaya_ams i_ams (
 );
 
 
-wire  [ 14-1: 0] pwm_signals[4-1:0];
 
 red_pitaya_pwm pwm [4-1:0] (
   // system signals
