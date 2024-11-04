@@ -103,6 +103,12 @@ localparam LOG_INPUT_MODULES = $clog2(EXTRAINPUTS+EXTRAMODULES+MODULES);
 localparam LOG_OUTPUT_MODULES = $clog2(EXTRAMODULES+MODULES);//the EXTRAOUTPUTS cannot be put on the DAC output, so we don't consider it. 
                                                                //This value is used in combination with output_direct and output_select
 
+initial begin
+   if (LOG_OUTPUT_MODULES > 4)begin
+        $fatal("LOG_OUTPUT_MODULES is too high, the current memory architecture does not allow for a number higher than 4. you would need to change the memory structure");
+   end
+end
+
 //Module numbers
 localparam PID0  = 'd0; //formerly PID11
 localparam PID1  = 'd1; //formerly PID12: input2->output1
@@ -191,8 +197,8 @@ assign pwm1 = (input_select[PWM1] == NONE) ? 14'h0 : output_signal[input_select[
 assign pwm2 = 14'b0;
 assign pwm3 = 14'b0;
 
-reg  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum1; 
-reg  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum2; 
+wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum1; 
+wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum2; 
 
 wire dac_a_saturated; //high when dac_a is saturated
 wire dac_b_saturated; //high when dac_b is saturated
@@ -206,65 +212,26 @@ generate for (j = 0; j < MODULES+EXTRAMODULES; j = j+1)
 endgenerate
 
 //sum together the direct outputs
-//
-//use a tree-like structure where at most 2 numbers are added per cycle (4 should be possible as well but lets go slow)
-//CHANNELS is the number of numbers to add, CHANNELS-1 the number of tree nodes (represented in presum)
-//presum... 0-7: sum of pairs of input signals (for 16 channels)
-//presum... 8 = 0+1, 9=2+3, 10=4+5 etc... => end result in presum[CHANNELS-1-1] 
-//right now we have an extra delay to go into sum, just to make sure that the slack is maximally positive
-
-localparam CHANNELS = 2**LOG_OUTPUT_MODULES; //not the same as MODULES+EXTRAMODULES
-wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] presum1 [(CHANNELS<<1)-1 -1:0]; 
-wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] presum2 [(CHANNELS<<1)-1 -1:0]; 
-reg  signed [   14+LOG_OUTPUT_MODULES-1: 0] presum1_reg [(CHANNELS<<1)-1 -1:CHANNELS];
-reg  signed [   14+LOG_OUTPUT_MODULES-1: 0] presum2_reg [(CHANNELS<<1)-1 -1:CHANNELS]; 
+wire  signed [(MODULES+EXTRAMODULES)*14 -1: 0] signalToSum1; 
+wire  signed [(MODULES+EXTRAMODULES)*14 -1: 0] signalToSum2; 
 
 generate
-     //first, put all the signals to be added at the start of presum
-     for (j=0;j<MODULES+EXTRAMODULES;j=j+1) begin
-        assign presum1[j] = output_select[j]&OUT1 ? {{LOG_OUTPUT_MODULES{output_direct[j][14-1]}},output_direct[j]} : {14+LOG_OUTPUT_MODULES{1'b0}};
-        assign presum2[j] = output_select[j]&OUT2 ? {{LOG_OUTPUT_MODULES{output_direct[j][14-1]}},output_direct[j]} : {14+LOG_OUTPUT_MODULES{1'b0}};
-     end
-        //unused channels are left to 0 (we might not have a full tree, so some branches are unused)
-     for (j=MODULES+EXTRAMODULES;j<CHANNELS;j=j+1) begin
-        assign presum1[j] = {14+LOG_OUTPUT_MODULES{1'b0}};
-        assign presum2[j] = {14+LOG_OUTPUT_MODULES{1'b0}};
-     end
-    
-      //for the rest of the tree, we do the sum with presumX_reg, and just copy its value in presumX
-     for (j=CHANNELS;j<(CHANNELS<<1)-1;j=j+1) begin
-        assign presum1[j] = presum1_reg[j];
-        assign presum2[j] = presum2_reg[j];
-     end
+  //first, put all the signals to be added at the start of signalToSum
+  for (j=0;j<MODULES+EXTRAMODULES;j=j+1) begin
+     assign signalToSum1[(j+1)*14 -1-:14] = output_select[j]&OUT1 ? {{LOG_OUTPUT_MODULES{output_direct[j][14-1]}},output_direct[j]} : {14+LOG_OUTPUT_MODULES{1'b0}};
+     assign signalToSum2[(j+1)*14 -1-:14] = output_select[j]&OUT2 ? {{LOG_OUTPUT_MODULES{output_direct[j][14-1]}},output_direct[j]} : {14+LOG_OUTPUT_MODULES{1'b0}};
+  end
 endgenerate
 
-always @(posedge clk_i) begin
-   if (rstn_i == 1'b0) begin
-     for (i=CHANNELS;i<(CHANNELS<<1)-1;i=i+1) begin
-        presum1_reg[i] <= {14+LOG_OUTPUT_MODULES{1'b0}};
-        presum2_reg[i] <= {14+LOG_OUTPUT_MODULES{1'b0}};
-     end
-     sum1 <= {14+LOG_OUTPUT_MODULES{1'b0}};
-     sum2 <= {14+LOG_OUTPUT_MODULES{1'b0}};
-   end
-   else begin
-
-      //sum in pairs to go up the tree   
-      for(i=CHANNELS;i>0;i=i>>1)begin
-        for (y = 0; y < (i>>1); y = y + 1) begin
-            presum1_reg[(CHANNELS<<1)-i+y] <= presum1[(CHANNELS<<1)-i-(y<<1) - 2] + presum1[(CHANNELS<<1)-i-(y<<1) - 1];
-            presum2_reg[(CHANNELS<<1)-i+y] <= presum2[(CHANNELS<<1)-i-(y<<1) - 2] + presum2[(CHANNELS<<1)-i-(y<<1) - 1];
-        end
-      end
-     // for (i=0;i<CHANNELS/2-1;i=i+1) begin
-     //    presum1[8+i] <= presum1[2*i]+presum1[2*i+1];
-     //    presum2[8+i] <= presum2[2*i]+presum2[2*i+1];
-     // end
-     //finally add some (probably unnecessary) delay
-     sum1 <= presum1[(CHANNELS<<1)-1 -1];
-     sum2 <= presum2[(CHANNELS<<1)-1 -1];
-   end
-end
+clockedTreeSum#(
+   .dataSize   (14),
+   .nOfInputs  (MODULES+EXTRAMODULES)
+) cts[0:1](
+   .clk        (clk_i),
+   .reset      (!rstn_i),
+   .ins        ({signalToSum1, signalToSum2}),
+   .out        ({sum1, sum2})
+);
 
 //saturation of outputs
 red_pitaya_saturate #(
@@ -317,7 +284,7 @@ always @(posedge clk_i) begin
    end
    else begin
       if (sys_wen) begin
-         if (sys_addr[16-1:0]==16'h00)     input_select[sys_addr[16+LOG_INPUT_MODULES-1:16]] <= sys_wdata[ LOG_INPUT_MODULES-1:0];
+         if (sys_addr[16-1:0]==16'h00)     input_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]] <= sys_wdata[ LOG_OUTPUT_MODULES-1:0];
          if (sys_addr[16-1:0]==16'h04)    output_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]] <= sys_wdata[ 2-1:0];
          if (sys_addr[16-1:0]==16'h0C)                                            sync <= sys_wdata[MODULES-1:0];
       end

@@ -135,3 +135,6 @@ cover/index.html
 
 #notebook checkpoints
 .ipynb_checkpoints
+pyrpl/fpga/project/pyrpl.runs/
+
+pyrpl/fpga/project/pyrpl.cache/

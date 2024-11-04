@@ -46,6 +46,6 @@ Created on Mon Jun 17 18:01:10 2024
 
 from pyrpl import Pyrpl
 
-p = Pyrpl()
+p = Pyrpl("a.yml")
 
 input("press enter to close pyrpl")
