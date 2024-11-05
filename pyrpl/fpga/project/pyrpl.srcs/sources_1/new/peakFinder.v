@@ -7,7 +7,7 @@ module peakFinder #(
 	input clk,
 	input reset,
 
-    input window_valid,
+    input trigger,
 	input [dataSize -1:0] in,
 	input in_valid,
 
@@ -19,36 +19,40 @@ module peakFinder #(
 	output reg max_valid
 );
 	reg [indexSize -1:0] counter;
-	wire inIndexRange = $unsigned(counter) >= $unsigned(indexRange_min) && $unsigned(counter) < $unsigned(indexRange_max);
+	wire inIndexRange = $unsigned(counter) >= $unsigned(indexRange_min);
 	wire [dataSize -1:0] minValue = areSignalsSigned ? (1 << (dataSize-1)) : 0;
 	reg [dataSize -1:0] currentMax;
 	reg [indexSize -1:0] currentMaxIndex;
-	reg windowWasValid;
+	reg running;
 	always @(posedge clk) begin
-		windowWasValid <= window_valid;
-		max_valid <= windowWasValid && (!window_valid) && (!reset);//output is valid only when the window just finished
+		max_valid <= (counter >= indexRange_max) && (!reset);//output is valid only when the window just finished
 		if (reset) begin
 			max <= minValue;
 			maxIndex <= 0;
 			currentMax <= minValue;
 			currentMaxIndex <= 0;
 			counter <= 0;
-		end else if(windowWasValid && !window_valid)begin// did we just finish a window?
+			running <= 0;
+		end else if(counter >= indexRange_max)begin// did we just finish a window?
 			//change output and reset
 		    max <= currentMax;
 		    maxIndex <= currentMaxIndex;
 			currentMax <= minValue;
 			currentMaxIndex <= 0;
 			counter <= 0;
-		end else if(window_valid && in_valid) begin// new value to test?
-			if(inIndexRange && (
-                   (areSignalsSigned && $signed(in) > $signed(currentMax)) ||
-                   ((!areSignalsSigned) && $unsigned(in) > $unsigned(currentMax))
-               )) begin
-				currentMax <= in;
-				currentMaxIndex <= counter;
+			running <= 0;
+		end else if(trigger || running) begin// new value to test?
+			running <= 1;
+			if(in_valid)begin
+				if(inIndexRange && (
+	                   (areSignalsSigned && $signed(in) > $signed(currentMax)) ||
+	                   ((!areSignalsSigned) && $unsigned(in) > $unsigned(currentMax))
+	               )) begin
+					currentMax <= in;
+					currentMaxIndex <= counter;
+				end
+				counter <= counter + 1;
 			end
-			counter <= counter + 1;
 		end
 	end
 

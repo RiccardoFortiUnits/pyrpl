@@ -102,10 +102,11 @@ localparam EXTRAOUTPUTS = 2; //two extra output signals for pwm channels
 localparam LOG_INPUT_MODULES = $clog2(EXTRAINPUTS+EXTRAMODULES+MODULES);
 localparam LOG_OUTPUT_MODULES = $clog2(EXTRAMODULES+MODULES);//the EXTRAOUTPUTS cannot be put on the DAC output, so we don't consider it. 
                                                                //This value is used in combination with output_direct and output_select
+localparam LOG_OUTPUT_DIRECT_MODULES = $clog2(EXTRAMODULES+MODULES+EXTRAOUTPUTS);//the EXTRAOUTPUTS cannot be put on the DAC output, so we don't consider it. 
 
 initial begin
-   if (LOG_OUTPUT_MODULES > 4)begin
-        $fatal("LOG_OUTPUT_MODULES is too high, the current memory architecture does not allow for a number higher than 4. you would need to change the memory structure");
+   if (LOG_OUTPUT_DIRECT_MODULES > 4)begin
+        $fatal("LOG_OUTPUT_DIRECT_MODULES is too high, the current memory architecture does not allow for a number higher than 4. you would need to change the memory structure");
    end
 end
 
@@ -284,8 +285,8 @@ always @(posedge clk_i) begin
    end
    else begin
       if (sys_wen) begin
-         if (sys_addr[16-1:0]==16'h00)     input_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]] <= sys_wdata[ LOG_OUTPUT_MODULES-1:0];
-         if (sys_addr[16-1:0]==16'h04)    output_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]] <= sys_wdata[ 2-1:0];
+         if (sys_addr[16-1:0]==16'h00)     input_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]] <= sys_wdata[ LOG_INPUT_MODULES-1:0];
+         if (sys_addr[16-1:0]==16'h04)    output_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]] <= sys_wdata[ 2-1:0];
          if (sys_addr[16-1:0]==16'h0C)                                            sync <= sys_wdata[MODULES-1:0];
       end
    end
@@ -300,11 +301,11 @@ if (rstn_i == 1'b0) begin
 end else begin
    sys_err <= 1'b0 ;
    casez (sys_addr[16-1:0])
-      20'h00 : begin sys_ack <= sys_en;          sys_rdata <= {{32- LOG_OUTPUT_MODULES{1'b0}},input_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]}; end 
-     20'h04 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},output_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]}; end
+      20'h00 : begin sys_ack <= sys_en;          sys_rdata <= {{32- LOG_INPUT_MODULES{1'b0}},input_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]]}; end 
+     20'h04 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},output_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]]}; end
      20'h08 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},dat_b_saturated,dac_a_saturated}; end
      20'h0C : begin sys_ack <= sys_en;          sys_rdata <= {{32-MODULES{1'b0}},sync} ; end
-      20'h10 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 14{1'b0}},output_signal[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]} ; end
+      20'h10 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 14{1'b0}},output_signal[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]]} ; end
 
      default : begin sys_ack <= module_ack[sys_addr[16+LOG_OUTPUT_MODULES-1:16]];    sys_rdata <=  module_rdata[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]  ; end
    endcase

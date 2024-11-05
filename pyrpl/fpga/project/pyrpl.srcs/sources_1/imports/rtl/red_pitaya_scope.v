@@ -264,6 +264,7 @@ wire              adc_rd_dv     ;
 reg               adc_we        ;
 reg               adc_we_keep   ;
 reg               adc_trig      ;
+reg               peak_trig     ;
 
 reg   [ RSZ-1: 0] adc_wp_trig   ;
 reg   [ RSZ-1: 0] adc_wp_cur    ;
@@ -388,8 +389,8 @@ peakFinder #(
    .clk              (adc_clk_i),
    .reset            (!adc_rstn_i),
 
-   .window_valid     (adc_we),
-   .in               ({adc_a_dat,adc_a_dat}),
+   .trigger          (peak_trig),
+   .in               ({adc_a_dat,adc_b_dat}),
    .in_valid         (adc_dv),
 
    .indexRange_min   ({peak_a_minIndex, peak_b_minIndex}),
@@ -633,6 +634,7 @@ reg               adc_trig_bp      ;
 reg               adc_trig_bn      ;
 reg               adc_trig_sw      ;
 reg   [   4-1: 0] set_trig_src     ;
+reg   [   4-1: 0] continuous_trig_src     ;//used for peak detection, since for that we don't want to disable the trigger once an acquisition has ended, but we want to restart the peak control immediately
 wire              ext_trig_p       ;
 wire              ext_trig_n       ;
 wire              asg_trig_p       ;
@@ -644,16 +646,20 @@ if (adc_rstn_i == 1'b0) begin
    adc_rst_do    <= 1'b0 ;
    adc_trig_sw   <= 1'b0 ;
    set_trig_src  <= 4'h0 ;
+   continuous_trig_src <= 0;
    adc_trig      <= 1'b0 ;
 end else begin
    adc_arm_do  <= sys_wen && (sys_addr[19:0]==20'h0) && sys_wdata[0] ; // SW ARM
    adc_rst_do  <= sys_wen && (sys_addr[19:0]==20'h0) && sys_wdata[1] ;
    adc_trig_sw <= sys_wen && (sys_addr[19:0]==20'h4) && (sys_wdata[3:0]==4'h1); // SW trigger
 
-      if (sys_wen && (sys_addr[19:0]==20'h4))
+      if (sys_wen && (sys_addr[19:0]==20'h4))begin
          set_trig_src <= sys_wdata[3:0] ;
+         continuous_trig_src <= sys_wdata[3:0];
+      end
       else if (((adc_dly_do || adc_trig) && (adc_dly_cnt == 32'h0)) || adc_rst_do) //delayed reached or reset
          set_trig_src <= 4'h0 ;
+         //we don't want to disable continuous_trig_src
 
    case (set_trig_src)
        4'd1 : adc_trig <= adc_trig_sw   ; // manual
@@ -667,6 +673,19 @@ end else begin
        4'd9 : adc_trig <= asg_trig_n    ; // ASG - falling edge
        4'd10: adc_trig <= trig_dsp_i    ; // dsp trigger input
     default : adc_trig <= 1'b0          ;
+   endcase
+   case (continuous_trig_src)
+       4'd1 : peak_trig <= adc_trig_sw   ; // manual
+       4'd2 : peak_trig <= adc_trig_ap   ; // A ch rising edge
+       4'd3 : peak_trig <= adc_trig_an   ; // A ch falling edge
+       4'd4 : peak_trig <= adc_trig_bp   ; // B ch rising edge
+       4'd5 : peak_trig <= adc_trig_bn   ; // B ch falling edge
+       4'd6 : peak_trig <= ext_trig_p    ; // external - rising edge
+       4'd7 : peak_trig <= ext_trig_n    ; // external - falling edge
+       4'd8 : peak_trig <= asg_trig_p    ; // ASG - rising edge
+       4'd9 : peak_trig <= asg_trig_n    ; // ASG - falling edge
+       4'd10: peak_trig <= trig_dsp_i    ; // dsp trigger input
+    default : peak_trig <= 1'b0          ;
    endcase
 end
 
@@ -837,9 +856,9 @@ if (adc_rstn_i == 1'b0) begin
 
 
     peak_a_minIndex <= 0;
-    peak_a_maxIndex <= -1;
+    peak_a_maxIndex <= 2**(RSZ-1);
     peak_b_minIndex <= 0;
-    peak_b_maxIndex <= -1;
+    peak_b_maxIndex <= 2**(RSZ-1);
     {usePretrigFromMem, pretrigFromMem} = 0;
 
 end else begin
@@ -900,7 +919,7 @@ end else begin
                                                                               , 1'b0                      // reset
                                                                               , adc_we}             ; end // arm
 
-     20'h00004 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 4{1'b0}}, set_trig_src}       ; end 
+     20'h00004 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 8{1'b0}},continuous_trig_src, set_trig_src}       ; end 
 
      20'h00008 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, set_a_tresh}        ; end
      //20'h0000C : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, set_b_tresh}        ; end
