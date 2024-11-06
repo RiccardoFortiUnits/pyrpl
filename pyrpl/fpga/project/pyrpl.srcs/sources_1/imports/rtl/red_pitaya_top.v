@@ -432,7 +432,7 @@ wire dsp_trigger;
 
 wire [14 -1:0] peak_a, peak_b;
 wire peak_a_valid, peak_b_valid;
-wire [32 -1:0] peak_a_index, peak_b_index;
+wire [14 -1:0] peak_a_index, peak_b_index;
 
 red_pitaya_scope i_scope (
   // ADC
@@ -470,13 +470,16 @@ red_pitaya_scope i_scope (
   .sys_ack         (  sys_ack[1]                 ),   // acknowledge signal
 
   //peak detection
-   .peak_a         (peak_a),
-   .peak_a_index   (peak_a_index),
-   .peak_a_valid   (peak_a_valid),
 
-   .peak_b         (peak_b),
-   .peak_b_index   (peak_b_index),
-   .peak_b_valid   (peak_b_valid)
+ .real_adc_a_i     (adc_a),
+ .real_adc_b_i     (adc_b),
+ .peak_a         (peak_a),
+ .peak_a_index   (peak_a_index),
+ .peak_a_valid   (peak_a_valid),
+
+ .peak_b         (peak_b),
+ .peak_b_index   (peak_b_index),
+ .peak_b_valid   (peak_b_valid)
 );
 
 //---------------------------------------------------------------------------------

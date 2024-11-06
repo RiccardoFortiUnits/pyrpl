@@ -115,13 +115,13 @@ module red_pitaya_scope #(
    output reg            sys_err       ,  // bus error indicator
    output reg            sys_ack       ,   // bus acknowledge signal
 
-
-   output [RSZ -1:0] peak_a,
-   output [32 -1:0] peak_a_index,
+   input      [RSZ -1:0] real_adc_a_i, // for the peak detection, let's always use the actual ADC signals (otherwise we run out of signals to trigger/show)
+   input      [RSZ -1:0] real_adc_b_i,
+   output     [RSZ -1:0] peak_a,
+   output     [RSZ -1:0]  peak_a_index,
    output peak_a_valid,
-
-   output [RSZ -1:0] peak_b,
-   output [32 -1:0] peak_b_index,
+   output     [RSZ -1:0] peak_b,
+   output     [RSZ -1:0]  peak_b_index,
    output peak_b_valid
 
 );
@@ -189,8 +189,12 @@ red_pitaya_dfilt1 i_dfilt1_chb (
 
 reg  [ 14-1: 0] adc_a_dat     ;
 reg  [ 14-1: 0] adc_b_dat     ;
+reg  [ 14-1: 0] real_adc_a_dat;
+reg  [ 14-1: 0] real_adc_b_dat;
 reg  [ 32-1: 0] adc_a_sum     ;
 reg  [ 32-1: 0] adc_b_sum     ;
+reg  [ 32-1: 0] real_adc_a_sum;
+reg  [ 32-1: 0] real_adc_b_sum;
 reg  [ 17-1: 0] set_dec       ;
 reg  [ 17-1: 0] adc_dec_cnt   ;
 reg             set_avg_en    ;
@@ -198,8 +202,8 @@ reg             adc_dv        ;
 
 always @(posedge adc_clk_i)
 if (adc_rstn_i == 1'b0) begin
-   adc_a_sum   <= 32'h0 ;
-   adc_b_sum   <= 32'h0 ;
+   adc_a_sum   <= 32'h0 ; real_adc_a_sum   <= 32'h0 ;
+   adc_b_sum   <= 32'h0 ; real_adc_b_sum   <= 32'h0 ;
    adc_dec_cnt <= 17'h0 ;
    adc_dv      <=  1'b0 ;
 end else begin
@@ -207,34 +211,38 @@ end else begin
       adc_dec_cnt <= 17'h1                   ;
       adc_a_sum   <= $signed(adc_a_filt_out) ;
       adc_b_sum   <= $signed(adc_b_filt_out) ;
+      real_adc_a_sum   <= $signed(real_adc_a_i) ;
+      real_adc_b_sum   <= $signed(real_adc_b_i) ;
    end else begin
       adc_dec_cnt <= adc_dec_cnt + 17'h1 ;
       adc_a_sum   <= $signed(adc_a_sum) + $signed(adc_a_filt_out) ;
       adc_b_sum   <= $signed(adc_b_sum) + $signed(adc_b_filt_out) ;
+      real_adc_a_sum   <= $signed(real_adc_a_sum) + $signed(real_adc_a_i) ;
+      real_adc_b_sum   <= $signed(real_adc_b_sum) + $signed(real_adc_b_i) ;
    end
 
    adc_dv <= (adc_dec_cnt >= set_dec) ;
 
    case (set_dec & {17{set_avg_en}})
-      17'h0     : begin adc_a_dat <= adc_a_filt_out;            adc_b_dat <= adc_b_filt_out;        end
-      17'h1     : begin adc_a_dat <= adc_a_sum[15+0 :  0];      adc_b_dat <= adc_b_sum[15+0 :  0];  end
-      17'h2     : begin adc_a_dat <= adc_a_sum[15+1 :  1];      adc_b_dat <= adc_b_sum[15+1 :  1];  end
-      17'h4     : begin adc_a_dat <= adc_a_sum[15+2 :  2];      adc_b_dat <= adc_b_sum[15+2 :  2];  end
-      17'h8     : begin adc_a_dat <= adc_a_sum[15+3 :  3];      adc_b_dat <= adc_b_sum[15+3 :  3];  end
-      17'h10    : begin adc_a_dat <= adc_a_sum[15+4 :  4];      adc_b_dat <= adc_b_sum[15+4 :  4];  end
-      17'h20    : begin adc_a_dat <= adc_a_sum[15+5 :  5];      adc_b_dat <= adc_b_sum[15+5 :  5];  end
-      17'h40    : begin adc_a_dat <= adc_a_sum[15+6 :  6];      adc_b_dat <= adc_b_sum[15+6 :  6];  end
-      17'h80    : begin adc_a_dat <= adc_a_sum[15+7 :  7];      adc_b_dat <= adc_b_sum[15+7 :  7];  end
-      17'h100   : begin adc_a_dat <= adc_a_sum[15+8 :  8];      adc_b_dat <= adc_b_sum[15+8 :  8];  end
-      17'h200   : begin adc_a_dat <= adc_a_sum[15+9 :  9];      adc_b_dat <= adc_b_sum[15+9 :  9];  end
-      17'h400   : begin adc_a_dat <= adc_a_sum[15+10: 10];      adc_b_dat <= adc_b_sum[15+10: 10];  end
-      17'h800   : begin adc_a_dat <= adc_a_sum[15+11: 11];      adc_b_dat <= adc_b_sum[15+11: 11];  end
-      17'h1000  : begin adc_a_dat <= adc_a_sum[15+12: 12];      adc_b_dat <= adc_b_sum[15+12: 12];  end
-      17'h2000  : begin adc_a_dat <= adc_a_sum[15+13: 13];      adc_b_dat <= adc_b_sum[15+13: 13];  end
-      17'h4000  : begin adc_a_dat <= adc_a_sum[15+14: 14];      adc_b_dat <= adc_b_sum[15+14: 14];  end
-      17'h8000  : begin adc_a_dat <= adc_a_sum[15+15: 15];      adc_b_dat <= adc_b_sum[15+15: 15];  end
-      17'h10000 : begin adc_a_dat <= adc_a_sum[15+16: 16];      adc_b_dat <= adc_b_sum[15+16: 16];  end
-      default   : begin adc_a_dat <= adc_a_sum[15+0 :  0];      adc_b_dat <= adc_b_sum[15+0 :  0];  end
+      17'h0     : begin adc_a_dat <= adc_a_filt_out;            adc_b_dat <= adc_b_filt_out;          real_adc_a_dat <= real_adc_a_i;                   real_adc_b_dat <= real_adc_b_i;               end
+      17'h1     : begin adc_a_dat <= adc_a_sum[15+0 :  0];      adc_b_dat <= adc_b_sum[15+0 :  0];    real_adc_a_dat <= real_adc_a_sum[15+0 :  0];      real_adc_b_dat <= real_adc_b_sum[15+0 :  0];  end
+      17'h2     : begin adc_a_dat <= adc_a_sum[15+1 :  1];      adc_b_dat <= adc_b_sum[15+1 :  1];    real_adc_a_dat <= real_adc_a_sum[15+1 :  1];      real_adc_b_dat <= real_adc_b_sum[15+1 :  1];  end
+      17'h4     : begin adc_a_dat <= adc_a_sum[15+2 :  2];      adc_b_dat <= adc_b_sum[15+2 :  2];    real_adc_a_dat <= real_adc_a_sum[15+2 :  2];      real_adc_b_dat <= real_adc_b_sum[15+2 :  2];  end
+      17'h8     : begin adc_a_dat <= adc_a_sum[15+3 :  3];      adc_b_dat <= adc_b_sum[15+3 :  3];    real_adc_a_dat <= real_adc_a_sum[15+3 :  3];      real_adc_b_dat <= real_adc_b_sum[15+3 :  3];  end
+      17'h10    : begin adc_a_dat <= adc_a_sum[15+4 :  4];      adc_b_dat <= adc_b_sum[15+4 :  4];    real_adc_a_dat <= real_adc_a_sum[15+4 :  4];      real_adc_b_dat <= real_adc_b_sum[15+4 :  4];  end
+      17'h20    : begin adc_a_dat <= adc_a_sum[15+5 :  5];      adc_b_dat <= adc_b_sum[15+5 :  5];    real_adc_a_dat <= real_adc_a_sum[15+5 :  5];      real_adc_b_dat <= real_adc_b_sum[15+5 :  5];  end
+      17'h40    : begin adc_a_dat <= adc_a_sum[15+6 :  6];      adc_b_dat <= adc_b_sum[15+6 :  6];    real_adc_a_dat <= real_adc_a_sum[15+6 :  6];      real_adc_b_dat <= real_adc_b_sum[15+6 :  6];  end
+      17'h80    : begin adc_a_dat <= adc_a_sum[15+7 :  7];      adc_b_dat <= adc_b_sum[15+7 :  7];    real_adc_a_dat <= real_adc_a_sum[15+7 :  7];      real_adc_b_dat <= real_adc_b_sum[15+7 :  7];  end
+      17'h100   : begin adc_a_dat <= adc_a_sum[15+8 :  8];      adc_b_dat <= adc_b_sum[15+8 :  8];    real_adc_a_dat <= real_adc_a_sum[15+8 :  8];      real_adc_b_dat <= real_adc_b_sum[15+8 :  8];  end
+      17'h200   : begin adc_a_dat <= adc_a_sum[15+9 :  9];      adc_b_dat <= adc_b_sum[15+9 :  9];    real_adc_a_dat <= real_adc_a_sum[15+9 :  9];      real_adc_b_dat <= real_adc_b_sum[15+9 :  9];  end
+      17'h400   : begin adc_a_dat <= adc_a_sum[15+10: 10];      adc_b_dat <= adc_b_sum[15+10: 10];    real_adc_a_dat <= real_adc_a_sum[15+10: 10];      real_adc_b_dat <= real_adc_b_sum[15+10: 10];  end
+      17'h800   : begin adc_a_dat <= adc_a_sum[15+11: 11];      adc_b_dat <= adc_b_sum[15+11: 11];    real_adc_a_dat <= real_adc_a_sum[15+11: 11];      real_adc_b_dat <= real_adc_b_sum[15+11: 11];  end
+      17'h1000  : begin adc_a_dat <= adc_a_sum[15+12: 12];      adc_b_dat <= adc_b_sum[15+12: 12];    real_adc_a_dat <= real_adc_a_sum[15+12: 12];      real_adc_b_dat <= real_adc_b_sum[15+12: 12];  end
+      17'h2000  : begin adc_a_dat <= adc_a_sum[15+13: 13];      adc_b_dat <= adc_b_sum[15+13: 13];    real_adc_a_dat <= real_adc_a_sum[15+13: 13];      real_adc_b_dat <= real_adc_b_sum[15+13: 13];  end
+      17'h4000  : begin adc_a_dat <= adc_a_sum[15+14: 14];      adc_b_dat <= adc_b_sum[15+14: 14];    real_adc_a_dat <= real_adc_a_sum[15+14: 14];      real_adc_b_dat <= real_adc_b_sum[15+14: 14];  end
+      17'h8000  : begin adc_a_dat <= adc_a_sum[15+15: 15];      adc_b_dat <= adc_b_sum[15+15: 15];    real_adc_a_dat <= real_adc_a_sum[15+15: 15];      real_adc_b_dat <= real_adc_b_sum[15+15: 15];  end
+      17'h10000 : begin adc_a_dat <= adc_a_sum[15+16: 16];      adc_b_dat <= adc_b_sum[15+16: 16];    real_adc_a_dat <= real_adc_a_sum[15+16: 16];      real_adc_b_dat <= real_adc_b_sum[15+16: 16];  end
+      default   : begin adc_a_dat <= adc_a_sum[15+0 :  0];      adc_b_dat <= adc_b_sum[15+0 :  0];    real_adc_a_dat <= real_adc_a_sum[15+0 :  0];      real_adc_b_dat <= real_adc_b_sum[15+0 :  0];  end
 /*
       17'h0     : begin adc_a_dat <= adc_a_filt_out;            adc_b_dat <= adc_b_filt_out;        end
       17'h1     : begin adc_a_dat <= adc_a_sum[15+0 :  0];      adc_b_dat <= adc_b_sum[15+0 :  0];  end
@@ -379,18 +387,18 @@ always @(posedge adc_clk_i) begin
    adc_b_rd    <= adc_b_buf[adc_b_raddr] ;
 end
 
-reg [32 -1:0] peak_a_minIndex, peak_b_minIndex, peak_a_maxIndex, peak_b_maxIndex;
+reg [RSZ -1:0] peak_a_minIndex, peak_b_minIndex, peak_a_maxIndex, peak_b_maxIndex;
 
 peakFinder #(
    .dataSize          (RSZ),
-   .indexSize         (32),
+   .indexSize         (RSZ),
    .areSignalsSigned  (1)
 )peakFinders[0:1](
    .clk              (adc_clk_i),
    .reset            (!adc_rstn_i),
 
    .trigger          (peak_trig),
-   .in               ({adc_a_dat,adc_b_dat}),
+   .in               ({real_adc_a_dat, real_adc_b_dat}),
    .in_valid         (adc_dv),
 
    .indexRange_min   ({peak_a_minIndex, peak_b_minIndex}),
@@ -628,10 +636,10 @@ assign axi1_rstn_o = adc_rstn_i;
 //---------------------------------------------------------------------------------
 //  Trigger source selector
 
-reg               adc_trig_ap      ;
-reg               adc_trig_an      ;
-reg               adc_trig_bp      ;
-reg               adc_trig_bn      ;
+reg               adc_trig_ap   , real_adc_trig_ap   ;
+reg               adc_trig_an   , real_adc_trig_an   ;
+reg               adc_trig_bp   , real_adc_trig_bp   ;
+reg               adc_trig_bn   , real_adc_trig_bn   ;
 reg               adc_trig_sw      ;
 reg   [   4-1: 0] set_trig_src     ;
 reg   [   4-1: 0] continuous_trig_src     ;//used for peak detection, since for that we don't want to disable the trigger once an acquisition has ended, but we want to restart the peak control immediately
@@ -672,6 +680,10 @@ end else begin
        4'd8 : adc_trig <= asg_trig_p    ; // ASG - rising edge
        4'd9 : adc_trig <= asg_trig_n    ; // ASG - falling edge
        4'd10: adc_trig <= trig_dsp_i    ; // dsp trigger input
+       4'd11: adc_trig <= real_adc_trig_ap;
+       4'd12: adc_trig <= real_adc_trig_an;
+       4'd13: adc_trig <= real_adc_trig_bp;
+       4'd14: adc_trig <= real_adc_trig_bn;
     default : adc_trig <= 1'b0          ;
    endcase
    case (continuous_trig_src)
@@ -685,6 +697,10 @@ end else begin
        4'd8 : peak_trig <= asg_trig_p    ; // ASG - rising edge
        4'd9 : peak_trig <= asg_trig_n    ; // ASG - falling edge
        4'd10: peak_trig <= trig_dsp_i    ; // dsp trigger input
+       4'd11: peak_trig <= real_adc_trig_ap;
+       4'd12: peak_trig <= real_adc_trig_an;
+       4'd13: peak_trig <= real_adc_trig_bp;
+       4'd14: peak_trig <= real_adc_trig_bn;
     default : peak_trig <= 1'b0          ;
    endcase
 end
@@ -692,10 +708,10 @@ end
 //---------------------------------------------------------------------------------
 //  Trigger created from input signal
 
-reg  [  2-1: 0] adc_scht_ap  ;
-reg  [  2-1: 0] adc_scht_an  ;
-reg  [  2-1: 0] adc_scht_bp  ;
-reg  [  2-1: 0] adc_scht_bn  ;
+reg  [  2-1: 0] adc_scht_ap  , real_adc_scht_ap;
+reg  [  2-1: 0] adc_scht_an  , real_adc_scht_an;
+reg  [  2-1: 0] adc_scht_bp  , real_adc_scht_bp;
+reg  [  2-1: 0] adc_scht_bn  , real_adc_scht_bn;
 reg  [ 14-1: 0] set_a_tresh  ;
 reg  [ 14-1: 0] set_a_treshp ;
 reg  [ 14-1: 0] set_a_treshm ;
@@ -707,14 +723,14 @@ reg  [ 14-1: 0] set_a_hyst   ;
 
 always @(posedge adc_clk_i)
 if (adc_rstn_i == 1'b0) begin
-   adc_scht_ap  <=  2'h0 ;
-   adc_scht_an  <=  2'h0 ;
-   adc_scht_bp  <=  2'h0 ;
-   adc_scht_bn  <=  2'h0 ;
-   adc_trig_ap  <=  1'b0 ;
-   adc_trig_an  <=  1'b0 ;
-   adc_trig_bp  <=  1'b0 ;
-   adc_trig_bn  <=  1'b0 ;
+   adc_scht_ap  <=  2'h0 ;  real_adc_scht_ap  <=  2'h0 ;
+   adc_scht_an  <=  2'h0 ;  real_adc_scht_an  <=  2'h0 ;
+   adc_scht_bp  <=  2'h0 ;  real_adc_scht_bp  <=  2'h0 ;
+   adc_scht_bn  <=  2'h0 ;  real_adc_scht_bn  <=  2'h0 ;
+   adc_trig_ap  <=  1'b0 ;  real_adc_trig_ap  <=  1'b0 ;
+   adc_trig_an  <=  1'b0 ;  real_adc_trig_an  <=  1'b0 ;
+   adc_trig_bp  <=  1'b0 ;  real_adc_trig_bp  <=  1'b0 ;
+   adc_trig_bn  <=  1'b0 ;  real_adc_trig_bn  <=  1'b0 ;
 end else begin
    set_a_treshp <= set_a_tresh + set_a_hyst ; // calculate positive
    set_a_treshm <= set_a_tresh - set_a_hyst ; // and negative treshold
@@ -731,17 +747,29 @@ end else begin
       else if ($signed(adc_b_dat) <  $signed(set_a_treshm))      adc_scht_bp[0] <= 1'b0 ; //set_b_treshm
            if ($signed(adc_b_dat) <= $signed(set_a_tresh ))      adc_scht_bn[0] <= 1'b1 ; //set_b_tresh
       else if ($signed(adc_b_dat) >  $signed(set_a_treshp))      adc_scht_bn[0] <= 1'b0 ; //set_b_treshp
+
+
+           if ($signed(real_adc_a_dat) >= $signed(set_a_tresh ))      real_adc_scht_ap[0] <= 1'b1 ;  // treshold reached
+      else if ($signed(real_adc_a_dat) <  $signed(set_a_treshm))      real_adc_scht_ap[0] <= 1'b0 ;  // wait until it goes under hysteresis
+           if ($signed(real_adc_a_dat) <= $signed(set_a_tresh ))      real_adc_scht_an[0] <= 1'b1 ;  // treshold reached
+      else if ($signed(real_adc_a_dat) >  $signed(set_a_treshp))      real_adc_scht_an[0] <= 1'b0 ;  // wait until it goes over hysteresis
+
+           if ($signed(real_adc_b_dat) >= $signed(set_a_tresh ))      real_adc_scht_bp[0] <= 1'b1 ; //set_b_tresh
+      else if ($signed(real_adc_b_dat) <  $signed(set_a_treshm))      real_adc_scht_bp[0] <= 1'b0 ; //set_b_treshm
+           if ($signed(real_adc_b_dat) <= $signed(set_a_tresh ))      real_adc_scht_bn[0] <= 1'b1 ; //set_b_tresh
+      else if ($signed(real_adc_b_dat) >  $signed(set_a_treshp))      real_adc_scht_bn[0] <= 1'b0 ; //set_b_treshp
    end
 
-   adc_scht_ap[1] <= adc_scht_ap[0] ;
-   adc_scht_an[1] <= adc_scht_an[0] ;
-   adc_scht_bp[1] <= adc_scht_bp[0] ;
-   adc_scht_bn[1] <= adc_scht_bn[0] ;
+   adc_scht_ap[1] <= adc_scht_ap[0] ; real_adc_scht_ap[1] <= real_adc_scht_ap[0] ;
+   adc_scht_an[1] <= adc_scht_an[0] ; real_adc_scht_an[1] <= real_adc_scht_an[0] ;
+   adc_scht_bp[1] <= adc_scht_bp[0] ; real_adc_scht_bp[1] <= real_adc_scht_bp[0] ;
+   adc_scht_bn[1] <= adc_scht_bn[0] ; real_adc_scht_bn[1] <= real_adc_scht_bn[0] ;
 
-   adc_trig_ap <= adc_scht_ap[0] && !adc_scht_ap[1] ; // make 1 cyc pulse 
-   adc_trig_an <= adc_scht_an[0] && !adc_scht_an[1] ;
-   adc_trig_bp <= adc_scht_bp[0] && !adc_scht_bp[1] ;
-   adc_trig_bn <= adc_scht_bn[0] && !adc_scht_bn[1] ;
+ // make 1 cyc pulse 
+   adc_trig_ap <= adc_scht_ap[0] && !adc_scht_ap[1] ;  real_adc_trig_ap <= real_adc_scht_ap[0] && !real_adc_scht_ap[1] ;
+   adc_trig_an <= adc_scht_an[0] && !adc_scht_an[1] ;  real_adc_trig_an <= real_adc_scht_an[0] && !real_adc_scht_an[1] ;
+   adc_trig_bp <= adc_scht_bp[0] && !adc_scht_bp[1] ;  real_adc_trig_bp <= real_adc_scht_bp[0] && !real_adc_scht_bp[1] ;
+   adc_trig_bn <= adc_scht_bn[0] && !adc_scht_bn[1] ;  real_adc_trig_bn <= real_adc_scht_bn[0] && !real_adc_scht_bn[1] ;
 end
 
 //---------------------------------------------------------------------------------

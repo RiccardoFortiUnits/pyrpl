@@ -89,10 +89,10 @@ should not be used.
    output reg            sys_ack         ,   //!< bus acknowledge signal
 
    input      [ 14 -1:0] peak_a,
-   input      [ 32 -1:0] peak_a_index,
+   input      [ 14 -1:0] peak_a_index,
    input                 peak_a_valid,
    input      [ 14 -1:0] peak_b,
-   input      [ 32 -1:0] peak_b_index,
+   input      [ 14 -1:0] peak_b_index,
    input                 peak_b_valid
 );
 
@@ -189,8 +189,8 @@ assign output_signal[DAC1] = dat_a_o;
 assign output_signal[DAC2] = dat_b_o;
 assign output_signal[PEAK1] = peak_a;
 assign output_signal[PEAK2] = peak_b;
-assign output_signal[PEAK_IDX1] = peak_a_index >> 3;
-assign output_signal[PEAK_IDX2] = peak_b_index >> 3;
+assign output_signal[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is an positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
+assign output_signal[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
 
 //connect only two pwm to internal signals (should be enough)
 assign pwm0 = (input_select[PWM0] == NONE) ? 14'h0 : output_signal[input_select[PWM0]];

@@ -25,7 +25,7 @@ module peakFinder #(
 	reg [indexSize -1:0] currentMaxIndex;
 	reg running;
 	always @(posedge clk) begin
-		max_valid <= (counter >= indexRange_max) && (!reset);//output is valid only when the window just finished
+		max_valid <= ($unsigned(counter) >= $unsigned(indexRange_max)) && (!reset);//output is valid only when the window just finished
 		if (reset) begin
 			max <= minValue;
 			maxIndex <= 0;
@@ -33,7 +33,7 @@ module peakFinder #(
 			currentMaxIndex <= 0;
 			counter <= 0;
 			running <= 0;
-		end else if(counter >= indexRange_max)begin// did we just finish a window?
+		end else if($unsigned(counter) >= $unsigned(indexRange_max))begin// did we just finish a window?
 			//change output and reset
 		    max <= currentMax;
 		    maxIndex <= currentMaxIndex;

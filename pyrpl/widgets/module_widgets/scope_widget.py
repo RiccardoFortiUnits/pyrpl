@@ -180,6 +180,20 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.attribute_widgets['duration'].value_changed.connect(
             self.update_rolling_mode_visibility)
 
+        self.layout_peaks = QtWidgets.QVBoxLayout()
+        
+        self.attribute_layout.removeWidget(aws['minTime1'])
+        self.attribute_layout.removeWidget(aws['maxTime1'])
+        self.attribute_layout.removeWidget(aws['minTime2'])
+        self.attribute_layout.removeWidget(aws['maxTime2'])
+        self.layout_peaks.addWidget(aws['minTime1'])
+        self.layout_peaks.addWidget(aws['maxTime1'])
+        self.layout_peaks.addWidget(aws['minTime2'])
+        self.layout_peaks.addWidget(aws['maxTime2'])
+
+
+        self.attribute_layout.addLayout(self.layout_peaks)
+
         super(ScopeWidget, self).init_gui()
         # since trigger_mode radiobuttons is not a regular attribute_widget,
         # it is not synced with the module at creation time.

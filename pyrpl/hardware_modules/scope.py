@@ -148,10 +148,27 @@ class DecimationRegister(SelectRegister):
     Careful: changing decimation changes duration and sampling_time as well
     """
     def set_value(self, obj, value):
+        previousPeaks = [0] * len(obj.peakRangeRegisters)
+        for i, reg in enumerate(obj.peakRangeRegisters.values()):
+            previousPeaks[i] = reg.get_value(obj)
         SelectRegister.set_value(self, obj, value)
         obj.__class__.duration.value_updated(obj, obj.duration)
         obj.__class__.sampling_time.value_updated(obj, obj.sampling_time)
+        for i, reg in enumerate(obj.peakRangeRegisters.values()):
+            reg.set_value(obj,previousPeaks[i])
 
+class peakIndexRegister(FloatRegister):
+    def __init__(self, address, norm=1, signed=True, invert=False, **kwargs):
+        super().__init__(address, 32, None, 0, norm, signed, invert, **kwargs, min = 0, max = 1, increment = 8e-9 * 0x200)
+
+    def set_value(self, obj, value):
+        value = value / obj.decimation / 8e-9
+        FloatRegister.set_value(self, obj, value)
+        
+    def get_value(self, obj):
+        value = FloatRegister.get_value(self, obj)
+        value = value * obj.decimation * 8e-9
+        return value
 
 class DurationProperty(SelectProperty):
     def get_value(self, obj):
@@ -228,7 +245,11 @@ class Scope(HardwareModule, AcquisitionModule):
                        "pid0_min_voltage",
                        "pid0_max_voltage",
                        "pid0_p",
-                       "pid0_i"]
+                       "pid0_i",
+                       "minTime1",
+                       "maxTime1",
+                       "minTime2",
+                       "maxTime2",]
     
     #____________added controls________________________________________
     asg0_offset = FloatRegister(address= 0x40200004 - addr_base, 
@@ -317,7 +338,11 @@ class Scope(HardwareModule, AcquisitionModule):
                                     "ext_negative_edge": 7,  # DIO0_P pin
                                     "asg0": 8,
                                     "asg1": 9,
-                                    "dsp": 10}, #dsp trig module trigger
+                                    "dsp": 10, #dsp trig module trigger
+                                    "adc1_positive_edge": 11,
+                                    "adc1_negative_edge": 12,
+                                    "adc2_positive_edge": 13,
+                                    "adc2_negative_edge": 14,}, 
                                     sort_by_values=True)
 
     trigger_sources = _trigger_sources.keys()  # help for the user
@@ -446,6 +471,18 @@ class Scope(HardwareModule, AcquisitionModule):
     sampling_times = [8e-9 * dec for dec in decimations]
 
     sampling_time = SamplingTimeProperty(options=sampling_times)
+
+    minTime1 = peakIndexRegister(0x94, default = 0x0, doc = "time after the trigger from which the peak on channel 1 is checked (the peak is searched only between minTime1 and maxTime1)")
+    maxTime1 = peakIndexRegister(0x98, default = 0x2000, doc = "time after the trigger at which the peak on channel 1 is no longer checked")
+    minTime2 = peakIndexRegister(0x9C, default = 0x0, doc = "time after the trigger from which the peak on channel 2 is checked (the peak is searched only between minTime2 and maxTime2)")
+    maxTime2 = peakIndexRegister(0xA0, default = 0x2000, doc = "time after the trigger at which the peak on channel 2 is no longer checked")
+
+    peakRangeRegisters = dict(
+        minTime1 = minTime1,
+        maxTime1 = maxTime1,
+        minTime2 = minTime2,
+        maxTime2 = maxTime2,
+    )
 
     # list comprehension workaround for python 3 compatibility
     # cf. http://stackoverflow.com/questions/13905741
