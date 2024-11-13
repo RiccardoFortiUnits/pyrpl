@@ -289,8 +289,6 @@ reg   [ 64 - 1:0] ctr_value        ;
 reg   [ 14 - 1:0] pretrig_data_min; // make sure this amount of data has been acquired before trig
 reg 			  pretrig_ok;
 
-reg [14 -1:0] pretrigFromMem;
-reg usePretrigFromMem;
 
 // Write
 always @(posedge adc_clk_i) begin
@@ -305,12 +303,12 @@ always @(posedge adc_clk_i) begin
       adc_dly_cnt <= 32'h0      ;
       adc_dly_do  <=  1'b0      ;
       triggered   <=  1'b0      ;
-      pretrig_data_min <= usePretrigFromMem ? pretrigFromMem : 2**RSZ - set_dly;
+      pretrig_data_min <= 2**RSZ - set_dly;
       pretrig_ok <= 1'b0; // goes to 1 when enough data has been acquired pretrigger
    end
    else begin
       ctr_value <= ctr_value + 1'b1;
-      pretrig_data_min <= usePretrigFromMem ? pretrigFromMem : 2**RSZ - set_dly; // next line takes care of negative overflow (when set_dly > 2**RSZ)
+      pretrig_data_min <= 2**RSZ - set_dly; // next line takes care of negative overflow (when set_dly > 2**RSZ)
       // ready for trigger when enough samples are acquired or trigger delay is longer than buffer duration
       pretrig_ok <= (adc_we_cnt > pretrig_data_min) || (|(set_dly[32-1:RSZ]));
 
@@ -387,7 +385,24 @@ always @(posedge adc_clk_i) begin
    adc_b_rd    <= adc_b_buf[adc_b_raddr] ;
 end
 
+localparam  chForPeak_realAdc0 = 0,
+            chForPeak_realAdc1 = 1,
+            chForPeak_adc0 = 2,
+            chForPeak_adc1 = 3;
+
+reg [1:0] chUsedByPeak0, chUsedByPeak1;
 reg [RSZ -1:0] peak_a_minIndex, peak_b_minIndex, peak_a_maxIndex, peak_b_maxIndex;
+reg [RSZ -1:0] signalForPeak0, signalForPeak1;
+wire [RSZ*4 -1:0] availablePeakSignals = {adc_b_dat, adc_a_dat, real_adc_b_dat, real_adc_a_dat};
+always @(posedge adc_clk_i) begin
+   if(~adc_rstn_i) begin
+      signalForPeak0 <= 0;
+      signalForPeak1 <= 0;
+   end else begin
+      signalForPeak0 <= availablePeakSignals[RSZ*(chUsedByPeak0+1) -1-:RSZ];
+      signalForPeak1 <= availablePeakSignals[RSZ*(chUsedByPeak1+1) -1-:RSZ];
+   end
+end
 
 peakFinder #(
    .dataSize          (RSZ),
@@ -398,7 +413,7 @@ peakFinder #(
    .reset            (!adc_rstn_i),
 
    .trigger          (peak_trig),
-   .in               ({real_adc_a_dat, real_adc_b_dat}),
+   .in               ({signalForPeak0, signalForPeak1}),
    .in_valid         (adc_dv),
 
    .indexRange_min   ({peak_a_minIndex, peak_b_minIndex}),
@@ -883,11 +898,13 @@ if (adc_rstn_i == 1'b0) begin
    set_b_axi_en  <=   1'b0      ;
 
 
-    peak_a_minIndex <= 0;
-    peak_a_maxIndex <= 2**(RSZ-1);
-    peak_b_minIndex <= 0;
-    peak_b_maxIndex <= 2**(RSZ-1);
-    {usePretrigFromMem, pretrigFromMem} = 0;
+   peak_a_minIndex <= 0;
+   peak_a_maxIndex <= 2**(RSZ-1);
+   peak_b_minIndex <= 0;
+   peak_b_maxIndex <= 2**(RSZ-1);
+
+   chUsedByPeak0 <= chForPeak_realAdc0;
+   chUsedByPeak1 <= chForPeak_realAdc1;
 
 end else begin
    if (sys_wen) begin
@@ -928,7 +945,7 @@ end else begin
       if (sys_addr[19:0]==20'h098)   peak_a_maxIndex <= sys_wdata ;
       if (sys_addr[19:0]==20'h09C)   peak_b_minIndex <= sys_wdata ;
       if (sys_addr[19:0]==20'h0A0)   peak_b_maxIndex <= sys_wdata ;
-      if (sys_addr[19:0]==20'h0B0)   {usePretrigFromMem, pretrigFromMem} <= sys_wdata ;
+      if (sys_addr[19:0]==20'h0B0)   {chUsedByPeak1, chUsedByPeak0} <= sys_wdata ;
    end
 end
 
@@ -1000,7 +1017,7 @@ end else begin
      20'h000A4 : begin sys_ack <= sys_en;          sys_rdata <= {peak_b_valid, peak_b, {(15-RSZ){1'b0}}, peak_a_valid, peak_a}        ; end
      20'h000A8 : begin sys_ack <= sys_en;          sys_rdata <= peak_a_index        ; end
      20'h000AC : begin sys_ack <= sys_en;          sys_rdata <= peak_b_index        ; end
-     20'h000B0 : begin sys_ack <= sys_en;          sys_rdata <= {usePretrigFromMem, pretrigFromMem}        ; end
+     20'h000B0 : begin sys_ack <= sys_en;          sys_rdata <= {chUsedByPeak1, chUsedByPeak0}        ; end
 
     
      20'h00154 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, adc_a_i }         ; end

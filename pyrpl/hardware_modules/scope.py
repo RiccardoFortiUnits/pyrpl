@@ -249,7 +249,9 @@ class Scope(HardwareModule, AcquisitionModule):
                        "minTime1",
                        "maxTime1",
                        "minTime2",
-                       "maxTime2",]
+                       "maxTime2",
+                       "peak1_input",
+                       "peak2_input",]
     
     #____________added controls________________________________________
     asg0_offset = FloatRegister(address= 0x40200004 - addr_base, 
@@ -477,6 +479,12 @@ class Scope(HardwareModule, AcquisitionModule):
     minTime2 = peakIndexRegister(0x9C, default = 0x0, doc = "time after the trigger from which the peak on channel 2 is checked (the peak is searched only between minTime2 and maxTime2)")
     maxTime2 = peakIndexRegister(0xA0, default = 0x2000, doc = "time after the trigger at which the peak on channel 2 is no longer checked")
 
+    peakInputsList = {"adc1" : 0, "adc2" : 1, "ch1" : 2, "ch2" : 3}
+    peak1_input =  SelectRegister(0xB0, startBit=0, doc="input used for the first peak search",
+                                              options=peakInputsList)
+    peak2_input =  SelectRegister(0xB0, startBit=2, doc="input used for the first peak search",
+                                              options=peakInputsList)
+
     peakRangeRegisters = dict(
         minTime1 = minTime1,
         maxTime1 = maxTime1,
@@ -577,7 +585,7 @@ class Scope(HardwareModule, AcquisitionModule):
         return np.array(
             np.roll(self._rawdata_ch1, - (self._write_pointer_trigger +
                                           self._trigger_delay_register + 1)),
-            dtype=np.float) / 2 ** 13
+            dtype=float) / 2 ** 13
 
     @property
     def _data_ch2(self):
@@ -585,21 +593,21 @@ class Scope(HardwareModule, AcquisitionModule):
         return np.array(
             np.roll(self._rawdata_ch2, - (self._write_pointer_trigger +
                                           self._trigger_delay_register + 1)),
-            dtype=np.float) / 2 ** 13
+            dtype=float) / 2 ** 13
 
     @property
     def _data_ch1_current(self):
         """ (unnormalized) data from ch1 while acquisition is still running"""
         return np.array(
             np.roll(self._rawdata_ch1, -(self._write_pointer_current + 1)),
-            dtype=np.float) / 2 ** 13
+            dtype=float) / 2 ** 13
 
     @property
     def _data_ch2_current(self):
         """ (unnormalized) data from ch2 while acquisition is still running"""
         return np.array(
             np.roll(self._rawdata_ch2, -(self._write_pointer_current + 1)),
-            dtype=np.float) / 2 ** 13
+            dtype=float) / 2 ** 13
 
     @property
     def times(self):
