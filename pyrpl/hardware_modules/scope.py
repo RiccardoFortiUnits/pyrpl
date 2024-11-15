@@ -121,7 +121,7 @@ large an integrator gain will quickly saturate the outputs.
 """
 
 import time
-from .dsp import all_inputs, dsp_addr_base, InputSelectRegister
+from .dsp import all_inputs, dsp_addr_base, InputSelectRegister, DspModule
 from ..acquisition_module import AcquisitionModule
 from ..async_utils import wait, ensure_future, sleep_async
 from ..pyrpl_utils import sorted_dict
@@ -129,6 +129,7 @@ from ..attributes import *
 from ..modules import HardwareModule
 from ..pyrpl_utils import time
 from ..widgets.module_widgets import ScopeWidget
+from .pid import IValAttribute
 
 logger = logging.getLogger(name=__name__)
 
@@ -246,6 +247,7 @@ class Scope(HardwareModule, AcquisitionModule):
                        "pid0_max_voltage",
                        "pid0_p",
                        "pid0_i",
+                       "ival",
                        "minTime1",
                        "maxTime1",
                        "minTime2",
@@ -263,25 +265,27 @@ class Scope(HardwareModule, AcquisitionModule):
     _PSR = 12  # Register(0x200)
     _ISR = 32  # Register(0x204)
     _DSR = 10  # Register(0x208)
-    _GAINBITS = 24  # Register(0x20C)    
-    pid0_setpoint = FloatRegister(0x40300104 - addr_base,
+    _GAINBITS = 24  # Register(0x20C)  
+    pid0_setpoint = FloatRegister(dsp_addr_base(0) + 0x104 - addr_base,
                     bits=14, norm= 2 **13,
                     doc="pid setpoint [volts]")
 
-    pid0_min_voltage = FloatRegister(0x40300124 - addr_base,
+    pid0_min_voltage = FloatRegister(dsp_addr_base(0) + 0x124 - addr_base,
                     bits=14, norm= 2 **13,
                     doc="minimum output signal [volts]")
-    pid0_max_voltage = FloatRegister(0x40300128 - addr_base,
+    pid0_max_voltage = FloatRegister(dsp_addr_base(0) + 0x128 - addr_base,
                     bits=14, norm= 2 **13,
                     doc="maximum output signal [volts]")
 
-    pid0_p = GainRegister(0x40300108 - addr_base,
+    pid0_p = GainRegister(dsp_addr_base(0) + 0x108 - addr_base,
                     bits=_GAINBITS, norm= 2 **_PSR,
                     doc="pid proportional gain [1]")
-    pid0_i = GainRegister(0x4030010C - addr_base,
+    pid0_i = GainRegister(dsp_addr_base(0) + 0x10C - addr_base,
                     bits=_GAINBITS, norm= 2 **_ISR * 2.0 * np.pi * 8e-9,
                     doc="pid integral unity-gain frequency [Hz]")
     
+    ival = IValAttribute(min=-4, max=4, increment= 8. / 2**16, doc="Current "
+            "value of the integrator memory (i.e. pid output voltage offset)")
     
     #__________________________________________________________________
     

@@ -138,8 +138,11 @@ def all_output_directs(instance):
 
 def dsp_addr_base(name):
     # find address from name
-    number = DSP_INPUTS[name]
-    return 0x40300000 + number * 0x10000
+    if isinstance(name, str):
+        number = DSP_INPUTS[name]
+    else:
+        number = int(name)
+    return 0x40400000 + number * 0x10000
 
 
 class PauseRegister(BoolRegister):

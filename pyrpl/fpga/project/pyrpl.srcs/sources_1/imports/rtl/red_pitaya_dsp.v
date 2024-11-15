@@ -43,9 +43,9 @@ The second half of this file defines the different submodules. For custom submod
 a good point to start is red_pitaya_pid_block.v. 
 
 Submodule i is assigned the address space
-0x40300000 + i*0x10000 + (0x0000 to 0xFFFF), that is 2**16 bytes.
+0x40400000 + i*0x10000 + (0x0000 to 0xFFFF), that is 2**16 bytes.
 
-Addresses 0x403z00zz where z is an arbitrary hex character are reserved to manage 
+Addresses 0x40[1zzz]z00zz where z is an arbitrary hex character are reserved to manage 
 the input/output routing of the submodule and are not forwarded, and therefore 
 should not be used.  
 *************************************************************/
@@ -69,11 +69,11 @@ should not be used.
    input      [ 14-1: 0] asg2_i,
    input      [ 14-1: 0] asg1phase_i,
 
-   // pwm outputs
+   // pwm and digital pins outputs
    output     [ 14-1: 0] pwm0,
    output     [ 14-1: 0] pwm1,
-   output     [ 14-1: 0] pwm2,
-   output     [ 14-1: 0] pwm3,
+   output     [ 14-1: 0] extDigital0,
+   output     [ 14-1: 0] extDigital1,
 
    // trigger outputs for the scope
    output                trig_o,   // output from trigger dsp module
@@ -98,7 +98,7 @@ should not be used.
 
 localparam EXTRAMODULES = 2; //need two extra control registers for scope/asg
 localparam EXTRAINPUTS = 8; //four extra input signals for dac(2)/adc(2), plus ADC peaks and peak positions
-localparam EXTRAOUTPUTS = 2; //two extra output signals for pwm channels
+localparam EXTRAOUTPUTS = 4; //two extra output signals for pwm channels, plus 2 signals for the external digital pins
 localparam LOG_INPUT_MODULES = $clog2(EXTRAINPUTS+EXTRAMODULES+MODULES);
 localparam LOG_OUTPUT_MODULES = $clog2(EXTRAMODULES+MODULES);//the EXTRAOUTPUTS cannot be put on the DAC output, so we don't consider it. 
                                                                //This value is used in combination with output_direct and output_select
@@ -141,8 +141,8 @@ localparam PEAK_IDX2  = MODULES+9;
 //EXTRAOUTPUT numbers
 localparam PWM0  = MODULES+2; //they can have the same indexes as the extra inputs
 localparam PWM1  = MODULES+3;
-localparam PWM3  = MODULES+4;
-localparam PWM4  = MODULES+5;
+localparam EXT_DIG0  = MODULES+4;
+localparam EXT_DIG1  = MODULES+5;
 
 //output states
 localparam BOTH = 2'b11;
@@ -192,11 +192,11 @@ assign output_signal[PEAK2] = peak_b;
 assign output_signal[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is an positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
 assign output_signal[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
 
-//connect only two pwm to internal signals (should be enough)
+//connect pwm and external digital pins to internal signals
 assign pwm0 = (input_select[PWM0] == NONE) ? 14'h0 : output_signal[input_select[PWM0]];
 assign pwm1 = (input_select[PWM1] == NONE) ? 14'h0 : output_signal[input_select[PWM1]];
-assign pwm2 = 14'b0;
-assign pwm3 = 14'b0;
+assign extDigital0 = (input_select[EXT_DIG0] == NONE) ? 14'h0 : output_signal[input_select[EXT_DIG0]];
+assign extDigital1 = (input_select[EXT_DIG1] == NONE) ? 14'h0 : output_signal[input_select[EXT_DIG1]];
 
 wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum1; 
 wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum2; 

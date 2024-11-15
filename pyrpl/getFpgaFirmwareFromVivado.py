@@ -27,3 +27,5 @@ shutil.copyfile(projectBinFilePath + "red_pitaya_top.bit.bin",
             backupSaveFolder)
 shutil.copyfile(projectBinFilePath + "red_pitaya_top.bit.bin", 
             fpgaFilePath + "red_pitaya.bin")
+shutil.copyfile(projectBinFilePath + "red_pitaya_top.bit.bin", 
+            "D:/Anaconda3/Lib/site-packages/pyrpl/fpga/red_pitaya.bin")

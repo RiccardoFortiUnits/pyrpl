@@ -153,7 +153,8 @@ class ScopeWidget(AcquisitionModuleWidget):
             "pid0_min_voltage",
             "pid0_max_voltage",
             "pid0_p",
-            "pid0_i"
+            "pid0_i",
+            "ival"
         ]
         for param in additionalScopeParams:
             self.attribute_layout.removeWidget(aws[param])
@@ -181,15 +182,23 @@ class ScopeWidget(AcquisitionModuleWidget):
             self.update_rolling_mode_visibility)
 
         self.layout_peaks = QtWidgets.QVBoxLayout()
+        self.layout_peak1 = QtWidgets.QHBoxLayout()
+        self.layout_peak2 = QtWidgets.QHBoxLayout()
+        self.layout_peaks.addLayout(self.layout_peak1)
+        self.layout_peaks.addLayout(self.layout_peak2)
         
         self.attribute_layout.removeWidget(aws['minTime1'])
         self.attribute_layout.removeWidget(aws['maxTime1'])
+        self.attribute_layout.removeWidget(aws['peak1_input'])
         self.attribute_layout.removeWidget(aws['minTime2'])
         self.attribute_layout.removeWidget(aws['maxTime2'])
-        self.layout_peaks.addWidget(aws['minTime1'])
-        self.layout_peaks.addWidget(aws['maxTime1'])
-        self.layout_peaks.addWidget(aws['minTime2'])
-        self.layout_peaks.addWidget(aws['maxTime2'])
+        self.attribute_layout.removeWidget(aws['peak2_input'])
+        self.layout_peak1.addWidget(aws['minTime1'])
+        self.layout_peak1.addWidget(aws['maxTime1'])
+        self.layout_peak1.addWidget(aws['peak1_input'])
+        self.layout_peak2.addWidget(aws['minTime2'])
+        self.layout_peak2.addWidget(aws['maxTime2'])
+        self.layout_peak2.addWidget(aws['peak2_input'])
 
 
         self.attribute_layout.addLayout(self.layout_peaks)

@@ -220,10 +220,13 @@ class BaseRegister(BaseProperty):
         Retrieves the value that is physically on the redpitaya device.
         """
         # self.parent = obj  # store obj in memory
+        val = obj._read(self.address)
         if self.bitmask is None:
-            return self.to_python(obj, obj._read(self.address))
+            print(f"address {hex(self.address + obj._addr_base)}, reading {hex(val)}")
+            return self.to_python(obj, val)
         else:
-            retVal = obj._read(self.address) & self.bitmask
+            print(f"address {hex(self.address + obj._addr_base)}, reading {hex(val)}")
+            retVal = val & self.bitmask
             if self.startBit is not None: 
                 # try:
                     retVal >>= self.startBit
@@ -238,6 +241,7 @@ class BaseRegister(BaseProperty):
         """
         if self.bitmask is None:
             obj._write(self.address, self.from_python(obj, val))
+            print(f"address {hex(self.address + obj._addr_base)}, writing {hex(self.from_python(obj, val))}")
         else:
             act = obj._read(self.address)
             new = act & (~self.bitmask)
@@ -246,6 +250,7 @@ class BaseRegister(BaseProperty):
                 addValue <<= self.startBit
             new |= (addValue & self.bitmask)
             obj._write(self.address, new)
+            print(f"address {hex(self.address + obj._addr_base)}, writing {hex(new)}")
                 
 
     def __set__(self, obj, value):

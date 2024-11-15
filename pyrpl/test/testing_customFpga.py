@@ -44,6 +44,20 @@ Created on Mon Jun 17 18:01:10 2024
 
 # # rp.end_all()
 
+
+# def install_and_import(package):
+# 	import subprocess
+# 	import sys
+# 	try:
+# 		__import__(package)
+# 	except ImportError:
+# 		subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+# 		__import__(package)
+		
+# install_and_import("scp")
+# install_and_import("PyQt5")
+# install_and_import("PyQt6")
+
 from pyrpl import Pyrpl
 
 p = Pyrpl("a.yml")
