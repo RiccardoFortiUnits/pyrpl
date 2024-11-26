@@ -54,42 +54,9 @@ module red_pitaya_lpf_block
     output signed [SIGNALBITS-1:0] signal_o
 );
 
-`define CLOG2(x) \
-   (x < 2) ? 1 : \
-   (x < 4) ? 2 : \
-   (x < 8) ? 3 : \
-   (x < 16) ? 4 : \
-   (x < 32) ? 5 : \
-   (x < 64) ? 6 : \
-   (x < 128) ? 7 : \
-   (x < 256) ? 8 : \
-   (x < 512) ? 9 : \
-   (x < 1024) ? 10 : \
-   (x < 2048) ? 11 : \
-   (x < 2**12) ? 12 : \
-   (x < 2**13) ? 13 : \
-   (x < 2**14) ? 14 : \
-   (x < 2**15) ? 15 : \
-   (x < 2**16) ? 16 : \
-   (x < 2**17) ? 17 : \
-   (x < 2**18) ? 18 : \
-   (x < 2**19) ? 19 : \
-   (x < 2**20) ? 20 : \
-   (x < 2**21) ? 21 : \
-   (x < 2**22) ? 22 : \
-   (x < 2**23) ? 23 : \
-   (x < 2**24) ? 24 : \
-   (x < 2**25) ? 25 : \
-   (x < 2**26) ? 26 : \
-   (x < 2**27) ? 27 : \
-   (x < 2**28) ? 28 : \
-   (x < 2**29) ? 29 : \
-   (x < 2**30) ? 30 : \
-   (x < 2**31) ? 31 : \
-   (x <= 2**32) ? 32 : \
-   -1
+
    
-localparam MAXSHIFT = `CLOG2(125000000/MINBW);  // gives an effective limit of 10 MHz (divided by 4 pi)
+localparam MAXSHIFT = $clog2(125000000/MINBW);  // gives an effective limit of 10 MHz (divided by 4 pi)
 
 reg  signed [SIGNALBITS+MAXSHIFT-1:0]    y;
 reg  signed [SIGNALBITS+MAXSHIFT-1:0]    delta;   //we need this cumbersome imperfect implementation with a delta buffer to introduce some delay so the code works at 125 MHZ

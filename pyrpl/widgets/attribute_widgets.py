@@ -181,7 +181,7 @@ class StringAttributeWidget(BaseAttributeWidget):
         return str(self.widget.text())
 
     def _set_widget_value(self, new_value):
-        self.widget.setText(new_value)
+        self.widget.setText(str(new_value))
 
 
 class TextAttributeWidget(StringAttributeWidget):

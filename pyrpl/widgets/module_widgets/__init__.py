@@ -21,3 +21,4 @@ from .scope_widget import ScopeWidget
 from .spec_an_widget import SpecAnWidget
 from .pyrpl_config_widget import PyrplConfigWidget
 from .curve_viewer_widget import CurveViewerWidget
+from .linearizer_widget import linearizerWidget

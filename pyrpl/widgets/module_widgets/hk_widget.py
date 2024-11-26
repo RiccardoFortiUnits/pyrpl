@@ -23,6 +23,8 @@ class HkWidget(ModuleWidget):
         self.main_lay = QtWidgets.QVBoxLayout()
         self.lay_h1 = QtWidgets.QHBoxLayout()
         self.lay_h1.addWidget(self.attribute_widgets['led'])
+        self.lay_h1.addWidget(self.attribute_widgets['input1'])
+        self.lay_h1.addWidget(self.attribute_widgets['input2'])
         self.refresh_button = QtWidgets.QPushButton("Refresh")
         self.refresh_button.clicked.connect(self.refresh)
         self.lay_h1.addWidget(self.refresh_button)
@@ -42,17 +44,19 @@ class HkWidget(ModuleWidget):
                 val_widget = self.attribute_widgets['expansion_' + sign + str(i)]
                 direction_widget = self.attribute_widgets['expansion_' + sign +
                                                           str(i) + '_output']
-                followTrigger_widget = self.attribute_widgets['expansion_' + sign +
-                                                          str(i) + '_followTrigger']
+                pinState_widget = self.attribute_widgets['pinState_' + sign + str(i)]
+                otherPin_widget = self.attribute_widgets['external_' + sign + str(i) + "_otherPinSelector"]
+                dspPin_widget = self.attribute_widgets['external_' + sign + str(i) + "_dspBitSelector"]
                 self.attribute_layout.removeWidget(val_widget)
                 self.attribute_layout.removeWidget(direction_widget)
-                self.attribute_layout.removeWidget(followTrigger_widget)
+                self.attribute_layout.removeWidget(pinState_widget)
+                self.attribute_layout.removeWidget(otherPin_widget)
+                self.attribute_layout.removeWidget(dspPin_widget)
                 lay.addWidget(val_widget)
                 lay.addWidget(direction_widget)
-                lay.addWidget(followTrigger_widget)
-            switch_widget = self.attribute_widgets['useFastSwitch' + str(i)]
-            self.attribute_layout.removeWidget(switch_widget)
-            lay.addWidget(switch_widget)
+                lay.addWidget(pinState_widget)
+                lay.addWidget(otherPin_widget)
+                lay.addWidget(dspPin_widget)
 
         self.attribute_layout.setStretch(0,0)
         self.attribute_layout.addStretch(1)

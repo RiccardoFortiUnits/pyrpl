@@ -39,6 +39,8 @@ import logging
 import sys
 import numpy as np
 import numbers
+import ast
+from typing import Type, List, Any, TypeVar
 
 logger = logging.getLogger(name=__name__)
 
@@ -477,6 +479,93 @@ class IntRegister(BaseRegister, IntProperty):
         return int(value)
 
 
+class ArrayProperty(BaseProperty):
+    """
+    class for lists of numbers/lists
+    """
+    _widget_class = TextAttributeWidget
+    @property
+    def default(self):
+        return np.zeros(self.len)
+
+    def __init__(self,
+                 len = 1,
+                 **kwargs):
+        self.len = len
+        BaseProperty.__init__(self, **kwargs)
+
+    def _create_widget(self, module, widget_name=None):
+        widget = BaseProperty._create_widget(self, module,
+                                             widget_name=widget_name)
+        return widget
+
+    def validate_and_normalize(self, obj, value):
+        """
+        Check that it is in fact a list. If it is a string, try to convert it 
+        """
+        if value is None:  # setting a number to None essentially calls setup()
+            value = self.get_value(obj)
+        if isinstance(value, str):
+            value = ast.literal_eval(value)
+        if not np.iterable(value):
+            value = [value]
+        if len(value) != self.len:
+            raise Exception(f"unexpected amount of values. Should give {self.len} elements, but received {len(value)}")
+        return value
+
+        
+T = TypeVar("T")
+class ArrayRegister(BaseRegister, ArrayProperty):
+    """
+    Register for integer values encoded on less than 32 bits.
+    """
+    
+    _widget_class = TextAttributeWidget
+
+    def __init__(self, registerType : T = None, addresses = None, startBits=None, bits=32, bitmask=None, registers = None, **kwargs):
+        #either you pass the registers you want to use in the array, or you specify the type, addresses and start bits of each register
+        if registers is not None:
+            self.registers = registers
+            length = len(registers)
+            BaseRegister.__init__(self, 0, 0)
+            ArrayProperty.__init__(self, length)
+            return
+        length = len(addresses)
+        if bitmask is not None:
+            raise Exception("cannot use bitmask argument for arrays. Use arguments startBits and bits instead")
+        if startBits is None:
+            startBits = [0] * length
+        self.registers : List[registerType]= [None] * length
+        for i in range(length):
+            self.registers[i] = registerType(address=addresses[i], bits=bits, startBit=startBits[i], **kwargs)
+
+        BaseRegister.__init__(self, address=addresses[0], bitmask=bitmask, bits=bits, startBit=startBits[0])
+            
+        ArrayProperty.__init__(self, length)
+
+    def to_python(self, obj, value):
+        raise Exception("you shouldn't be able to call this function")
+        return int(value)
+
+    def from_python(self, obj, value):
+        raise Exception("you shouldn't be able to call this function")
+        return int(value)
+
+    
+    def get_value(self, obj):
+        values = []
+        for reg in self.registers:
+            values.append(reg.get_value(obj))
+        return values
+
+    def set_value(self, obj, val):
+        """
+        Sets the value on the redpitaya device.
+        """
+        for reg, value in zip(self.registers, val):
+            reg.set_value(obj, value)
+
+    
 class ConstantIntRegister(IntRegister):
     """
     Implements an int register that only interacts with the FPGA once and
@@ -1580,7 +1669,7 @@ class digitalPinProperty(StringProperty):
         Convert argument to string
         """
         if isinstance(value, str):
-            row = 1 if 'n' in value else 0
+            row = 1 if 'p' in value else 0
             try:
                 idx = int(value.replace('p','').replace('n',''))
             except:
@@ -1599,14 +1688,7 @@ class digitalPinRegister(BaseRegister, digitalPinProperty):
         
     def to_python(self, obj, value):
         val = int(value)
-        return str(val & 0x7)+ ('p' if val < 8 else 'n')
+        return str(val & 0x7)+ ('n' if val < 8 else 'p')
 
     def from_python(self, obj, value):
-        if isinstance(value, str):
-            row = 1 if 'n' in value else 0
-            try:
-                idx = int(value.replace('p','').replace('n',''))
-            except:
-                idx = 0
-            return row * 8 + idx
-        return int(value)
+        return self.validate_and_normalize(obj, value)

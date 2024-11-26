@@ -80,7 +80,7 @@
  * 
  */
 
-module red_pitaya_top (
+(* use_dsp = "yes" *) module red_pitaya_top (
    // PS connections
    inout  [54-1: 0] FIXED_IO_mio       ,
    inout            FIXED_IO_ps_clk    ,
@@ -249,17 +249,6 @@ assign ps_sys_ack   = |(sys_cs & sys_ack);
 
 // unused system bus slave ports
 
-assign sys_rdata[5*32+:32] = 32'h0; 
-assign sys_err  [5       ] =  1'b0;
-assign sys_ack  [5       ] =  1'b1;
-
-assign sys_rdata[6*32+:32] = 32'h0; 
-assign sys_err  [6       ] =  1'b0;
-assign sys_ack  [6       ] =  1'b1;
-
-assign sys_rdata[7*32+:32] = 32'h0; 
-assign sys_err  [7       ] =  1'b0;
-assign sys_ack  [7       ] =  1'b1;
 
 ////////////////////////////////////////////////////////////////////////////////
 // local signals
@@ -391,6 +380,8 @@ ODDR oddr_dac_dat [14-1:0] (.Q(dac_dat_o), .D1(dac_dat_b), .D2(dac_dat_a), .C(da
 wire  [  8-1: 0] exp_p_in , exp_n_in ;
 wire  [  8-1: 0] exp_p_out, exp_n_out;
 wire  [  8-1: 0] exp_p_dir, exp_n_dir;
+wire [ 14-1: 0] extDigital0, extDigital1;
+wire asg_trigger, scope_trigger, ramp_trigger;
 
 red_pitaya_hk i_hk (
   // system signals
@@ -400,6 +391,9 @@ red_pitaya_hk i_hk (
   .led_o           (  led_o                      ),  // LED output
   // global configuration
   .digital_loop    (  digital_loop               ),
+  //dsp inputs
+  .dsp_input0      (  extDigital0                ),
+  .dsp_input1      (  extDigital1                ),
   // Expansion connector
   .exp_p_dat_i     (  exp_p_in                   ),  // input data
   .exp_p_dat_o     (  exp_p_out                  ),  // output data
@@ -407,6 +401,10 @@ red_pitaya_hk i_hk (
   .exp_n_dat_i     (  exp_n_in                   ),
   .exp_n_dat_o     (  exp_n_out                  ),
   .exp_n_dir_o     (  exp_n_dir                  ),
+  //triggers for other modules
+  .asg_trigger     (  asg_trigger                ),
+  .scope_trigger   (  scope_trigger              ),
+  .ramp_trigger    (  ramp_trigger               ),
    // System bus
   .sys_addr        (  sys_addr                   ),  // address
   .sys_wdata       (  sys_wdata                  ),  // write data
@@ -440,7 +438,7 @@ red_pitaya_scope i_scope (
   .adc_b_i         (  to_scope_b /*adc_a*/       ),  // CH 2
   .adc_clk_i       (  adc_clk                    ),  // clock
   .adc_rstn_i      (  adc_rstn                   ),  // reset - active low
-  .trig_ext_i      (  exp_p_in[0]                ),  // external trigger
+  .trig_ext_i      (  scope_trigger              ),  // external trigger
   .trig_asg_i      (  trig_asg_out               ),  // ASG trigger
   .trig_dsp_i      (  dsp_trigger                ),
   .trig_scope_o    (  trig_scope_out             ),  // scope trigger to feed other instruments
@@ -492,8 +490,8 @@ red_pitaya_asg i_asg (
   .dac_b_o         (  asg_b                      ),  // CH 2
   .dac_clk_i       (  adc_clk                    ),  // clock
   .dac_rstn_i      (  adc_rstn                   ),  // reset - active low
-  .trig_a_i        (  exp_p_in[0]                ),
-  .trig_b_i        (  exp_p_in[0]                ),
+  .trig_a_i        (  asg_trigger                ),
+  .trig_b_i        (  asg_trigger                ),
   .trig_out_o      (  trig_asg_out               ),
   .trig_scope_i    (  trig_scope_out             ),
   .asg1phase_o     (  asg1phase_o                ),
@@ -538,8 +536,10 @@ red_pitaya_dsp i_dsp (
 
   .pwm0            (  pwm_signals[0]         ),
   .pwm1            (  pwm_signals[1]         ),
-  .pwm2            (  pwm_signals[2]         ),
-  .pwm3            (  pwm_signals[3]         ),
+  .extDigital0     (  extDigital0            ),
+  .extDigital1     (  extDigital1            ),
+
+  .ramp_trigger    (  ramp_trigger           ),
 
   .trig_o          (  dsp_trigger            ),
 

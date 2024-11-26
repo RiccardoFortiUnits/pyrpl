@@ -101,7 +101,7 @@ class RedPitaya(object):
         logging.getLogger().setLevel(logging.DEBUG)"""
         if(isDefaultFpga):
             self.cls_modules = [rp.HK, rp.AMS, rp.Scope, rp.Sampler, rp.Asg0, rp.Asg1] + \
-                      [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 3 + [rp.Trig] + [ rp.IIR]
+                      [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 3 + [rp.Trig] + [ rp.IIR] + [rp.linearizer]
         else:
             self.cls_modules = [rp.HK, rp.AmsNouveau, rp.PidNouveau, rp.PidNouveau]
         self.logger = logging.getLogger(name=__name__)
@@ -505,3 +505,8 @@ class RedPitaya(object):
         r._master = self
         self._slaves.append(r)
         return r
+    
+    def readRAM(self, address):
+        return int(self.client._reads(address, 1))
+    def writeRAM(self, address, value):
+        self.client._writes(address, [int(value)])

@@ -52,7 +52,7 @@ should not be used.
 
 
 (* use_dsp = "yes" *) module red_pitaya_dsp #(
-   parameter MODULES = 9
+   parameter MODULES = 11
 )
 (
    // signals
@@ -75,6 +75,8 @@ should not be used.
    output     [ 14-1: 0] extDigital0,
    output     [ 14-1: 0] extDigital1,
 
+   // input triggers
+   output                ramp_trigger,
    // trigger outputs for the scope
    output                trig_o,   // output from trigger dsp module
 
@@ -104,23 +106,24 @@ localparam LOG_OUTPUT_MODULES = $clog2(EXTRAMODULES+MODULES);//the EXTRAOUTPUTS 
                                                                //This value is used in combination with output_direct and output_select
 localparam LOG_OUTPUT_DIRECT_MODULES = $clog2(EXTRAMODULES+MODULES+EXTRAOUTPUTS);//the EXTRAOUTPUTS cannot be put on the DAC output, so we don't consider it. 
 
-initial begin
-   if (LOG_OUTPUT_DIRECT_MODULES > 4)begin
-        $fatal("LOG_OUTPUT_DIRECT_MODULES is too high, the current memory architecture does not allow for a number higher than 4. you would need to change the memory structure");
-   end
-end
+// initial begin
+//    if (LOG_OUTPUT_DIRECT_MODULES > 4)begin
+//         $fatal("LOG_OUTPUT_DIRECT_MODULES is too high, the current memory architecture does not allow for a number higher than 4. you would need to change the memory structure");
+//    end
+// end
 
 //Module numbers
-localparam PID0  = 'd0; //formerly PID11
-localparam PID1  = 'd1; //formerly PID12: input2->output1
-localparam PID2  = 'd2; //formerly PID21: input1->output2
-localparam PID3  = 'd3; //formerly PID22
-localparam TRIG  = 'd3; //formerly PID3
-localparam IIR   = 'd4; //IIR filter to connect in series to PID module
-localparam IQ0   = 'd5; //for PDH signal generation
-localparam IQ1   = 'd6; //for NA functionality
-localparam IQ2   = 'd7; //for PFD error signal
-localparam IQ2_1 = 'd8; 
+localparam PID0  = 'd0;  //formerly PID11
+localparam PID1  = 'd1;  //formerly PID12: input2->output1
+localparam PID2  = 'd2;  //formerly PID21: input1->output2
+localparam TRIG  = 'd3;  //formerly PID3
+localparam IIR   = 'd4;  //IIR filter to connect in series to PID module
+localparam IQ0   = 'd5;  //for PDH signal generation
+localparam IQ1   = 'd6;  //for NA functionality
+localparam IQ2   = 'd7;  //for PFD error signal
+localparam IQ2_1 = 'd8;  //for second output of IQ2
+localparam LIN   = 'd9;  //linearizer
+localparam RAMP  = 'd10; //triggered ramp (does not use an input)
 //localparam CUSTOM1 = 'd8; //available slots
 localparam NONE = 2**LOG_INPUT_MODULES-1; //code for no module; only used to switch off PWM outputs
 
@@ -208,8 +211,10 @@ integer i, y;
 genvar j;
 
 //select inputs
-generate for (j = 0; j < MODULES+EXTRAMODULES; j = j+1)
-   assign input_signal[j] = (input_select[j]==NONE) ? 14'b0 : output_signal[input_select[j]];
+generate 
+   for (j = 0; j < MODULES+EXTRAMODULES; j = j+1) begin
+        assign input_signal[j] = (input_select[j]==NONE) ? 14'b0 : output_signal[input_select[j]];
+   end
 endgenerate
 
 //sum together the direct outputs
@@ -258,8 +263,8 @@ always @(posedge clk_i) begin
       input_select [PID2] <= ADC1;
       output_select[PID2] <= OFF;
 
-      input_select [PID3] <= ADC1;
-      output_select[PID3] <= OFF;
+      input_select [TRIG] <= ADC1;
+      output_select[TRIG] <= OFF;
 
       input_select [IIR] <= ADC1;
       output_select[IIR] <= OFF;
@@ -326,7 +331,7 @@ assign diff_input_signal[0] = diff_output_signal[1]; // difference input of PID0
 assign diff_input_signal[1] = diff_output_signal[0]; // difference input of PID1 is PID0
 assign diff_input_signal[2] = {14{1'b0}};      // difference input of PID2 is zero
 
-generate for (j = 0; j < 3; j = j+1) begin
+generate for (j = PID0; j < TRIG; j = j+1) begin
    red_pitaya_pid_block i_pid (
      // data
      .clk_i        (  clk_i          ),  // clock
@@ -351,7 +356,7 @@ endgenerate
 
 wire trig_signal;
 //TRIG
-generate for (j = 3; j < 4; j = j+1) begin
+generate for (j = TRIG; j < IIR; j = j+1) begin
    red_pitaya_trigger_block i_trigger (
      // data
      .clk_i        (  clk_i          ),  // clock
@@ -375,28 +380,28 @@ endgenerate
 assign trig_o = trig_signal;
 
 //IIR module 
-generate for (j = 4; j < 5; j = j+1) begin
-    red_pitaya_iir_block iir (
-        // data
-        .clk_i        (  clk_i          ),  // clock
-        .rstn_i       (  rstn_i         ),  // reset - active low
-        .dat_i        (  input_signal [j] ),  // input data
-        .dat_o        (  output_direct[j]),  // output data
+// generate for (j = IIR; j < IQ0; j = j+1) begin
+//     red_pitaya_iir_block iir (
+//         // data
+//         .clk_i        (  clk_i          ),  // clock
+//         .rstn_i       (  rstn_i         ),  // reset - active low
+//         .dat_i        (  input_signal [j] ),  // input data
+//         .dat_o        (  output_direct[j]),  // output data
 
-       //communincation with PS
-       .addr ( sys_addr[16-1:0] ),
-       .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-       .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-       .ack  ( module_ack[j] ),
-       .rdata (module_rdata[j]),
-        .wdata (sys_wdata)
-      );
-     assign output_signal[j] = output_direct[j];
-end endgenerate
+//        //communincation with PS
+//        .addr ( sys_addr[16-1:0] ),
+//        .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+//        .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+//        .ack  ( module_ack[j] ),
+//        .rdata (module_rdata[j]),
+//         .wdata (sys_wdata)
+//       );
+//      assign output_signal[j] = output_direct[j];
+// end endgenerate
 
 
 //IQ modules
-generate for (j = 5; j < 7; j = j+1) begin
+generate for (j = IQ0; j < IQ2; j = j+1) begin
     red_pitaya_iq_block 
       iq
       (
@@ -423,7 +428,7 @@ generate for (j = 5; j < 7; j = j+1) begin
 end endgenerate
 
 // IQ with two outputs
-generate for (j = 7; j < 8; j = j+2) begin
+generate for (j = IQ2; j < LIN; j = j+2) begin
     red_pitaya_iq_block   #( .QUADRATUREFILTERSTAGES(4) )
       iq_2_outputs
       (
@@ -444,6 +449,34 @@ generate for (j = 7; j < 8; j = j+2) begin
          .rdata (module_rdata[j]),
          .wdata (sys_wdata)
       );
+end endgenerate
+
+// segmented function, for linearizations
+generate for (j = LIN; j < RAMP; j = j+1) begin
+
+    segmentedFunction#(
+        .nOfEdges          (8),
+        .totalBits_IO      (14),
+        .fracBits_IO       (0),
+        .totalBits_m       (20),
+        .fracBits_m        (14),
+        .areSignalsSigned  (1)
+    )sf(
+        .clk           (clk_i),
+        .reset         (!rstn_i),
+        .in            (input_signal [j]),
+        .out           (output_signal[j]),
+        
+        //communincation with PS
+        .addr ( sys_addr[16-1:0] ),
+        .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+        .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+        .ack  ( module_ack[j] ),
+        .rdata (module_rdata[j]),
+        .wdata (sys_wdata)
+    );
+   assign output_signal[j] = output_direct[j];
+   
 end endgenerate
 
 endmodule
