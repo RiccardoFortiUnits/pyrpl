@@ -101,7 +101,7 @@ endgenerate
 
 wire [1:0] fastSwitchOutputs;
 reg[7:0] nOfActivePeriods, nOfInactivePeriods, switchPhase;
-reg[3:0] triggerPin;
+reg[DLE -1:0] fastSwitch_triggerPin;
 
 reg [DWE*2-1:0] allOutputPins;
 assign {exp_p_dat_o, exp_n_dat_o} = allOutputPins;
@@ -126,13 +126,20 @@ doubleFastSwitcher_HalfStart#(
 )fs(
 		.clk(clk_i),
 		.reset(!rstn_i),
-		.trigger(allInputPins[triggerPin]),
+		.trigger(allInputPins[fastSwitch_triggerPin]),
 		.nOfPeriodsActive(nOfActivePeriods),
 		.nOfPeriodsInactive(nOfInactivePeriods),
 		.phase(switchPhase),
 		.out1(fastSwitchOutputs[0]),
 		.out2(fastSwitchOutputs[1])
 );
+
+//triggers for external modules
+reg [DLE -1:0] ramp_triggerPin, asg_triggerPin, scope_triggerPin;
+
+assign asg_trigger = allInputPins[asg_triggerPin];
+assign scope_trigger = allInputPins[scope_triggerPin];
+assign ramp_trigger = allInputPins[ramp_triggerPin];
 
 //---------------------------------------------------------------------------------
 //
@@ -200,6 +207,9 @@ if (rstn_i == 1'b0) begin
 	exp_n_dir_o  <= {DWE{1'b0}};
 	pinState_p <= 0;
 	pinState_n <= 0;
+	ramp_triggerPin <= 0;
+	asg_triggerPin <= 0;
+	scope_triggerPin <= 0;
 	
 	for(i=0;i<DWE;i=i+1)begin
 		otherPinSelectorBit_p[i] <= 0;
@@ -210,7 +220,7 @@ if (rstn_i == 1'b0) begin
 
 	nOfActivePeriods <= 0;
 	nOfInactivePeriods <= 0;
-	triggerPin <= 0;
+	fastSwitch_triggerPin <= 0;
 	switchPhase <= 0;
 end else if (sys_wen) begin
 	if (sys_addr[19:0]==20'h0c)   digital_loop <= sys_wdata[0];
@@ -220,10 +230,12 @@ end else if (sys_wen) begin
 	if (sys_addr[19:0]==20'h18)   exp_p_dat_o_reg  <= sys_wdata[DWE-1:0];
 	if (sys_addr[19:0]==20'h1C)   exp_n_dat_o_reg  <= sys_wdata[DWE-1:0];
 
+	if (sys_addr[19:0]==20'h28)   {ramp_triggerPin, asg_triggerPin, scope_triggerPin} <= sys_wdata;
+
 	if (sys_addr[19:0]==20'h30)   led_o        <= sys_wdata[DWL-1:0];
 	if (sys_addr[19:0]==20'h34)   {pinState_p} <= sys_wdata;
 	if (sys_addr[19:0]==20'h38)   {pinState_n} <= sys_wdata;
-	if (sys_addr[19:0]==20'h3c)   {triggerPin, nOfInactivePeriods, nOfActivePeriods} <= sys_wdata;
+	if (sys_addr[19:0]==20'h3c)   {fastSwitch_triggerPin, nOfInactivePeriods, nOfActivePeriods} <= sys_wdata;
 	if (sys_addr[19:0]==20'h40)   {switchPhase} <= sys_wdata;
 			
 	if (sys_addr[19:0]==20'h50)  {dspSelectorBit_p[0], otherPinSelectorBit_p[0], dspSelectorBit_n[0], otherPinSelectorBit_n[0]} <= sys_wdata;
@@ -259,10 +271,12 @@ end else begin
 		20'h00020: begin sys_ack <= sys_en;  sys_rdata <= {{32-DWE{1'b0}}, exp_p_dat_i}       ; end
 		20'h00024: begin sys_ack <= sys_en;  sys_rdata <= {{32-DWE{1'b0}}, exp_n_dat_i}       ; end
 
+		20'h00028: begin sys_ack <= sys_en;  sys_rdata <= {ramp_triggerPin, asg_triggerPin, scope_triggerPin}       ; end
+
 		20'h00030: begin sys_ack <= sys_en;  sys_rdata <= {{32-DWL{1'b0}}, led_o}             ; end
 		20'h00034: begin sys_ack <= sys_en;  sys_rdata <= {pinState_p}             ; end
 		20'h00038: begin sys_ack <= sys_en;  sys_rdata <= {pinState_n}             ; end
-		20'h0003c: begin sys_ack <= sys_en;  sys_rdata <= { triggerPin, nOfInactivePeriods, nOfActivePeriods}             ; end
+		20'h0003c: begin sys_ack <= sys_en;  sys_rdata <= { fastSwitch_triggerPin, nOfInactivePeriods, nOfActivePeriods}             ; end
 		20'h00040: begin sys_ack <= sys_en;  sys_rdata <= { switchPhase}             ; end
 
 		20'h00050: begin sys_ack <= sys_en;  sys_rdata <= { dspSelectorBit_p[0], otherPinSelectorBit_p[0], dspSelectorBit_n[0], otherPinSelectorBit_n[0]}             ; end

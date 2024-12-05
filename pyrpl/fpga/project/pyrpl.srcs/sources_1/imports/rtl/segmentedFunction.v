@@ -35,7 +35,6 @@ module segmentedFunction#(
     // System bus
     input      [ 32-1:0] addr   ,  // bus address
     input      [ 32-1:0] wdata  ,  // bus write data
-    input      [  4-1:0] sel    ,  // bus write byte select
     input                wen    ,  // bus write enable
     input                ren    ,  // bus read enable
     output reg [ 32-1:0] rdata  ,  // bus read data

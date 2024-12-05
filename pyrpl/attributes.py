@@ -224,10 +224,10 @@ class BaseRegister(BaseProperty):
         # self.parent = obj  # store obj in memory
         val = obj._read(self.address)
         if self.bitmask is None:
-            print(f"address {hex(self.address + obj._addr_base)}, reading {hex(val)}")
+            # print(f"address {hex(self.address + obj._addr_base)}, reading {hex(val)}")
             return self.to_python(obj, val)
         else:
-            print(f"address {hex(self.address + obj._addr_base)}, reading {hex(val)}")
+            # print(f"address {hex(self.address + obj._addr_base)}, reading {hex(val)}")
             retVal = val & self.bitmask
             if self.startBit is not None: 
                 # try:
@@ -243,7 +243,7 @@ class BaseRegister(BaseProperty):
         """
         if self.bitmask is None:
             obj._write(self.address, self.from_python(obj, val))
-            print(f"address {hex(self.address + obj._addr_base)}, writing {hex(self.from_python(obj, val))}")
+            # print(f"address {hex(self.address + obj._addr_base)}, writing {hex(self.from_python(obj, val))}")
         else:
             act = obj._read(self.address)
             new = act & (~self.bitmask)
@@ -252,7 +252,7 @@ class BaseRegister(BaseProperty):
                 addValue <<= self.startBit
             new |= (addValue & self.bitmask)
             obj._write(self.address, new)
-            print(f"address {hex(self.address + obj._addr_base)}, writing {hex(new)}")
+            # print(f"address {hex(self.address + obj._addr_base)}, writing {hex(new)}")
                 
 
     def __set__(self, obj, value):
@@ -511,7 +511,7 @@ class ArrayProperty(BaseProperty):
             value = [value]
         if len(value) != self.len:
             raise Exception(f"unexpected amount of values. Should give {self.len} elements, but received {len(value)}")
-        return value
+        return list(value)
 
         
 T = TypeVar("T")
@@ -525,7 +525,7 @@ class ArrayRegister(BaseRegister, ArrayProperty):
     def __init__(self, registerType : T = None, addresses = None, startBits=None, bits=32, bitmask=None, registers = None, **kwargs):
         #either you pass the registers you want to use in the array, or you specify the type, addresses and start bits of each register
         if registers is not None:
-            self.registers = registers
+            self._registers = registers
             length = len(registers)
             BaseRegister.__init__(self, 0, 0)
             ArrayProperty.__init__(self, length)
@@ -535,9 +535,9 @@ class ArrayRegister(BaseRegister, ArrayProperty):
             raise Exception("cannot use bitmask argument for arrays. Use arguments startBits and bits instead")
         if startBits is None:
             startBits = [0] * length
-        self.registers : List[registerType]= [None] * length
+        self._registers : List[registerType]= [None] * length
         for i in range(length):
-            self.registers[i] = registerType(address=addresses[i], bits=bits, startBit=startBits[i], **kwargs)
+            self._registers[i] = registerType(address=addresses[i], bits=bits, startBit=startBits[i], **kwargs)
 
         BaseRegister.__init__(self, address=addresses[0], bitmask=bitmask, bits=bits, startBit=startBits[0])
             
@@ -550,8 +550,15 @@ class ArrayRegister(BaseRegister, ArrayProperty):
     def from_python(self, obj, value):
         raise Exception("you shouldn't be able to call this function")
         return int(value)
-
     
+    @property
+    def registers(self):
+        return self._registers
+
+    @registers.setter
+    def registers(self, value):
+        self._registers = value
+        
     def get_value(self, obj):
         values = []
         for reg in self.registers:

@@ -130,6 +130,7 @@ from ..modules import HardwareModule
 from ..pyrpl_utils import time
 from ..widgets.module_widgets import ScopeWidget
 from .pid import IValAttribute
+from .hk import HK
 
 logger = logging.getLogger(name=__name__)
 
@@ -266,21 +267,21 @@ class Scope(HardwareModule, AcquisitionModule):
     _ISR = 32  # Register(0x204)
     _DSR = 10  # Register(0x208)
     _GAINBITS = 24  # Register(0x20C)  
-    pid0_setpoint = FloatRegister(dsp_addr_base(0) + 0x104 - addr_base,
+    pid0_setpoint = FloatRegister(dsp_addr_base('pid0') + 0x104 - addr_base,
                     bits=14, norm= 2 **13,
                     doc="pid setpoint [volts]")
 
-    pid0_min_voltage = FloatRegister(dsp_addr_base(0) + 0x124 - addr_base,
+    pid0_min_voltage = FloatRegister(dsp_addr_base('pid0') + 0x124 - addr_base,
                     bits=14, norm= 2 **13,
                     doc="minimum output signal [volts]")
-    pid0_max_voltage = FloatRegister(dsp_addr_base(0) + 0x128 - addr_base,
+    pid0_max_voltage = FloatRegister(dsp_addr_base('pid0') + 0x128 - addr_base,
                     bits=14, norm= 2 **13,
                     doc="maximum output signal [volts]")
 
-    pid0_p = GainRegister(dsp_addr_base(0) + 0x108 - addr_base,
+    pid0_p = GainRegister(dsp_addr_base('pid0') + 0x108 - addr_base,
                     bits=_GAINBITS, norm= 2 **_PSR,
                     doc="pid proportional gain [1]")
-    pid0_i = GainRegister(dsp_addr_base(0) + 0x10C - addr_base,
+    pid0_i = GainRegister(dsp_addr_base('pid0') + 0x10C - addr_base,
                     bits=_GAINBITS, norm= 2 **_ISR * 2.0 * np.pi * 8e-9,
                     doc="pid integral unity-gain frequency [Hz]")
     
@@ -375,6 +376,8 @@ class Scope(HardwareModule, AcquisitionModule):
                                   doc="trigger threshold [volts]")
     hysteresis = FloatRegister(0x20, bits=14, norm=2 ** 13,
                                     doc="hysteresis for trigger [volts]")
+    
+    external_trigger_pin = digitalPinRegister(- addr_base + HK.addr_base + 0x28, startBit=0)
 
     @property
     def threshold_ch1(self):

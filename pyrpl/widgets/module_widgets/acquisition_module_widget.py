@@ -106,7 +106,7 @@ class AcquisitionModuleWidget(ModuleWidget):
     def run_continuous_clicked(self):
         """
         Toggles the button run_continuous to stop or vice versa and starts
-        he acquisition timer
+        the acquisition timer
         """
 
         if str(self.button_continuous.text()).startswith("Run continuous"):
@@ -148,31 +148,31 @@ class AcquisitionModuleWidget(ModuleWidget):
             self.button_single.setText("Run single")
             self.button_single.setEnabled(False)
             self.button_stop.setEnabled(True)
-        else:
-            if self.module.running_state == "running_single":
-                self.button_continuous.setText("Run continuous")
-                self.button_continuous.setEnabled(False)
-                self.button_single.setText("Pause")
-                self.button_single.setEnabled(True)
-                self.button_stop.setEnabled(True)
-            else:
-                if self.module.running_state == "paused_single":
-                    self.button_continuous.setText("Resume continuous")
-                    self.button_continuous.setEnabled(True)
-                    self.button_single.setText("Resume single")
-                    self.button_single.setEnabled(True)
-                    self.button_stop.setEnabled(True)
-                else:
-                    if self.module.running_state == "paused_continuous":
-                        self.button_continuous.setText("Resume continuous")
-                        self.button_continuous.setEnabled(True)
-                        self.button_single.setText("Resume single")
-                        self.button_single.setEnabled(True)
-                        self.button_stop.setEnabled(True)
-                    else:
-                        if self.module.running_state == "stopped":
-                            self.button_continuous.setText("Run continuous")
-                            self.button_continuous.setEnabled(True)
-                            self.button_single.setText("Run single")
-                            self.button_single.setEnabled(True)
-                            self.button_stop.setEnabled(False)
+            return
+        if self.module.running_state == "running_single":
+            self.button_continuous.setText("Run continuous")
+            self.button_continuous.setEnabled(False)
+            self.button_single.setText("Pause")
+            self.button_single.setEnabled(True)
+            self.button_stop.setEnabled(True)
+            return
+        if self.module.running_state == "paused_single":
+            self.button_continuous.setText("Resume continuous")
+            self.button_continuous.setEnabled(True)
+            self.button_single.setText("Resume single")
+            self.button_single.setEnabled(True)
+            self.button_stop.setEnabled(True)
+            return
+        if self.module.running_state == "paused_continuous":
+            self.button_continuous.setText("Resume continuous")
+            self.button_continuous.setEnabled(True)
+            self.button_single.setText("Resume single")
+            self.button_single.setEnabled(True)
+            self.button_stop.setEnabled(True)
+            return
+        if self.module.running_state == "stopped":
+            self.button_continuous.setText("Run continuous")
+            self.button_continuous.setEnabled(True)
+            self.button_single.setText("Run single")
+            self.button_single.setEnabled(True)
+            self.button_stop.setEnabled(False)

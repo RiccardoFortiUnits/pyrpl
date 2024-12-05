@@ -76,7 +76,7 @@ should not be used.
    output     [ 14-1: 0] extDigital1,
 
    // input triggers
-   output                ramp_trigger,
+   input                ramp_trigger,
    // trigger outputs for the scope
    output                trig_o,   // output from trigger dsp module
 
@@ -467,6 +467,32 @@ generate for (j = LIN; j < RAMP; j = j+1) begin
         .in            (input_signal [j]),
         .out           (output_signal[j]),
         
+        //communincation with PS
+        .addr ( sys_addr[16-1:0] ),
+        .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+        .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+        .ack  ( module_ack[j] ),
+        .rdata (module_rdata[j]),
+        .wdata (sys_wdata)
+    );
+   assign output_signal[j] = output_direct[j];
+   
+end endgenerate
+
+// sequence of ramp functions, for arbitrary functions with strict timings (useful to make sequences of ramps with very different time frames, if you tried to do this with the normal asg, the very fast ramps would not be that precise)
+generate for (j = RAMP; j < MODULES; j = j+1) begin
+
+    ramp#(
+        .nOfRamps                   (8),
+        .data_size                  (14),
+        .time_size                  (24),
+        .inhibitionTimeForTrigger   (500)//4e-6s
+    )rmp(
+        .clk      (clk_i),
+        .reset    (!rstn_i),
+        .trigger  (ramp_trigger),
+        
+        .out           (output_signal[j]),
         //communincation with PS
         .addr ( sys_addr[16-1:0] ),
         .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),

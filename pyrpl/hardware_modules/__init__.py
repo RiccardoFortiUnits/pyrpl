@@ -36,3 +36,4 @@ from .ams import AMS
 from .ams import AmsNouveau
 from .trig import Trig
 from .linearizer import linearizer
+from .ramp import Ramp

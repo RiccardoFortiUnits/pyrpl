@@ -13,7 +13,7 @@ from ... import APP
 
 class linearizerWidget(ModuleWidget):
     """
-    Widget for the HK module
+    Widget for the linearizer module
     """
 
     def init_gui(self):
