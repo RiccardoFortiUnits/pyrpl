@@ -162,6 +162,7 @@ reg [LOG_INPUT_MODULES-1:0] input_select [MODULES+EXTRAMODULES+EXTRAOUTPUTS-1:0]
 
 // the output of each module for internal routing, including 'virtual outputs' for the EXTRAINPUTS
 wire [14-1:0] output_signal [MODULES+EXTRAMODULES+EXTRAINPUTS-1+1:0];
+wire [MODULES+EXTRAMODULES+EXTRAINPUTS-1+1:0] output_valid;
 
 // the output of each module that is added to the chosen DAC
 wire [14-1:0] output_direct [MODULES+EXTRAMODULES-1:0];
@@ -192,8 +193,9 @@ assign output_signal[DAC1] = dat_a_o;
 assign output_signal[DAC2] = dat_b_o;
 assign output_signal[PEAK1] = peak_a;
 assign output_signal[PEAK2] = peak_b;
-assign output_signal[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is an positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
+assign output_signal[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is a positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
 assign output_signal[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
+assign output_valid = {peak_b_valid, peak_a_valid, peak_b_valid, peak_a_valid, {PEAK1{1'b1}}};// all inputs are always valid, except for the peak signals
 
 //connect pwm and external digital pins to internal signals
 assign pwm0 = (input_select[PWM0] == NONE) ? 14'h0 : output_signal[input_select[PWM0]];
@@ -336,7 +338,7 @@ generate for (j = PID0; j < TRIG; j = j+1) begin
      // data
      .clk_i        (  clk_i          ),  // clock
      .rstn_i       (  rstn_i         ),  // reset - active low
-     .sync_i       (  sync[j]        ),  // syncronization of different dsp modules
+     .sync_i       (  sync[j] & output_valid[input_select[j]] ),  // syncronization of different dsp modules
      .dat_i        (  input_signal [j] ),  // input data
      .dat_o        (  output_direct[j]),  // output data
     .diff_dat_i   (  diff_input_signal[j] ),  // input data for differential mode
@@ -379,7 +381,7 @@ end
 endgenerate
 assign trig_o = trig_signal;
 
-//IIR module 
+// // IIR module 
 // generate for (j = IIR; j < IQ0; j = j+1) begin
 //     red_pitaya_iir_block iir (
 //         // data

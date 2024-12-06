@@ -147,17 +147,17 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.main_layout.addLayout(self.button_layout)
 
         # self.layout_additional= QtWidgets.QHBoxLayout()
-        additionalScopeParams = [
-            "asg0_offset",
-            "pid0_setpoint",
-            "pid0_min_voltage",
-            "pid0_max_voltage",
-            "pid0_p",
-            "pid0_i",
-            "ival"
-        ]
-        for param in additionalScopeParams:
-            self.attribute_layout.removeWidget(aws[param])
+        # additionalScopeParams = [
+        #     "asg0_offset",
+        #     "pid0_setpoint",
+        #     "pid0_min_voltage",
+        #     "pid0_max_voltage",
+        #     "pid0_p",
+        #     "pid0_i",
+        #     "ival"
+        # ]
+        # for param in additionalScopeParams:
+        #     self.attribute_layout.removeWidget(aws[param])
         #     self.layout_additional.addWidget(aws[param])
         # self.main_layout.addLayout(self.layout_additional)
         
@@ -188,20 +188,39 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.layout_peaks.addLayout(self.layout_peak1)
         self.layout_peaks.addLayout(self.layout_peak2)
         
-        self.attribute_layout.removeWidget(aws['minTime1'])
-        self.attribute_layout.removeWidget(aws['maxTime1'])
-        self.attribute_layout.removeWidget(aws['peak1_input'])
-        self.attribute_layout.removeWidget(aws['minTime2'])
-        self.attribute_layout.removeWidget(aws['maxTime2'])
-        self.attribute_layout.removeWidget(aws['peak2_input'])
-        self.layout_peak1.addWidget(aws['minTime1'])
-        self.layout_peak1.addWidget(aws['maxTime1'])
-        self.layout_peak1.addWidget(aws['peak1_input'])
-        self.layout_peak2.addWidget(aws['minTime2'])
-        self.layout_peak2.addWidget(aws['maxTime2'])
-        self.layout_peak2.addWidget(aws['peak2_input'])
+        self.minTime1 = aws["minTime1"]
+        self.maxTime1 = aws["maxTime1"]
+        self.peak1_minValue = aws["peak1_minValue"]
+        self.peak1_input = aws["peak1_input"]
+        self.minTime2 = aws["minTime2"]
+        self.maxTime2 = aws["maxTime2"]
+        self.peak2_minValue = aws["peak2_minValue"]
+        self.peak2_input = aws["peak2_input"]
+        self.attribute_layout.removeWidget(self.minTime1)
+        self.attribute_layout.removeWidget(self.maxTime1)
+        self.attribute_layout.removeWidget(self.peak1_minValue)
+        self.attribute_layout.removeWidget(self.peak1_input)
+        self.attribute_layout.removeWidget(self.minTime2)
+        self.attribute_layout.removeWidget(self.maxTime2)
+        self.attribute_layout.removeWidget(self.peak2_minValue)
+        self.attribute_layout.removeWidget(self.peak2_input)
+        self.layout_peak1.addWidget(self.minTime1)
+        self.layout_peak1.addWidget(self.maxTime1)
+        self.layout_peak1.addWidget(self.peak1_minValue)
+        self.layout_peak1.addWidget(self.peak1_input)
+        self.layout_peak2.addWidget(self.minTime2)
+        self.layout_peak2.addWidget(self.maxTime2)
+        self.layout_peak2.addWidget(self.peak2_minValue)
+        self.layout_peak2.addWidget(self.peak2_input)
 
-
+        self.updatePeakButton1 = QtWidgets.QPushButton("update peak1 timings")
+        self.updatePeakButton1.clicked.connect(self.updatePeakTimings1)
+        self.layout_peak1.addWidget(self.updatePeakButton1)
+        
+        self.updatePeakButton2 = QtWidgets.QPushButton("update peak1 timings")
+        self.updatePeakButton2.clicked.connect(self.updatePeakTimings2)
+        self.layout_peak2.addWidget(self.updatePeakButton2)
+        
         self.attribute_layout.addLayout(self.layout_peaks)
 
         super(ScopeWidget, self).init_gui()
@@ -216,6 +235,17 @@ class ScopeWidget(AcquisitionModuleWidget):
         #self.button_layout.setStretchFactor(self.button_single, 1)
         #self.button_layout.setStretchFactor(self.button_continuous, 1)
         #self.button_layout.setStretchFactor(self.button_save, 1)
+
+    def updatePeakTimings1(self):
+        xrange, _ = self.plot_item.getViewBox().viewRange()
+        self.minTime1.attribute_value = xrange[0]
+        self.maxTime1.attribute_value = xrange[1]
+        print(xrange)
+    
+    def updatePeakTimings2(self):
+        xrange, _ = self.plot_item.getViewBox().viewRange()
+        self.minTime2.attribute_value = xrange[0]
+        self.maxTime2.attribute_value = xrange[1]
 
     def update_attribute_by_name(self, name, new_value_list):
         """

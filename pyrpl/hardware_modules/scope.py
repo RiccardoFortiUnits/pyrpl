@@ -131,6 +131,7 @@ from ..pyrpl_utils import time
 from ..widgets.module_widgets import ScopeWidget
 from .pid import IValAttribute
 from .hk import HK
+import asyncio
 
 logger = logging.getLogger(name=__name__)
 
@@ -242,20 +243,45 @@ class Scope(HardwareModule, AcquisitionModule):
                        "ch_math_active",
                        "math_formula",
                        "xy_mode",
-                       "asg0_offset",
-                       "pid0_setpoint",
-                       "pid0_min_voltage",
-                       "pid0_max_voltage",
-                       "pid0_p",
-                       "pid0_i",
-                       "ival",
+                    #    "asg0_offset",
+                    #    "pid0_setpoint",
+                    #    "pid0_min_voltage",
+                    #    "pid0_max_voltage",
+                    #    "pid0_p",
+                    #    "pid0_i",
+                    #    "ival",
                        "minTime1",
                        "maxTime1",
                        "minTime2",
                        "maxTime2",
                        "peak1_input",
-                       "peak2_input",]
+                       "peak2_input",
+                       "peak1_minValue",
+                       "peak2_minValue",
+                       ]
     
+    def __init__(self, parent, name=None):
+        super(Scope, self).__init__(parent, name=name)
+        try:
+            self.isDac1Modified = self.parent.c.scope["DAC1_modified"]
+        except:
+            self.isDac1Modified = False
+        try:
+            self.isDac2Modified = self.parent.c.scope["DAC2_modified"]
+        except:
+            self.isDac2Modified = False
+
+    def _from_raw_data_to_numbers(self,data : np.ndarray):
+        inputs = [self.input1, self.input2]
+        modifications = {
+            "out1" : lambda x: x + 1 if self.isDac1Modified else x,
+            "out2" : lambda x: x + 1 if self.isDac2Modified else x,
+        }
+        for ch in [0,1]:
+            if inputs[ch] in modifications.keys():
+                data[ch] = modifications[inputs[ch]](data[ch])
+        return data
+
     #____________added controls________________________________________
     asg0_offset = FloatRegister(address= 0x40200004 - addr_base, 
                            bits=14, startBit=16,
@@ -491,6 +517,11 @@ class Scope(HardwareModule, AcquisitionModule):
                                               options=peakInputsList)
     peak2_input =  SelectRegister(0xB0, startBit=2, doc="input used for the first peak search",
                                               options=peakInputsList)
+
+    peak1_minValue = FloatRegister(0xB4, startBit= 0, bits=14, norm=2 ** 13,
+                                doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
+    peak2_minValue = FloatRegister(0xB4, startBit= 14, bits=14, norm=2 ** 13,
+                                doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
 
     peakRangeRegisters = dict(
         minTime1 = minTime1,
@@ -816,3 +847,16 @@ class Scope(HardwareModule, AcquisitionModule):
                                               self.data_avg[ch],
                                               **d)
         return curves
+    
+    # def getCurrentSignal(self, signalName):
+    #     currentTrigger = self.trigger_source
+    #     if "ch" in currentTrigger:
+    #         usedChannel = 0 if "2" in currentTrigger else 1
+    #     else:
+    #         usedChannel = 0
+    #     inputs = [self.input1, self.input2]
+    #     prevInput = inputs[usedChannel]
+    #     inputs[usedChannel] = signalName
+    #     data = asyncio.run(self._trace_async(0))
+    #     inputs[usedChannel] = prevInput
+    #     return data[usedChannel]
