@@ -208,6 +208,8 @@ class AcquisitionModule(Module):
                                   call_setup=True)
 
 
+    lastData = None
+    
     def __init__(self, parent, name=None):
         super(AcquisitionModule, self).__init__(parent, name=name)
         self._last_run = None
@@ -232,7 +234,8 @@ class AcquisitionModule(Module):
         """
         self._start_trace_acquisition()
         await self._data_ready_async(min_delay_ms)
-        return self._from_raw_data_to_numbers(self._get_trace())
+        AcquisitionModule.lastData = self._from_raw_data_to_numbers(self._get_trace())
+        return AcquisitionModule.lastData
 
     def single_async(self):
         """

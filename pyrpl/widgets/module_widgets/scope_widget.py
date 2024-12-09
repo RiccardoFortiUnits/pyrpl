@@ -123,6 +123,8 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.win = pg.GraphicsWindow(title="Scope")
         self.plot_item = self.win.addPlot(title="Scope")
         self.plot_item.showGrid(y=True, alpha=1.)
+        self.viewBox = self.plot_item.getViewBox()
+        self.viewBox.setMouseEnabled(y=False)
 
 
         #self.button_single = QtWidgets.QPushButton("Run single")
@@ -237,13 +239,13 @@ class ScopeWidget(AcquisitionModuleWidget):
         #self.button_layout.setStretchFactor(self.button_save, 1)
 
     def updatePeakTimings1(self):
-        xrange, _ = self.plot_item.getViewBox().viewRange()
+        xrange, _ = self.viewBox.viewRange()
         self.minTime1.attribute_value = xrange[0]
         self.maxTime1.attribute_value = xrange[1]
         print(xrange)
     
     def updatePeakTimings2(self):
-        xrange, _ = self.plot_item.getViewBox().viewRange()
+        xrange, _ = self.viewBox.viewRange()
         self.minTime2.attribute_value = xrange[0]
         self.maxTime2.attribute_value = xrange[1]
 

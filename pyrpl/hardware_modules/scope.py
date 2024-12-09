@@ -260,6 +260,7 @@ class Scope(HardwareModule, AcquisitionModule):
                        "peak2_minValue",
                        ]
     
+    lastInputs = [None, None]
     def __init__(self, parent, name=None):
         super(Scope, self).__init__(parent, name=name)
         try:
@@ -280,6 +281,9 @@ class Scope(HardwareModule, AcquisitionModule):
         for ch in [0,1]:
             if inputs[ch] in modifications.keys():
                 data[ch] = modifications[inputs[ch]](data[ch])
+        #let's save the inputs used for the last data acquisition, in case they are changed later
+        Scope.lastInputs = inputs
+
         return data
 
     #____________added controls________________________________________
@@ -848,15 +852,8 @@ class Scope(HardwareModule, AcquisitionModule):
                                               **d)
         return curves
     
-    # def getCurrentSignal(self, signalName):
-    #     currentTrigger = self.trigger_source
-    #     if "ch" in currentTrigger:
-    #         usedChannel = 0 if "2" in currentTrigger else 1
-    #     else:
-    #         usedChannel = 0
-    #     inputs = [self.input1, self.input2]
-    #     prevInput = inputs[usedChannel]
-    #     inputs[usedChannel] = signalName
-    #     data = asyncio.run(self._trace_async(0))
-    #     inputs[usedChannel] = prevInput
-    #     return data[usedChannel]
+    @staticmethod
+    def getLastAcquisition(signalName):
+        if signalName in Scope.lastInputs:
+            return AcquisitionModule.lastData[Scope.lastInputs.index(signalName)]
+        raise Exception(f"signal {signalName} was not used in the last acquisition, do a new acquisition with this signal")
