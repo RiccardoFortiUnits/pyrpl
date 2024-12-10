@@ -7,14 +7,14 @@ import math
 
 # order here determines the order in the GUI etc.
 DSP_INPUTS = OrderedDict([
-    ('in1', 11), #same as asg
-    ('in2', 12),
-    ('out1', 13),
-    ('out2', 14),
-    ('peak1', 15), #same as asg
-    ('peak2', 16),
-    ('peakIndex1', 17),
-    ('peakIndex2', 18),
+    ('in1', 13), #same as asg
+    ('in2', 14),
+    ('out1', 15),
+    ('out2', 16),
+    ('peak1', 17), #same as asg
+    ('peak2', 18),
+    ('peakIndex1', 19),
+    ('peakIndex2', 20),
     ('iq0', 5),
     ('iq1', 6),
     ('iq2', 7),
@@ -22,14 +22,21 @@ DSP_INPUTS = OrderedDict([
     ('pid0', 0),
     ('pid1', 1),
     ('pid2', 2),
-    ('asg0', 9),
-    ('asg1', 10),
+    ('asg0', 11),
+    ('asg1', 12),
+    ('linearizer', 9),
+    ('ramp', 10),
     ('trig', 3),
     ('iir', 4),
-    # ('scope0', 8), #same as asg0 by design
-    # ('scope1', 9), #same as asg1 by design
-    ('off', 0)])
+    ('off', -1)])
 DSP_INPUTS['off'] = 2**math.ceil(math.log2(max(DSP_INPUTS.values()))) - 1
+DSP_ONLY_INPUTS = OrderedDict([
+    ('scope0', DSP_INPUTS['asg0']),
+    ('scope1', DSP_INPUTS['asg1']),
+    ('pwm0', DSP_INPUTS['in1']),
+    ('pwm1', DSP_INPUTS['in2']),
+    ('dig0', DSP_INPUTS['out1']),
+    ('dig1', DSP_INPUTS['out2']),])
 
 def all_inputs_keys(instance):
     """ collects all available logical inputs, composed of all
@@ -138,8 +145,14 @@ def all_output_directs(instance):
 
 def dsp_addr_base(name):
     # find address from name
-    number = DSP_INPUTS[name]
-    return 0x40300000 + number * 0x10000
+    if isinstance(name, str):
+        try:
+            number = DSP_INPUTS[name]
+        except KeyError:
+            number = DSP_ONLY_INPUTS[name]
+    else:
+        number = int(name)
+    return 0x40400000 + number * 0x10000
 
 
 class PauseRegister(BoolRegister):
@@ -202,7 +215,10 @@ class DspModule(HardwareModule, SignalModule):
     """
 
     def __init__(self, rp, name):
-        self._number = DSP_INPUTS[name]
+        try:
+            self._number = DSP_INPUTS[name]
+        except KeyError:
+            self._number = DSP_ONLY_INPUTS[name]
         self.addr_base = dsp_addr_base(name)
         super(DspModule, self).__init__(rp, name)
 

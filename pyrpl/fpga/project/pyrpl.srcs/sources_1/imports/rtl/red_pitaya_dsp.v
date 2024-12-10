@@ -43,16 +43,16 @@ The second half of this file defines the different submodules. For custom submod
 a good point to start is red_pitaya_pid_block.v. 
 
 Submodule i is assigned the address space
-0x40300000 + i*0x10000 + (0x0000 to 0xFFFF), that is 2**16 bytes.
+0x40400000 + i*0x10000 + (0x0000 to 0xFFFF), that is 2**16 bytes.
 
-Addresses 0x403z00zz where z is an arbitrary hex character are reserved to manage 
+Addresses 0x40[1zzz]z00zz where z is an arbitrary hex character are reserved to manage 
 the input/output routing of the submodule and are not forwarded, and therefore 
 should not be used.  
 *************************************************************/
 
 
 (* use_dsp = "yes" *) module red_pitaya_dsp #(
-   parameter MODULES = 9
+   parameter MODULES = 11
 )
 (
    // signals
@@ -69,12 +69,14 @@ should not be used.
    input      [ 14-1: 0] asg2_i,
    input      [ 14-1: 0] asg1phase_i,
 
-   // pwm outputs
+   // pwm and digital pins outputs
    output     [ 14-1: 0] pwm0,
    output     [ 14-1: 0] pwm1,
-   output     [ 14-1: 0] pwm2,
-   output     [ 14-1: 0] pwm3,
+   output     [ 14-1: 0] extDigital0,
+   output     [ 14-1: 0] extDigital1,
 
+   // input triggers
+   input                ramp_trigger,
    // trigger outputs for the scope
    output                trig_o,   // output from trigger dsp module
 
@@ -98,29 +100,30 @@ should not be used.
 
 localparam EXTRAMODULES = 2; //need two extra control registers for scope/asg
 localparam EXTRAINPUTS = 8; //four extra input signals for dac(2)/adc(2), plus ADC peaks and peak positions
-localparam EXTRAOUTPUTS = 2; //two extra output signals for pwm channels
+localparam EXTRAOUTPUTS = 4; //two extra output signals for pwm channels, plus 2 signals for the external digital pins
 localparam LOG_INPUT_MODULES = $clog2(EXTRAINPUTS+EXTRAMODULES+MODULES);
 localparam LOG_OUTPUT_MODULES = $clog2(EXTRAMODULES+MODULES);//the EXTRAOUTPUTS cannot be put on the DAC output, so we don't consider it. 
                                                                //This value is used in combination with output_direct and output_select
 localparam LOG_OUTPUT_DIRECT_MODULES = $clog2(EXTRAMODULES+MODULES+EXTRAOUTPUTS);//the EXTRAOUTPUTS cannot be put on the DAC output, so we don't consider it. 
 
-initial begin
-   if (LOG_OUTPUT_DIRECT_MODULES > 4)begin
-        $fatal("LOG_OUTPUT_DIRECT_MODULES is too high, the current memory architecture does not allow for a number higher than 4. you would need to change the memory structure");
-   end
-end
+// initial begin
+//    if (LOG_OUTPUT_DIRECT_MODULES > 4)begin
+//         $fatal("LOG_OUTPUT_DIRECT_MODULES is too high, the current memory architecture does not allow for a number higher than 4. you would need to change the memory structure");
+//    end
+// end
 
 //Module numbers
-localparam PID0  = 'd0; //formerly PID11
-localparam PID1  = 'd1; //formerly PID12: input2->output1
-localparam PID2  = 'd2; //formerly PID21: input1->output2
-localparam PID3  = 'd3; //formerly PID22
-localparam TRIG  = 'd3; //formerly PID3
-localparam IIR   = 'd4; //IIR filter to connect in series to PID module
-localparam IQ0   = 'd5; //for PDH signal generation
-localparam IQ1   = 'd6; //for NA functionality
-localparam IQ2   = 'd7; //for PFD error signal
-localparam IQ2_1 = 'd8; 
+localparam PID0  = 'd0;  //formerly PID11
+localparam PID1  = 'd1;  //formerly PID12: input2->output1
+localparam PID2  = 'd2;  //formerly PID21: input1->output2
+localparam TRIG  = 'd3;  //formerly PID3
+localparam IIR   = 'd4;  //IIR filter to connect in series to PID module
+localparam IQ0   = 'd5;  //for PDH signal generation
+localparam IQ1   = 'd6;  //for NA functionality
+localparam IQ2   = 'd7;  //for PFD error signal
+localparam IQ2_1 = 'd8;  //for second output of IQ2
+localparam LIN   = 'd9;  //linearizer
+localparam RAMP  = 'd10; //triggered ramp (does not use an input)
 //localparam CUSTOM1 = 'd8; //available slots
 localparam NONE = 2**LOG_INPUT_MODULES-1; //code for no module; only used to switch off PWM outputs
 
@@ -141,8 +144,8 @@ localparam PEAK_IDX2  = MODULES+9;
 //EXTRAOUTPUT numbers
 localparam PWM0  = MODULES+2; //they can have the same indexes as the extra inputs
 localparam PWM1  = MODULES+3;
-localparam PWM3  = MODULES+4;
-localparam PWM4  = MODULES+5;
+localparam EXT_DIG0  = MODULES+4;
+localparam EXT_DIG1  = MODULES+5;
 
 //output states
 localparam BOTH = 2'b11;
@@ -159,6 +162,7 @@ reg [LOG_INPUT_MODULES-1:0] input_select [MODULES+EXTRAMODULES+EXTRAOUTPUTS-1:0]
 
 // the output of each module for internal routing, including 'virtual outputs' for the EXTRAINPUTS
 wire [14-1:0] output_signal [MODULES+EXTRAMODULES+EXTRAINPUTS-1+1:0];
+wire [MODULES+EXTRAMODULES+EXTRAINPUTS-1+1:0] output_valid;
 
 // the output of each module that is added to the chosen DAC
 wire [14-1:0] output_direct [MODULES+EXTRAMODULES-1:0];
@@ -189,14 +193,15 @@ assign output_signal[DAC1] = dat_a_o;
 assign output_signal[DAC2] = dat_b_o;
 assign output_signal[PEAK1] = peak_a;
 assign output_signal[PEAK2] = peak_b;
-assign output_signal[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is an positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
+assign output_signal[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is a positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
 assign output_signal[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
+assign output_valid = {peak_b_valid, peak_a_valid, peak_b_valid, peak_a_valid, {PEAK1{1'b1}}};// all inputs are always valid, except for the peak signals
 
-//connect only two pwm to internal signals (should be enough)
+//connect pwm and external digital pins to internal signals
 assign pwm0 = (input_select[PWM0] == NONE) ? 14'h0 : output_signal[input_select[PWM0]];
 assign pwm1 = (input_select[PWM1] == NONE) ? 14'h0 : output_signal[input_select[PWM1]];
-assign pwm2 = 14'b0;
-assign pwm3 = 14'b0;
+assign extDigital0 = (input_select[EXT_DIG0] == NONE) ? 14'h0 : output_signal[input_select[EXT_DIG0]];
+assign extDigital1 = (input_select[EXT_DIG1] == NONE) ? 14'h0 : output_signal[input_select[EXT_DIG1]];
 
 wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum1; 
 wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum2; 
@@ -208,8 +213,10 @@ integer i, y;
 genvar j;
 
 //select inputs
-generate for (j = 0; j < MODULES+EXTRAMODULES; j = j+1)
-   assign input_signal[j] = (input_select[j]==NONE) ? 14'b0 : output_signal[input_select[j]];
+generate 
+   for (j = 0; j < MODULES+EXTRAMODULES; j = j+1) begin
+        assign input_signal[j] = (input_select[j]==NONE) ? 14'b0 : output_signal[input_select[j]];
+   end
 endgenerate
 
 //sum together the direct outputs
@@ -258,8 +265,8 @@ always @(posedge clk_i) begin
       input_select [PID2] <= ADC1;
       output_select[PID2] <= OFF;
 
-      input_select [PID3] <= ADC1;
-      output_select[PID3] <= OFF;
+      input_select [TRIG] <= ADC1;
+      output_select[TRIG] <= OFF;
 
       input_select [IIR] <= ADC1;
       output_select[IIR] <= OFF;
@@ -326,12 +333,12 @@ assign diff_input_signal[0] = diff_output_signal[1]; // difference input of PID0
 assign diff_input_signal[1] = diff_output_signal[0]; // difference input of PID1 is PID0
 assign diff_input_signal[2] = {14{1'b0}};      // difference input of PID2 is zero
 
-generate for (j = 0; j < 3; j = j+1) begin
+generate for (j = PID0; j < TRIG; j = j+1) begin
    red_pitaya_pid_block i_pid (
      // data
      .clk_i        (  clk_i          ),  // clock
      .rstn_i       (  rstn_i         ),  // reset - active low
-     .sync_i       (  sync[j]        ),  // syncronization of different dsp modules
+     .sync_i       (  sync[j] & output_valid[input_select[j]] ),  // syncronization of different dsp modules
      .dat_i        (  input_signal [j] ),  // input data
      .dat_o        (  output_direct[j]),  // output data
     .diff_dat_i   (  diff_input_signal[j] ),  // input data for differential mode
@@ -351,7 +358,7 @@ endgenerate
 
 wire trig_signal;
 //TRIG
-generate for (j = 3; j < 4; j = j+1) begin
+generate for (j = TRIG; j < IIR; j = j+1) begin
    red_pitaya_trigger_block i_trigger (
      // data
      .clk_i        (  clk_i          ),  // clock
@@ -374,29 +381,29 @@ end
 endgenerate
 assign trig_o = trig_signal;
 
-//IIR module 
-generate for (j = 4; j < 5; j = j+1) begin
-    red_pitaya_iir_block iir (
-        // data
-        .clk_i        (  clk_i          ),  // clock
-        .rstn_i       (  rstn_i         ),  // reset - active low
-        .dat_i        (  input_signal [j] ),  // input data
-        .dat_o        (  output_direct[j]),  // output data
+// // IIR module 
+// generate for (j = IIR; j < IQ0; j = j+1) begin
+//     red_pitaya_iir_block iir (
+//         // data
+//         .clk_i        (  clk_i          ),  // clock
+//         .rstn_i       (  rstn_i         ),  // reset - active low
+//         .dat_i        (  input_signal [j] ),  // input data
+//         .dat_o        (  output_direct[j]),  // output data
 
-       //communincation with PS
-       .addr ( sys_addr[16-1:0] ),
-       .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-       .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-       .ack  ( module_ack[j] ),
-       .rdata (module_rdata[j]),
-        .wdata (sys_wdata)
-      );
-     assign output_signal[j] = output_direct[j];
-end endgenerate
+//        //communincation with PS
+//        .addr ( sys_addr[16-1:0] ),
+//        .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+//        .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+//        .ack  ( module_ack[j] ),
+//        .rdata (module_rdata[j]),
+//         .wdata (sys_wdata)
+//       );
+//      assign output_signal[j] = output_direct[j];
+// end endgenerate
 
 
 //IQ modules
-generate for (j = 5; j < 7; j = j+1) begin
+generate for (j = IQ0; j < IQ2; j = j+1) begin
     red_pitaya_iq_block 
       iq
       (
@@ -423,7 +430,7 @@ generate for (j = 5; j < 7; j = j+1) begin
 end endgenerate
 
 // IQ with two outputs
-generate for (j = 7; j < 8; j = j+2) begin
+generate for (j = IQ2; j < LIN; j = j+2) begin
     red_pitaya_iq_block   #( .QUADRATUREFILTERSTAGES(4) )
       iq_2_outputs
       (
@@ -444,6 +451,60 @@ generate for (j = 7; j < 8; j = j+2) begin
          .rdata (module_rdata[j]),
          .wdata (sys_wdata)
       );
+end endgenerate
+
+// segmented function, for linearizations
+generate for (j = LIN; j < RAMP; j = j+1) begin
+
+    segmentedFunction#(
+        .nOfEdges          (8),
+        .totalBits_IO      (14),
+        .fracBits_IO       (0),
+        .totalBits_m       (20),
+        .fracBits_m        (14),
+        .areSignalsSigned  (1)
+    )sf(
+        .clk           (clk_i),
+        .reset         (!rstn_i),
+        .in            (input_signal [j]),
+        .out           (output_signal[j]),
+        
+        //communincation with PS
+        .addr ( sys_addr[16-1:0] ),
+        .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+        .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+        .ack  ( module_ack[j] ),
+        .rdata (module_rdata[j]),
+        .wdata (sys_wdata)
+    );
+   assign output_signal[j] = output_direct[j];
+   
+end endgenerate
+
+// sequence of ramp functions, for arbitrary functions with strict timings (useful to make sequences of ramps with very different time frames, if you tried to do this with the normal asg, the very fast ramps would not be that precise)
+generate for (j = RAMP; j < MODULES; j = j+1) begin
+
+    ramp#(
+        .nOfRamps                   (8),
+        .data_size                  (14),
+        .time_size                  (24),
+        .inhibitionTimeForTrigger   (500)//4e-6s
+    )rmp(
+        .clk      (clk_i),
+        .reset    (!rstn_i),
+        .trigger  (ramp_trigger),
+        
+        .out           (output_signal[j]),
+        //communincation with PS
+        .addr ( sys_addr[16-1:0] ),
+        .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+        .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+        .ack  ( module_ack[j] ),
+        .rdata (module_rdata[j]),
+        .wdata (sys_wdata)
+    );
+   assign output_signal[j] = output_direct[j];
+   
 end endgenerate
 
 endmodule

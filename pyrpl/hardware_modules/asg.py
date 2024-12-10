@@ -22,10 +22,11 @@ Let's set up the ASG to output a sawtooth signal of amplitude 0.8 V
 import numpy as np
 from collections import OrderedDict
 from ..attributes import BoolRegister, FloatRegister, SelectRegister, SelectProperty, \
-                             IntRegister, LongRegister, PhaseRegister, FrequencyRegister, FloatProperty
+                             IntRegister, LongRegister, PhaseRegister, FrequencyRegister, FloatProperty, digitalPinRegister
 from ..modules import HardwareModule, SignalModule
 from ..widgets.module_widgets import AsgWidget
 from . import all_output_directs, dsp_addr_base
+from .hk import HK
 
 
 class WaveformAttribute(SelectProperty):
@@ -259,6 +260,8 @@ def make_asg(channel=0):
                                         'cycles. This is used for the generation of '
                                         'white noise. If false, asg behaves '
                                         'normally. ')
+
+        external_trigger_pin = digitalPinRegister(- addr_base + HK.addr_base + 0x28, startBit=4)
 
         def _noise_distribution(self):
             """

@@ -232,7 +232,7 @@ class Pid(FilterModule):
                          "p",
                          "i",
                          #"d",
-                         "inputfilter",
+                        #  "inputfilter",
                          "max_voltage",
                          "min_voltage",
                          "pause_gains",

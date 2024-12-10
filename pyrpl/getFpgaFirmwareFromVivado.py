@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime
 import shutil
 
-newFpgaName = "peakFinder" + datetime.now().strftime(" %d_%m_%Y %H_%M")+".bit.bin"
+newFpgaName = "peakFinder_disablable" + datetime.now().strftime(" %d_%m_%Y %H_%M")+".bit.bin"
 
 backupSaveFolder = "C:/Users/lastline/Documents/backupFpgaBinaries/"
 
@@ -27,3 +27,5 @@ shutil.copyfile(projectBinFilePath + "red_pitaya_top.bit.bin",
             backupSaveFolder)
 shutil.copyfile(projectBinFilePath + "red_pitaya_top.bit.bin", 
             fpgaFilePath + "red_pitaya.bin")
+shutil.copyfile(projectBinFilePath + "red_pitaya_top.bit.bin", 
+            "D:/Anaconda3/Lib/site-packages/pyrpl/fpga/red_pitaya.bin")

@@ -1,5 +1,6 @@
 from . import DspModule
 from ..widgets.module_widgets import PwmWidget
+from .dsp import all_inputs, dsp_addr_base, InputSelectRegister
 
 
 class Pwm(DspModule):
@@ -30,12 +31,18 @@ class Pwm(DspModule):
     _gui_attributes = _setup_attributes
 
     def __init__(self, rp, name=None):
-        super(Pwm, self).__init__(rp, name=dict(pwm0='in1',
-                                                pwm1='in2')[name])
+        super(Pwm, self).__init__(rp, name=name)
         # because pwm's input is using adc-input's plug
         self.name = name
+        # # the PWM inputs have the same index as the ADCs
+        # self.input = InputSelectRegister(- self.addr_base + dsp_addr_base('asg0') + 0x0,
+        #                             options=all_inputs,
+        #                             default='in1',
+        #                             ignore_errors=True,
+        #                             doc="selects the input signal of the module")
         with self.do_setup:
             self.input ='off'
+            
     """
     def __init__(self, client, name, parent): # name is 'pwm0' or 'pwm1'
         pwm_to_module = dict(pwm1='adc1', pwm2='adc2')

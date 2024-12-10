@@ -208,11 +208,21 @@ class AcquisitionModule(Module):
                                   call_setup=True)
 
 
+    lastData = None
+    
     def __init__(self, parent, name=None):
         super(AcquisitionModule, self).__init__(parent, name=name)
         self._last_run = None
         self.curve_name = self.name + " curve"
         self.current_avg = 0
+        try:
+            self.isDac1Modified = self.parent.parent.c.scope["DAC1_modified"]
+        except:
+            pass
+        try:
+            self.isDac12odified = self.parent.parent.c.scope["DAC2_modified"]
+        except:
+            pass
 
     def _emit_signal_by_name(self, signal_name, *args, **kwds):
         """Let's the module's signal_launcher emit signal name"""
@@ -224,7 +234,8 @@ class AcquisitionModule(Module):
         """
         self._start_trace_acquisition()
         await self._data_ready_async(min_delay_ms)
-        return self._get_trace()
+        AcquisitionModule.lastData = self._from_raw_data_to_numbers(self._get_trace())
+        return AcquisitionModule.lastData
 
     def single_async(self):
         """
@@ -435,6 +446,12 @@ class AcquisitionModule(Module):
           a 2*n array for the scope
         """
         raise NotImplementedError  # pragma: no cover
+    
+    def _from_raw_data_to_numbers(self, data):
+        """
+        convert the raw data from the instrument into usable float values
+        """
+        return data
 
     def _start_trace_acquisition(self):
         """

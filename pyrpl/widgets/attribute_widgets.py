@@ -167,6 +167,13 @@ class BaseAttributeWidget(QtWidgets.QWidget):
         # Here, it is simply forwarded upwards in hierarchy.
         return super(BaseAttributeWidget, self).wheelEvent(event)
 
+class NoScrollComboBox(QtWidgets.QComboBox):
+    def __init__(self, parent=None):
+        super(NoScrollComboBox, self).__init__(parent)
+
+    def wheelEvent(self, event):
+        # Ignore the wheel event to prevent changing the value
+        event.ignore()
 
 class StringAttributeWidget(BaseAttributeWidget):
     """
@@ -181,7 +188,7 @@ class StringAttributeWidget(BaseAttributeWidget):
         return str(self.widget.text())
 
     def _set_widget_value(self, new_value):
-        self.widget.setText(new_value)
+        self.widget.setText(str(new_value))
 
 
 class TextAttributeWidget(StringAttributeWidget):
@@ -454,7 +461,7 @@ class ListComboBox(QtWidgets.QWidget):
         self.options = options
         self.decimals = decimals
         for i in range(number):
-            combo = QtWidgets.QComboBox()
+            combo = NoScrollComboBox()
             self.combos.append(combo)
             combo.addItems(self.options)
             combo.currentIndexChanged.connect(self.value_changed)
@@ -559,7 +566,7 @@ class SelectAttributeWidget(BaseAttributeWidget):
     Multiple choice property.
     """
     def _make_widget(self):
-        self.widget = QtWidgets.QComboBox()
+        self.widget = NoScrollComboBox()
         self.widget.addItems(self.options)
         self.widget.currentIndexChanged.connect(self.write_widget_value_to_attribute)
 

@@ -9,7 +9,7 @@ logger = logging.getLogger(name=__name__)
 class AMS(HardwareModule):
     """mostly deprecated module (redpitaya has removed adc support).
     only here for dac2 and dac3"""
-    addr_base = 0x40400000
+    addr_base = 0x40300000
 
     # attention: writing to dac0 and dac1 has no effect
     # only write to dac2 and 3 to set output voltages
@@ -29,7 +29,7 @@ class AMS(HardwareModule):
 
 
 class AmsNouveau(HardwareModule):
-    addr_base = 0x40400000
+    addr_base = 0x40300000
     linearizer_nOfSegments = 8
     ramp_nOfSegments = 8
 

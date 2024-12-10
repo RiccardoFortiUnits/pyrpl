@@ -121,7 +121,7 @@ large an integrator gain will quickly saturate the outputs.
 """
 
 import time
-from .dsp import all_inputs, dsp_addr_base, InputSelectRegister
+from .dsp import all_inputs, dsp_addr_base, InputSelectRegister, DspModule
 from ..acquisition_module import AcquisitionModule
 from ..async_utils import wait, ensure_future, sleep_async
 from ..pyrpl_utils import sorted_dict
@@ -129,6 +129,9 @@ from ..attributes import *
 from ..modules import HardwareModule
 from ..pyrpl_utils import time
 from ..widgets.module_widgets import ScopeWidget
+from .pid import IValAttribute
+from .hk import HK
+import asyncio
 
 logger = logging.getLogger(name=__name__)
 
@@ -240,19 +243,49 @@ class Scope(HardwareModule, AcquisitionModule):
                        "ch_math_active",
                        "math_formula",
                        "xy_mode",
-                       "asg0_offset",
-                       "pid0_setpoint",
-                       "pid0_min_voltage",
-                       "pid0_max_voltage",
-                       "pid0_p",
-                       "pid0_i",
+                    #    "asg0_offset",
+                    #    "pid0_setpoint",
+                    #    "pid0_min_voltage",
+                    #    "pid0_max_voltage",
+                    #    "pid0_p",
+                    #    "pid0_i",
+                    #    "ival",
                        "minTime1",
                        "maxTime1",
                        "minTime2",
                        "maxTime2",
                        "peak1_input",
-                       "peak2_input",]
+                       "peak2_input",
+                       "peak1_minValue",
+                       "peak2_minValue",
+                       ]
     
+    lastInputs = [None, None]
+    def __init__(self, parent, name=None):
+        super(Scope, self).__init__(parent, name=name)
+        try:
+            self.isDac1Modified = self.parent.c.scope["DAC1_modified"]
+        except:
+            self.isDac1Modified = False
+        try:
+            self.isDac2Modified = self.parent.c.scope["DAC2_modified"]
+        except:
+            self.isDac2Modified = False
+
+    def _from_raw_data_to_numbers(self,data : np.ndarray):
+        inputs = [self.input1, self.input2]
+        modifications = {
+            "out1" : lambda x: x + 1 if self.isDac1Modified else x,
+            "out2" : lambda x: x + 1 if self.isDac2Modified else x,
+        }
+        for ch in [0,1]:
+            if inputs[ch] in modifications.keys():
+                data[ch] = modifications[inputs[ch]](data[ch])
+        #let's save the inputs used for the last data acquisition, in case they are changed later
+        Scope.lastInputs = inputs
+
+        return data
+
     #____________added controls________________________________________
     asg0_offset = FloatRegister(address= 0x40200004 - addr_base, 
                            bits=14, startBit=16,
@@ -263,25 +296,27 @@ class Scope(HardwareModule, AcquisitionModule):
     _PSR = 12  # Register(0x200)
     _ISR = 32  # Register(0x204)
     _DSR = 10  # Register(0x208)
-    _GAINBITS = 24  # Register(0x20C)    
-    pid0_setpoint = FloatRegister(0x40300104 - addr_base,
+    _GAINBITS = 24  # Register(0x20C)  
+    pid0_setpoint = FloatRegister(dsp_addr_base('pid0') + 0x104 - addr_base,
                     bits=14, norm= 2 **13,
                     doc="pid setpoint [volts]")
 
-    pid0_min_voltage = FloatRegister(0x40300124 - addr_base,
+    pid0_min_voltage = FloatRegister(dsp_addr_base('pid0') + 0x124 - addr_base,
                     bits=14, norm= 2 **13,
                     doc="minimum output signal [volts]")
-    pid0_max_voltage = FloatRegister(0x40300128 - addr_base,
+    pid0_max_voltage = FloatRegister(dsp_addr_base('pid0') + 0x128 - addr_base,
                     bits=14, norm= 2 **13,
                     doc="maximum output signal [volts]")
 
-    pid0_p = GainRegister(0x40300108 - addr_base,
+    pid0_p = GainRegister(dsp_addr_base('pid0') + 0x108 - addr_base,
                     bits=_GAINBITS, norm= 2 **_PSR,
                     doc="pid proportional gain [1]")
-    pid0_i = GainRegister(0x4030010C - addr_base,
+    pid0_i = GainRegister(dsp_addr_base('pid0') + 0x10C - addr_base,
                     bits=_GAINBITS, norm= 2 **_ISR * 2.0 * np.pi * 8e-9,
                     doc="pid integral unity-gain frequency [Hz]")
     
+    ival = IValAttribute(min=-4, max=4, increment= 8. / 2**16, doc="Current "
+            "value of the integrator memory (i.e. pid output voltage offset)")
     
     #__________________________________________________________________
     
@@ -371,6 +406,8 @@ class Scope(HardwareModule, AcquisitionModule):
                                   doc="trigger threshold [volts]")
     hysteresis = FloatRegister(0x20, bits=14, norm=2 ** 13,
                                     doc="hysteresis for trigger [volts]")
+    
+    external_trigger_pin = digitalPinRegister(- addr_base + HK.addr_base + 0x28, startBit=0)
 
     @property
     def threshold_ch1(self):
@@ -484,6 +521,11 @@ class Scope(HardwareModule, AcquisitionModule):
                                               options=peakInputsList)
     peak2_input =  SelectRegister(0xB0, startBit=2, doc="input used for the first peak search",
                                               options=peakInputsList)
+
+    peak1_minValue = FloatRegister(0xB4, startBit= 0, bits=14, norm=2 ** 13,
+                                doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
+    peak2_minValue = FloatRegister(0xB4, startBit= 14, bits=14, norm=2 ** 13,
+                                doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
 
     peakRangeRegisters = dict(
         minTime1 = minTime1,
@@ -809,3 +851,9 @@ class Scope(HardwareModule, AcquisitionModule):
                                               self.data_avg[ch],
                                               **d)
         return curves
+    
+    @staticmethod
+    def getLastAcquisition(signalName):
+        if signalName in Scope.lastInputs:
+            return AcquisitionModule.lastData[Scope.lastInputs.index(signalName)]
+        raise Exception(f"signal {signalName} was not used in the last acquisition, do a new acquisition with this signal")

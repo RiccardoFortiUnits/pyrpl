@@ -392,6 +392,7 @@ localparam  chForPeak_realAdc0 = 0,
 
 reg [1:0] chUsedByPeak0, chUsedByPeak1;
 reg [RSZ -1:0] peak_a_minIndex, peak_b_minIndex, peak_a_maxIndex, peak_b_maxIndex;
+reg [RSZ -1:0] peak_b_minValue, peak_a_minValue;
 reg [RSZ -1:0] signalForPeak0, signalForPeak1;
 wire [RSZ*4 -1:0] availablePeakSignals = {adc_b_dat, adc_a_dat, real_adc_b_dat, real_adc_a_dat};
 always @(posedge adc_clk_i) begin
@@ -418,6 +419,8 @@ peakFinder #(
 
    .indexRange_min   ({peak_a_minIndex, peak_b_minIndex}),
    .indexRange_max   ({peak_a_maxIndex, peak_b_maxIndex}),
+
+   .minValue         ({peak_a_minValue, peak_b_minValue}),
 
    .max              ({peak_a, peak_b}),
    .maxIndex         ({peak_a_index, peak_b_index}),
@@ -905,6 +908,9 @@ if (adc_rstn_i == 1'b0) begin
 
    chUsedByPeak0 <= chForPeak_realAdc0;
    chUsedByPeak1 <= chForPeak_realAdc1;
+   peak_b_minValue <= 0;
+   peak_a_minValue <= 0;
+
 
 end else begin
    if (sys_wen) begin
@@ -946,6 +952,7 @@ end else begin
       if (sys_addr[19:0]==20'h09C)   peak_b_minIndex <= sys_wdata ;
       if (sys_addr[19:0]==20'h0A0)   peak_b_maxIndex <= sys_wdata ;
       if (sys_addr[19:0]==20'h0B0)   {chUsedByPeak1, chUsedByPeak0} <= sys_wdata ;
+      if (sys_addr[19:0]==20'h0B4)   {peak_b_minValue, peak_a_minValue} <= sys_wdata ;
    end
 end
 
@@ -1018,6 +1025,7 @@ end else begin
      20'h000A8 : begin sys_ack <= sys_en;          sys_rdata <= peak_a_index        ; end
      20'h000AC : begin sys_ack <= sys_en;          sys_rdata <= peak_b_index        ; end
      20'h000B0 : begin sys_ack <= sys_en;          sys_rdata <= {chUsedByPeak1, chUsedByPeak0}        ; end
+     20'h000B4 : begin sys_ack <= sys_en;          sys_rdata <= {peak_b_minValue, peak_a_minValue}        ; end
 
     
      20'h00154 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, adc_a_i }         ; end

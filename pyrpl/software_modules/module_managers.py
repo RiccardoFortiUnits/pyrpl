@@ -190,3 +190,16 @@ class Hks(ModuleManager):
     Only one trig, but it should be protected by the slave/owner mechanism.
     """
     pass #_widget_class = IirManagerWidget
+
+
+class Linearizers(ModuleManager):
+    """
+    Only one trig, but it should be protected by the slave/owner mechanism.
+    """
+    pass #_widget_class = IirManagerWidget
+
+class Ramps(ModuleManager):
+    """
+    Only one trig, but it should be protected by the slave/owner mechanism.
+    """
+    pass #_widget_class = IirManagerWidget
