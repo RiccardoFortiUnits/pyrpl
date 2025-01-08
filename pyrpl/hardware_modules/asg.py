@@ -137,7 +137,9 @@ def make_asg(channel=0):
                            "frequency",
                            "trigger_source",
                            "output_direct",
-                           "start_phase"]
+                           "start_phase",
+                           "repetitions",
+                           "external_trigger_pin"]
         _setup_attributes = _gui_attributes + ["cycles_per_burst"]
 
         _DATA_OFFSET = set_DATA_OFFSET
@@ -262,6 +264,8 @@ def make_asg(channel=0):
                                         'normally. ')
 
         external_trigger_pin = digitalPinRegister(- addr_base + HK.addr_base + 0x28, startBit=4)
+
+        repetitions = IntRegister(0x18, doc = 'number of repetitions of the curve. If 0, the curve is repeated indefinetly')
 
         def _noise_distribution(self):
             """

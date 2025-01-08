@@ -38,7 +38,7 @@ class PidWidget(ModuleWidget):
     def setpointToCurrentValue(self):
         #get the last acquisition from the scope and put its average as the new setpoint
         acquisition = self.module.parent.scope.getLastAcquisition(self.inputSignal_widget.attribute_value)
-        self.setpoint_widget.widget_value = np.mean(acquisition)
+        self.setpoint_widget.attribute_value = np.mean(acquisition)
 
     def update_ival(self):
         widget = self.attribute_widgets['ival']

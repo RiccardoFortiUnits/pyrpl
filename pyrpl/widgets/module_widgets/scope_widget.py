@@ -95,7 +95,8 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.attribute_layout.removeWidget(aws['duration'])
         self.attribute_layout.removeWidget(aws['trigger_delay'])
         self.layout_duration = QtWidgets.QVBoxLayout()
-        self.layout_duration.addWidget(aws['duration'])
+        self.duration = aws['duration']
+        self.layout_duration.addWidget(self.duration)
         self.layout_duration.addWidget(aws['trigger_delay'])
         self.attribute_layout.addLayout(self.layout_duration)
 
@@ -219,7 +220,7 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.updatePeakButton1.clicked.connect(self.updatePeakTimings1)
         self.layout_peak1.addWidget(self.updatePeakButton1)
         
-        self.updatePeakButton2 = QtWidgets.QPushButton("update peak1 timings")
+        self.updatePeakButton2 = QtWidgets.QPushButton("update peak2 timings")
         self.updatePeakButton2.clicked.connect(self.updatePeakTimings2)
         self.layout_peak2.addWidget(self.updatePeakButton2)
         
@@ -240,12 +241,20 @@ class ScopeWidget(AcquisitionModuleWidget):
 
     def updatePeakTimings1(self):
         xrange, _ = self.viewBox.viewRange()
+        if xrange[0] < 0:
+            xrange[0] = 0
+        if xrange[1] > self.duration.attribute_value:
+            xrange[1] = self.duration.attribute_value * .99
         self.minTime1.attribute_value = xrange[0]
         self.maxTime1.attribute_value = xrange[1]
         print(xrange)
     
     def updatePeakTimings2(self):
         xrange, _ = self.viewBox.viewRange()
+        if xrange[0] < 0:
+            xrange[0] = 0
+        if xrange[1] > self.duration.attribute_value:
+            xrange[1] = self.duration.attribute_value * .99
         self.minTime2.attribute_value = xrange[0]
         self.maxTime2.attribute_value = xrange[1]
 

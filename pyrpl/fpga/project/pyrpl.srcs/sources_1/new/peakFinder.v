@@ -18,7 +18,7 @@ module peakFinder #(
 
 	output reg [dataSize -1:0] max,
 	output reg [indexSize -1:0] maxIndex,
-	output reg max_valid
+	output max_valid
 );
 	reg [indexSize -1:0] counter;
 	wire inIndexRange = $unsigned(counter) >= $unsigned(indexRange_min);
@@ -27,6 +27,9 @@ module peakFinder #(
 	reg [indexSize -1:0] currentMaxIndex;
 	reg running;
 	reg isPeakValid;
+
+	reg peakFound;
+	reg [indexSize+1 -1:0] peakValid_counter;//the peak will be considered valid for 2^indexSize cycles
 	always @(posedge clk) begin
 		// max_valid <= ($unsigned(counter) >= $unsigned(indexRange_max)) && (!reset);//output is valid only when the window just finished
 		if (reset) begin
@@ -37,7 +40,8 @@ module peakFinder #(
 			counter <= 0;
 			running <= 0;
 			isPeakValid <= 0;
-			max_valid <= 0;
+			peakFound <= 0;
+			peakValid_counter <= 0;
 		end else if($unsigned(counter) >= $unsigned(indexRange_max))begin// did we just finish a window?
 			//change output and reset
 		    max <= currentMax;
@@ -46,7 +50,8 @@ module peakFinder #(
 			currentMaxIndex <= 0;
 			counter <= 0;
 			running <= 0;
-			max_valid <= isPeakValid;
+			peakFound <= isPeakValid;
+			peakValid_counter <= -1;
 			isPeakValid <= 0;
 		end else if(trigger || running) begin// new value to test?
 			running <= 1;
@@ -60,8 +65,17 @@ module peakFinder #(
 					isPeakValid <= 1;
 				end
 				counter <= counter + 1;
+				if(peakValid_counter)begin
+					peakValid_counter <= peakValid_counter - 1;
+				end
+			end
+		end else begin
+			if(in_valid && peakValid_counter)begin
+				peakValid_counter <= peakValid_counter - 1;
 			end
 		end
 	end
 
+	assign max_valid = peakValid_counter && peakFound;
+	
 endmodule
