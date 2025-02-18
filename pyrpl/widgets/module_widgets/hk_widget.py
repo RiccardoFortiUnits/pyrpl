@@ -25,6 +25,7 @@ class HkWidget(ModuleWidget):
         self.lay_h1.addWidget(self.attribute_widgets['led'])
         self.lay_h1.addWidget(self.attribute_widgets['input1'])
         self.lay_h1.addWidget(self.attribute_widgets['input2'])
+        self.lay_h1.addWidget(self.attribute_widgets['genericModuleTrigger'])
         self.refresh_button = QtWidgets.QPushButton("Refresh")
         self.refresh_button.clicked.connect(self.refresh)
         self.lay_h1.addWidget(self.refresh_button)

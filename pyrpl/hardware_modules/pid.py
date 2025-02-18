@@ -238,6 +238,7 @@ class Pid(FilterModule):
                          "pause_gains",
                          "paused",
                          "differential_mode_enabled",
+                         "useGenericTrigger"
                          ]
     _gui_attributes = _setup_attributes + ["ival"]
 

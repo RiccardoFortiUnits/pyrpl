@@ -77,6 +77,7 @@ should not be used.
 
    // input triggers
    input                ramp_trigger,
+   input                generic_module_trigger,
    // trigger outputs for the scope
    output                trig_o,   // output from trigger dsp module
 
@@ -170,7 +171,11 @@ wire [14-1:0] output_direct [MODULES+EXTRAMODULES-1:0];
 reg [2-1:0] output_select [MODULES+EXTRAMODULES-1:0]; 
 
 // syncronization register to trigger simultaneous action of different dsp modules
-reg [MODULES-1:0] sync;
+//it is usually used as a enable flag (each module just looks at its own sync bit), so I also added the possibility of disabling it with an external trigger
+reg [MODULES-1:0] sync_fromMemory;
+reg [MODULES-1:0] sync_alsoUseGenericTrigger;
+wire [MODULES-1:0] sync = sync_fromMemory & (~sync_alsoUseGenericTrigger | {MODULES{generic_module_trigger}});//disables module[i] when sync_fromMemory[i] == 0 or (if sync_alsoUseGenericTrigger == 1) generic_module_trigger == 0
+//todo add output_valid[input_select[j]] to the formula for sync
 
 // bus read data of individual modules (only needed for 'real' modules)
 wire [ 32-1: 0] module_rdata [MODULES-1:0];  
@@ -288,13 +293,14 @@ always @(posedge clk_i) begin
       input_select [PWM0] <= NONE;
       input_select [PWM1] <= NONE;
       
-      sync <= {MODULES{1'b1}} ;  // all modules on by default
+      sync_fromMemory <= {MODULES{1'b1}} ;  // all modules on by default
+      sync_alsoUseGenericTrigger <= 0;
    end
    else begin
       if (sys_wen) begin
-         if (sys_addr[16-1:0]==16'h00)     input_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]] <= sys_wdata[ LOG_INPUT_MODULES-1:0];
-         if (sys_addr[16-1:0]==16'h04)    output_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]] <= sys_wdata[ 2-1:0];
-         if (sys_addr[16-1:0]==16'h0C)                                            sync <= sys_wdata[MODULES-1:0];
+         if (sys_addr[16-1:0]==16'h00)     input_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]] <= sys_wdata[LOG_INPUT_MODULES -1:0];
+         if (sys_addr[16-1:0]==16'h04)    { sync_alsoUseGenericTrigger[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]], output_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]]} <= sys_wdata;
+         if (sys_addr[16-1:0]==16'h0C)                                               sync_fromMemory <= sys_wdata[MODULES -1:0];
       end
    end
 end
@@ -309,12 +315,11 @@ end else begin
    sys_err <= 1'b0 ;
    casez (sys_addr[16-1:0])
       20'h00 : begin sys_ack <= sys_en;          sys_rdata <= {{32- LOG_INPUT_MODULES{1'b0}},input_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]]}; end 
-     20'h04 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},output_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]]}; end
-     20'h08 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},dat_b_saturated,dac_a_saturated}; end
-     20'h0C : begin sys_ack <= sys_en;          sys_rdata <= {{32-MODULES{1'b0}},sync} ; end
+      20'h04 : begin sys_ack <= sys_en;          sys_rdata <= {sync_alsoUseGenericTrigger[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]], output_select[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]]}; end
+      20'h08 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},dat_b_saturated,dac_a_saturated}; end
+      20'h0C : begin sys_ack <= sys_en;          sys_rdata <= {{32-MODULES{1'b0}},sync_fromMemory} ; end
       20'h10 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 14{1'b0}},output_signal[sys_addr[16+LOG_OUTPUT_DIRECT_MODULES-1:16]]} ; end
-
-     default : begin sys_ack <= module_ack[sys_addr[16+LOG_OUTPUT_MODULES-1:16]];    sys_rdata <=  module_rdata[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]  ; end
+      default : begin sys_ack <= module_ack[sys_addr[16+LOG_OUTPUT_MODULES-1:16]];    sys_rdata <=  module_rdata[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]  ; end
    endcase
 end
 

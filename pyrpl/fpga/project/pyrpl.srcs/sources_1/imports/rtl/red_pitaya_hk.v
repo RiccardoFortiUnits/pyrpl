@@ -46,6 +46,7 @@
 	output 				 asg_trigger,
 	output 				 scope_trigger,
 	output 	    		 ramp_trigger,
+	output 	    		 generic_module_trigger,
 	input      [DWE-1:0] exp_n_dat_i,  //
 	output     [DWE-1:0] exp_n_dat_o,  //
 	output reg [DWE-1:0] exp_n_dir_o,  //
@@ -135,11 +136,12 @@ doubleFastSwitcher_HalfStart#(
 );
 
 //triggers for external modules
-reg [DLE -1:0] ramp_triggerPin, asg_triggerPin, scope_triggerPin;
+reg [DLE -1:0] ramp_triggerPin, asg_triggerPin, scope_triggerPin, generic_module_triggerPin;
 
 assign asg_trigger = allInputPins[asg_triggerPin];
 assign scope_trigger = allInputPins[scope_triggerPin];
 assign ramp_trigger = allInputPins[ramp_triggerPin];
+assign generic_module_trigger = allInputPins[generic_module_triggerPin];
 
 //---------------------------------------------------------------------------------
 //
@@ -210,6 +212,7 @@ if (rstn_i == 1'b0) begin
 	ramp_triggerPin <= 0;
 	asg_triggerPin <= 0;
 	scope_triggerPin <= 0;
+	generic_module_triggerPin <= 0;
 	
 	for(i=0;i<DWE;i=i+1)begin
 		otherPinSelectorBit_p[i] <= 0;
@@ -230,7 +233,7 @@ end else if (sys_wen) begin
 	if (sys_addr[19:0]==20'h18)   exp_p_dat_o_reg  <= sys_wdata[DWE-1:0];
 	if (sys_addr[19:0]==20'h1C)   exp_n_dat_o_reg  <= sys_wdata[DWE-1:0];
 
-	if (sys_addr[19:0]==20'h28)   {ramp_triggerPin, asg_triggerPin, scope_triggerPin} <= sys_wdata;
+	if (sys_addr[19:0]==20'h28)   {generic_module_triggerPin, ramp_triggerPin, asg_triggerPin, scope_triggerPin} <= sys_wdata;
 
 	if (sys_addr[19:0]==20'h30)   led_o        <= sys_wdata[DWL-1:0];
 	if (sys_addr[19:0]==20'h34)   {pinState_p} <= sys_wdata;
@@ -271,7 +274,7 @@ end else begin
 		20'h00020: begin sys_ack <= sys_en;  sys_rdata <= {{32-DWE{1'b0}}, exp_p_dat_i}       ; end
 		20'h00024: begin sys_ack <= sys_en;  sys_rdata <= {{32-DWE{1'b0}}, exp_n_dat_i}       ; end
 
-		20'h00028: begin sys_ack <= sys_en;  sys_rdata <= {ramp_triggerPin, asg_triggerPin, scope_triggerPin}       ; end
+		20'h00028: begin sys_ack <= sys_en;  sys_rdata <= {generic_module_triggerPin, ramp_triggerPin, asg_triggerPin, scope_triggerPin}       ; end
 
 		20'h00030: begin sys_ack <= sys_en;  sys_rdata <= {{32-DWL{1'b0}}, led_o}             ; end
 		20'h00034: begin sys_ack <= sys_en;  sys_rdata <= {pinState_p}             ; end

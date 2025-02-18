@@ -32,7 +32,8 @@ class HK(HardwareModule):
 						['fastSwitch_triggerPin'] + \
 						['fastSwitch_channelsDelay'] + \
 						['input1'] + \
-						['input2']
+						['input2'] +\
+						['genericModuleTrigger']
 	_gui_attributes =  _setup_attributes
 	addr_base = 0x40000000
 	# We need all attributes to be there when the interpreter is done reading the class (for metaclass to workout)
@@ -57,6 +58,7 @@ class HK(HardwareModule):
 	led = IntRegister(0x30, doc="LED control with bits 1:8", min=0, max=2**8)
 	# another option: access led as array of bools
 	# led = [BoolRegister(0x30,bit=i,doc="LED "+str(i)) for i in range(8)]
+	genericModuleTrigger = digitalPinRegister(0x28, startBit=0xC, doc="pin that can disable dsp modules, if their 'useGenericTrigger' value is checked")
 
 	def set_expansion_direction(self, index, val):
 		"""Sets the output mode of expansion index (both for P and N expansions)"""

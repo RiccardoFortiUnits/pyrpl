@@ -234,7 +234,6 @@ class DspModule(HardwareModule, SignalModule):
     input = InputSelectRegister(0x0,
                                 options=all_inputs,
                                 doc="selects the input signal of the module")
-
     @property
     def output_directs(self):
         self._logger.warning("Deprecation warning: DspModule.output_directs"
@@ -247,6 +246,7 @@ class DspModule(HardwareModule, SignalModule):
                                    doc="selects to which analog output the "
                                        "module signal is sent directly")
 
+    useGenericTrigger = BoolRegister(0x4, bit = 2, doc="If true, this module can be disabled with the ModuleDisable pin (check HK module)")
     out1_saturated = BoolRegister(0x8, 0, doc="True if out1 is saturated")
 
     out2_saturated = BoolRegister(0x8, 1, doc="True if out2 is saturated")

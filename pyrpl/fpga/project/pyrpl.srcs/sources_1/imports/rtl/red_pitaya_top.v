@@ -381,7 +381,7 @@ wire  [  8-1: 0] exp_p_in , exp_n_in ;
 wire  [  8-1: 0] exp_p_out, exp_n_out;
 wire  [  8-1: 0] exp_p_dir, exp_n_dir;
 wire [ 14-1: 0] extDigital0, extDigital1;
-wire asg_trigger, scope_trigger, ramp_trigger;
+wire asg_trigger, scope_trigger, ramp_trigger, generic_module_trigger;
 
 red_pitaya_hk i_hk (
   // system signals
@@ -405,6 +405,7 @@ red_pitaya_hk i_hk (
   .asg_trigger     (  asg_trigger                ),
   .scope_trigger   (  scope_trigger              ),
   .ramp_trigger    (  ramp_trigger               ),
+  .generic_module_trigger(generic_module_trigger),
    // System bus
   .sys_addr        (  sys_addr                   ),  // address
   .sys_wdata       (  sys_wdata                  ),  // write data
@@ -540,6 +541,7 @@ red_pitaya_dsp i_dsp (
   .extDigital1     (  extDigital1            ),
 
   .ramp_trigger    (  ramp_trigger           ),
+  .generic_module_trigger(generic_module_trigger),
 
   .trig_o          (  dsp_trigger            ),
 
