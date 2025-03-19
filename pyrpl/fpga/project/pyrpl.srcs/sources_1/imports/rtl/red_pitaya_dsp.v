@@ -67,6 +67,8 @@ should not be used.
    output     [ 14-1: 0] scope2_o,
    input      [ 14-1: 0] asg1_i,
    input      [ 14-1: 0] asg2_i,
+   output     [ 14-1: 0] asg_a_amp_o,
+   output     [ 14-1: 0] asg_b_amp_o,
    input      [ 14-1: 0] asg1phase_i,
 
    // pwm and digital pins outputs
@@ -96,12 +98,15 @@ should not be used.
    input                 peak_a_valid,
    input      [ 14 -1:0] peak_b,
    input      [ 14 -1:0] peak_b_index,
-   input                 peak_b_valid
+   input                 peak_b_valid,
+   input      [ 14 -1:0] peak_c,
+   input      [ 14 -1:0] peak_c_index,
+   input                 peak_c_valid
 );
 
 localparam EXTRAMODULES = 2; //need two extra control registers for scope/asg
-localparam EXTRAINPUTS = 8; //four extra input signals for dac(2)/adc(2), plus ADC peaks and peak positions
-localparam EXTRAOUTPUTS = 4; //two extra output signals for pwm channels, plus 2 signals for the external digital pins
+localparam EXTRAINPUTS = 10; //four extra input signals for dac(2)/adc(2), plus ADC peaks and peak positions
+localparam EXTRAOUTPUTS = 6; //two extra output signals for pwm channels, plus 2 signals for the external digital pins and asg_amplitude controllers
 localparam LOG_INPUT_MODULES = $clog2(EXTRAINPUTS+EXTRAMODULES+MODULES);
 localparam LOG_OUTPUT_MODULES = $clog2(EXTRAMODULES+MODULES);//the EXTRAOUTPUTS cannot be put on the DAC output, so we don't consider it. 
                                                                //This value is used in combination with output_direct and output_select
@@ -140,13 +145,17 @@ localparam DAC1  = MODULES+4;
 localparam DAC2  = MODULES+5;
 localparam PEAK1  = MODULES+6;
 localparam PEAK2  = MODULES+7;
-localparam PEAK_IDX1  = MODULES+8;
-localparam PEAK_IDX2  = MODULES+9;
+localparam PEAK3  = MODULES+8;
+localparam PEAK_IDX1  = MODULES+9;
+localparam PEAK_IDX2  = MODULES+10;
+localparam PEAK_IDX3  = MODULES+11;
 //EXTRAOUTPUT numbers
 localparam PWM0  = MODULES+2; //they can have the same indexes as the extra inputs
 localparam PWM1  = MODULES+3;
 localparam EXT_DIG0  = MODULES+4;
 localparam EXT_DIG1  = MODULES+5;
+localparam ASG_AMP1 = MODULES+6;
+localparam ASG_AMP2 = MODULES+7;
 
 //output states
 localparam BOTH = 2'b11;
@@ -198,15 +207,19 @@ assign output_signal[DAC1] = dat_a_o;
 assign output_signal[DAC2] = dat_b_o;
 assign output_signal[PEAK1] = peak_a;
 assign output_signal[PEAK2] = peak_b;
+assign output_signal[PEAK3] = peak_c;
 assign output_signal[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is a positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
 assign output_signal[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
-assign output_valid = {peak_b_valid, peak_a_valid, peak_b_valid, peak_a_valid, {PEAK1{1'b1}}};// all inputs are always valid, except for the peak signals
+assign output_signal[PEAK_IDX3] = {~peak_c_index[13], peak_c_index[12:0]};
+assign output_valid = {peak_c_valid, peak_b_valid, peak_a_valid, peak_c_valid, peak_b_valid, peak_a_valid, {PEAK1{1'b1}}};// all inputs are always valid, except for the peak signals
 
 //connect pwm and external digital pins to internal signals
 assign pwm0 = (input_select[PWM0] == NONE) ? 14'h0 : output_signal[input_select[PWM0]];
 assign pwm1 = (input_select[PWM1] == NONE) ? 14'h0 : output_signal[input_select[PWM1]];
 assign extDigital0 = (input_select[EXT_DIG0] == NONE) ? 14'h0 : output_signal[input_select[EXT_DIG0]];
 assign extDigital1 = (input_select[EXT_DIG1] == NONE) ? 14'h0 : output_signal[input_select[EXT_DIG1]];
+assign asg_a_amp_o = (input_select[ASG_AMP1] == NONE) ? 14'h0 : output_signal[input_select[ASG_AMP1]];
+assign asg_b_amp_o = (input_select[ASG_AMP2] == NONE) ? 14'h0 : output_signal[input_select[ASG_AMP2]];
 
 wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum1; 
 wire  signed [   14+LOG_OUTPUT_MODULES-1: 0] sum2; 
@@ -459,57 +472,57 @@ generate for (j = IQ2; j < LIN; j = j+2) begin
 end endgenerate
 
 // segmented function, for linearizations
-generate for (j = LIN; j < RAMP; j = j+1) begin
+// generate for (j = LIN; j < RAMP; j = j+1) begin
 
-    segmentedFunction#(
-        .nOfEdges          (8),
-        .totalBits_IO      (14),
-        .fracBits_IO       (0),
-        .totalBits_m       (20),
-        .fracBits_m        (14),
-        .areSignalsSigned  (1)
-    )sf(
-        .clk           (clk_i),
-        .reset         (!rstn_i),
-        .in            (input_signal [j]),
-        .out           (output_signal[j]),
+//     segmentedFunction#(
+//         .nOfEdges          (8),
+//         .totalBits_IO      (14),
+//         .fracBits_IO       (0),
+//         .totalBits_m       (20),
+//         .fracBits_m        (14),
+//         .areSignalsSigned  (1)
+//     )sf(
+//         .clk           (clk_i),
+//         .reset         (!rstn_i),
+//         .in            (input_signal [j]),
+//         .out           (output_signal[j]),
         
-        //communincation with PS
-        .addr ( sys_addr[16-1:0] ),
-        .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-        .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-        .ack  ( module_ack[j] ),
-        .rdata (module_rdata[j]),
-        .wdata (sys_wdata)
-    );
-   assign output_signal[j] = output_direct[j];
+//         //communincation with PS
+//         .addr ( sys_addr[16-1:0] ),
+//         .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+//         .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+//         .ack  ( module_ack[j] ),
+//         .rdata (module_rdata[j]),
+//         .wdata (sys_wdata)
+//     );
+//    assign output_signal[j] = output_direct[j];
    
-end endgenerate
+// end endgenerate
 
 // sequence of ramp functions, for arbitrary functions with strict timings (useful to make sequences of ramps with very different time frames, if you tried to do this with the normal asg, the very fast ramps would not be that precise)
-generate for (j = RAMP; j < MODULES; j = j+1) begin
+// generate for (j = RAMP; j < MODULES; j = j+1) begin
 
-    ramp#(
-        .nOfRamps                   (8),
-        .data_size                  (14),
-        .time_size                  (24),
-        .inhibitionTimeForTrigger   (500)//4e-6s
-    )rmp(
-        .clk      (clk_i),
-        .reset    (!rstn_i),
-        .trigger  (ramp_trigger),
+//     ramp#(
+//         .nOfRamps                   (8),
+//         .data_size                  (14),
+//         .time_size                  (24),
+//         .inhibitionTimeForTrigger   (500)//4e-6s
+//     )rmp(
+//         .clk      (clk_i),
+//         .reset    (!rstn_i),
+//         .trigger  (ramp_trigger),
         
-        .out           (output_signal[j]),
-        //communincation with PS
-        .addr ( sys_addr[16-1:0] ),
-        .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-        .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-        .ack  ( module_ack[j] ),
-        .rdata (module_rdata[j]),
-        .wdata (sys_wdata)
-    );
-   assign output_signal[j] = output_direct[j];
+//         .out           (output_signal[j]),
+//         //communincation with PS
+//         .addr ( sys_addr[16-1:0] ),
+//         .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+//         .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+//         .ack  ( module_ack[j] ),
+//         .rdata (module_rdata[j]),
+//         .wdata (sys_wdata)
+//     );
+//    assign output_signal[j] = output_direct[j];
    
-end endgenerate
+// end endgenerate
 
 endmodule

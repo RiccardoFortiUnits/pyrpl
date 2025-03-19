@@ -188,8 +188,10 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.layout_peaks = QtWidgets.QVBoxLayout()
         self.layout_peak1 = QtWidgets.QHBoxLayout()
         self.layout_peak2 = QtWidgets.QHBoxLayout()
+        self.layout_peak3 = QtWidgets.QHBoxLayout()
         self.layout_peaks.addLayout(self.layout_peak1)
         self.layout_peaks.addLayout(self.layout_peak2)
+        self.layout_peaks.addLayout(self.layout_peak3)
         
         self.minTime1 = aws["minTime1"]
         self.maxTime1 = aws["maxTime1"]
@@ -199,6 +201,10 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.maxTime2 = aws["maxTime2"]
         self.peak2_minValue = aws["peak2_minValue"]
         self.peak2_input = aws["peak2_input"]
+        self.minTime3 = aws["minTime3"]
+        self.maxTime3 = aws["maxTime3"]
+        self.peak3_minValue = aws["peak3_minValue"]
+        self.peak3_input = aws["peak3_input"]
         self.attribute_layout.removeWidget(self.minTime1)
         self.attribute_layout.removeWidget(self.maxTime1)
         self.attribute_layout.removeWidget(self.peak1_minValue)
@@ -207,6 +213,10 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.attribute_layout.removeWidget(self.maxTime2)
         self.attribute_layout.removeWidget(self.peak2_minValue)
         self.attribute_layout.removeWidget(self.peak2_input)
+        self.attribute_layout.removeWidget(self.minTime3)
+        self.attribute_layout.removeWidget(self.maxTime3)
+        self.attribute_layout.removeWidget(self.peak3_minValue)
+        self.attribute_layout.removeWidget(self.peak3_input)
         self.layout_peak1.addWidget(self.minTime1)
         self.layout_peak1.addWidget(self.maxTime1)
         self.layout_peak1.addWidget(self.peak1_minValue)
@@ -215,6 +225,10 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.layout_peak2.addWidget(self.maxTime2)
         self.layout_peak2.addWidget(self.peak2_minValue)
         self.layout_peak2.addWidget(self.peak2_input)
+        self.layout_peak3.addWidget(self.minTime3)
+        self.layout_peak3.addWidget(self.maxTime3)
+        self.layout_peak3.addWidget(self.peak3_minValue)
+        self.layout_peak3.addWidget(self.peak3_input)
 
         self.updatePeakButton1 = QtWidgets.QPushButton("update peak1 timings")
         self.updatePeakButton1.clicked.connect(self.updatePeakTimings1)
@@ -224,6 +238,10 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.updatePeakButton2.clicked.connect(self.updatePeakTimings2)
         self.layout_peak2.addWidget(self.updatePeakButton2)
         
+        self.updatePeakButton3 = QtWidgets.QPushButton("update peak3 timings")
+        self.updatePeakButton3.clicked.connect(self.updatePeakTimings3)
+        self.layout_peak3.addWidget(self.updatePeakButton3)
+                
         self.attribute_layout.addLayout(self.layout_peaks)
 
         super(ScopeWidget, self).init_gui()
@@ -257,6 +275,15 @@ class ScopeWidget(AcquisitionModuleWidget):
             xrange[1] = self.duration.attribute_value * .99
         self.minTime2.attribute_value = xrange[0]
         self.maxTime2.attribute_value = xrange[1]
+    
+    def updatePeakTimings3(self):
+        xrange, _ = self.viewBox.viewRange()
+        if xrange[0] < 0:
+            xrange[0] = 0
+        if xrange[1] > self.duration.attribute_value:
+            xrange[1] = self.duration.attribute_value * .99
+        self.minTime3.attribute_value = xrange[0]
+        self.maxTime3.attribute_value = xrange[1]
 
     def update_attribute_by_name(self, name, new_value_list):
         """

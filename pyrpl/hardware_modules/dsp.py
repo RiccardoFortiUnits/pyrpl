@@ -13,8 +13,10 @@ DSP_INPUTS = OrderedDict([
     ('out2', 16),
     ('peak1', 17), #same as asg
     ('peak2', 18),
-    ('peakIndex1', 19),
-    ('peakIndex2', 20),
+    ('peak3', 19),
+    ('peakIndex1', 20),
+    ('peakIndex2', 21),
+    ('peakIndex3', 22),
     ('iq0', 5),
     ('iq1', 6),
     ('iq2', 7),
@@ -36,7 +38,9 @@ DSP_ONLY_INPUTS = OrderedDict([
     ('pwm0', DSP_INPUTS['in1']),
     ('pwm1', DSP_INPUTS['in2']),
     ('dig0', DSP_INPUTS['out1']),
-    ('dig1', DSP_INPUTS['out2']),])
+    ('dig1', DSP_INPUTS['out2']),
+    ('asg_ampl0', DSP_INPUTS['peak1']),
+    ('asg_ampl1', DSP_INPUTS['peak2']),])
 
 def all_inputs_keys(instance):
     """ collects all available logical inputs, composed of all

@@ -383,6 +383,7 @@ wire  [  8-1: 0] exp_p_dir, exp_n_dir;
 wire [ 14-1: 0] extDigital0, extDigital1;
 wire asg_trigger, scope_trigger, ramp_trigger, generic_module_trigger;
 
+
 red_pitaya_hk i_hk (
   // system signals
   .clk_i           (  adc_clk                    ),  // clock
@@ -429,9 +430,9 @@ wire    [14-1: 0] to_scope_a;
 wire    [14-1: 0] to_scope_b;
 wire dsp_trigger;
 
-wire [14 -1:0] peak_a, peak_b;
-wire peak_a_valid, peak_b_valid;
-wire [14 -1:0] peak_a_index, peak_b_index;
+wire [14 -1:0] peak_a, peak_b, peak_c;
+wire peak_a_valid, peak_b_valid, peak_c_valid;
+wire [14 -1:0] peak_a_index, peak_b_index, peak_c_index;
 
 red_pitaya_scope i_scope (
   // ADC
@@ -478,12 +479,18 @@ red_pitaya_scope i_scope (
 
  .peak_b         (peak_b),
  .peak_b_index   (peak_b_index),
- .peak_b_valid   (peak_b_valid)
+ .peak_b_valid   (peak_b_valid),
+
+ .peak_c         (peak_c),
+ .peak_c_index   (peak_c_index),
+ .peak_c_valid   (peak_c_valid)
 );
 
 //---------------------------------------------------------------------------------
 //  DAC arbitrary signal generator
 wire    [14-1: 0] asg1phase_o;
+
+wire [14 -1:0] external_a_amp, external_b_amp;
 
 red_pitaya_asg i_asg (
    // DAC
@@ -496,6 +503,9 @@ red_pitaya_asg i_asg (
   .trig_out_o      (  trig_asg_out               ),
   .trig_scope_i    (  trig_scope_out             ),
   .asg1phase_o     (  asg1phase_o                ),
+
+ .external_a_amp   (  external_a_amp             ),  // external multiplicator for signal
+ .external_b_amp   (  external_b_amp             ),  // external multiplicator for signal
   
   // System bus
   .sys_addr        (  sys_addr                   ),  // address
@@ -531,6 +541,8 @@ red_pitaya_dsp i_dsp (
   
   .asg1_i          (  asg_a                  ),
   .asg2_i          (  asg_b                  ),
+  .asg_a_amp_o     (  external_a_amp         ),
+  .asg_b_amp_o     (  external_b_amp         ),
   .scope1_o        (  to_scope_a             ),
   .scope2_o        (  to_scope_b             ),
   .asg1phase_i     (  asg1phase_o            ),
@@ -561,7 +573,11 @@ red_pitaya_dsp i_dsp (
 
    .peak_b         (peak_b),
    .peak_b_index   (peak_b_index),
-   .peak_b_valid   (peak_b_valid)
+   .peak_b_valid   (peak_b_valid),
+
+   .peak_c         (peak_c),
+   .peak_c_index   (peak_c_index),
+   .peak_c_valid   (peak_c_valid)
 );
 
 // the ams module has been obsoleted by PWM control via DSP module (outputs)

@@ -254,10 +254,14 @@ class Scope(HardwareModule, AcquisitionModule):
                        "maxTime1",
                        "minTime2",
                        "maxTime2",
+                       "minTime3",
+                       "maxTime3",
                        "peak1_input",
                        "peak2_input",
+                       "peak3_input",
                        "peak1_minValue",
                        "peak2_minValue",
+                       "peak3_minValue",
                        ]
     
     lastInputs = [None, None]
@@ -515,16 +519,22 @@ class Scope(HardwareModule, AcquisitionModule):
     maxTime1 = peakIndexRegister(0x98, default = 0x2000, doc = "time after the trigger at which the peak on channel 1 is no longer checked")
     minTime2 = peakIndexRegister(0x9C, default = 0x0, doc = "time after the trigger from which the peak on channel 2 is checked (the peak is searched only between minTime2 and maxTime2)")
     maxTime2 = peakIndexRegister(0xA0, default = 0x2000, doc = "time after the trigger at which the peak on channel 2 is no longer checked")
+    minTime3 = peakIndexRegister(0xBC, default = 0x0, doc = "time after the trigger from which the peak on channel 3 is checked (the peak is searched only between minTime3 and maxTime3)")
+    maxTime3 = peakIndexRegister(0xC0, default = 0x2000, doc = "time after the trigger at which the peak on channel 3 is no longer checked")
 
     peakInputsList = {"adc1" : 0, "adc2" : 1, "ch1" : 2, "ch2" : 3}
     peak1_input =  SelectRegister(0xB0, startBit=0, doc="input used for the first peak search",
                                               options=peakInputsList)
     peak2_input =  SelectRegister(0xB0, startBit=2, doc="input used for the first peak search",
                                               options=peakInputsList)
+    peak3_input =  SelectRegister(0xB0, startBit=4, doc="input used for the first peak search",
+                                              options=peakInputsList)
 
     peak1_minValue = FloatRegister(0xB4, startBit= 0, bits=14, norm=2 ** 13,
                                 doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
     peak2_minValue = FloatRegister(0xB4, startBit= 14, bits=14, norm=2 ** 13,
+                                doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
+    peak3_minValue = FloatRegister(0xCC, startBit= 0, bits=14, norm=2 ** 13,
                                 doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
 
     peakRangeRegisters = dict(
@@ -532,6 +542,8 @@ class Scope(HardwareModule, AcquisitionModule):
         maxTime1 = maxTime1,
         minTime2 = minTime2,
         maxTime2 = maxTime2,
+        minTime3 = minTime3,
+        maxTime3 = maxTime3,
     )
 
     # list comprehension workaround for python 3 compatibility

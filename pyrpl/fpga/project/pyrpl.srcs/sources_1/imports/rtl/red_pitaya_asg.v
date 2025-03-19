@@ -80,6 +80,8 @@ module red_pitaya_asg (
   input                 trig_scope_i    ,  // trigger from the scope
 
   output     [ 14-1: 0] asg1phase_o,
+  input      [ 14-1: 0] external_a_amp,  // external multiplicator for signal
+  input      [ 14-1: 0] external_b_amp,  // external multiplicator for signal
 
   // System bus
   input      [ 32-1: 0] sys_addr  ,  // bus address
@@ -105,6 +107,8 @@ reg               set_a_rst    , set_b_rst    ;
 reg               set_a_once   , set_b_once   ;
 reg               set_a_wrap   , set_b_wrap   ;
 reg   [  14-1: 0] set_a_amp    , set_b_amp    ;
+reg    set_a_amp_fromMemory    , set_b_amp_fromMemory    ;
+wire  [  14-1: 0] used_a_amp    , used_b_amp    ;
 reg   [  14-1: 0] set_a_dc     , set_b_dc     ;
 reg               set_a_zero   , set_b_zero   ;
 reg   [  32-1: 0] set_a_ncyc   , set_b_ncyc   ;
@@ -154,7 +158,8 @@ red_pitaya_adv_trigger adv_trig_b (
     .hysteresis_i (at_counts_b)//stay on for hysteresis_i cycles
     );
 
-
+assign used_a_amp = set_a_amp_fromMemory ? set_a_amp : external_a_amp;
+assign used_b_amp = set_b_amp_fromMemory ? set_b_amp : external_b_amp;
 
 red_pitaya_asg_ch  #(.RSZ (RSZ)) ch [1:0] (
   // DAC
@@ -179,7 +184,7 @@ red_pitaya_asg_ch  #(.RSZ (RSZ)) ch [1:0] (
   .set_rst_i       ({set_b_rst        , set_a_rst        }),  // set FMS to reset
   .set_once_i      ({set_b_once       , set_a_once       }),  // set only once
   .set_wrap_i      ({set_b_wrap       , set_a_wrap       }),  // set wrap pointer
-  .set_amp_i       ({set_b_amp        , set_a_amp        }),  // set amplitude scale
+  .set_amp_i       ({used_b_amp       , used_a_amp       }),  // set amplitude scale
   .set_dc_i        ({set_b_dc         , set_a_dc         }),  // set output offset
   .set_zero_i      ({set_b_zero       , set_a_zero       }),  // set output to zero
   .set_ncyc_i      ({set_b_ncyc       , set_a_ncyc       }),  // set number of cycle
@@ -230,6 +235,7 @@ if (dac_rstn_i == 1'b0) begin
    trig_a_sw   <=  1'b0    ;
    trig_a_src  <=  3'h0    ;
    set_a_amp   <= 14'h2000 ;
+   set_a_amp_fromMemory   <= 1 ;
    set_a_dc    <= 14'h0    ;
    set_a_zero  <=  1'b0    ;
    set_a_rst   <=  1'b0    ;
@@ -245,6 +251,7 @@ if (dac_rstn_i == 1'b0) begin
    trig_b_sw   <=  1'b0    ;
    trig_b_src  <=  3'h0    ;
    set_b_amp   <= 14'h2000 ;
+   set_b_amp_fromMemory   <= 1 ;
    set_b_dc    <= 14'h0    ;
    set_b_zero  <=  1'b0    ;
    set_b_rst   <=  1'b0    ;
@@ -286,6 +293,7 @@ end else begin
       if (sys_addr[19:0]==20'h0)   {rand_b_on, at_autorearm_b, at_invert_b, at_reset_b, set_b_rgate, set_b_zero, set_b_rst, set_b_once, set_b_wrap} <= sys_wdata[28:20] ;
 
       if (sys_addr[19:0]==20'h4)   set_a_amp  <= sys_wdata[  0+13: 0] ;
+      if (sys_addr[19:0]==20'h4)   set_a_amp_fromMemory <= sys_wdata[14+1: 14] ;
       if (sys_addr[19:0]==20'h4)   set_a_dc   <= sys_wdata[ 16+13:16] ;
       if (sys_addr[19:0]==20'h8)   set_a_size <= sys_wdata[RSZ+15: 0] ;
       if (sys_addr[19:0]==20'hC)   set_a_ofs  <= sys_wdata[RSZ+15: 0] ;
@@ -295,6 +303,7 @@ end else begin
       if (sys_addr[19:0]==20'h20)  set_a_rdly <= sys_wdata[  32-1: 0] ;
 
       if (sys_addr[19:0]==20'h24)  set_b_amp  <= sys_wdata[  0+13: 0] ;
+      if (sys_addr[19:0]==20'h24)  set_b_amp_fromMemory <= sys_wdata[14+1: 14] ;
       if (sys_addr[19:0]==20'h24)  set_b_dc   <= sys_wdata[ 16+13:16] ;
       if (sys_addr[19:0]==20'h28)  set_b_size <= sys_wdata[RSZ+15: 0] ;
       if (sys_addr[19:0]==20'h2C)  set_b_ofs  <= sys_wdata[RSZ+15: 0] ;
@@ -336,7 +345,7 @@ end else begin
    casez (sys_addr[19:0])
      20'h00000 : begin sys_ack <= sys_en;          sys_rdata <= r0_rd                              ; end
 
-     20'h00004 : begin sys_ack <= sys_en;          sys_rdata <= {2'h0, set_a_dc, 2'h0, set_a_amp}  ; end
+     20'h00004 : begin sys_ack <= sys_en;          sys_rdata <= {2'h0, set_a_dc, 1'h0, set_a_amp_fromMemory, set_a_amp}  ; end
      20'h00008 : begin sys_ack <= sys_en;          sys_rdata <= {{32-RSZ-16{1'b0}},set_a_size}     ; end
      20'h0000C : begin sys_ack <= sys_en;          sys_rdata <= {{32-RSZ-16{1'b0}},set_a_ofs}      ; end
      20'h00010 : begin sys_ack <= sys_en;          sys_rdata <= {{32-RSZ-16{1'b0}},set_a_step}     ; end
@@ -345,7 +354,7 @@ end else begin
      20'h0001C : begin sys_ack <= sys_en;          sys_rdata <= {{32-16{1'b0}},set_a_rnum}         ; end
      20'h00020 : begin sys_ack <= sys_en;          sys_rdata <= set_a_rdly                         ; end
 
-     20'h00024 : begin sys_ack <= sys_en;          sys_rdata <= {2'h0, set_b_dc, 2'h0, set_b_amp}  ; end
+     20'h00024 : begin sys_ack <= sys_en;          sys_rdata <= {2'h0, set_b_dc, 1'h0, set_b_amp_fromMemory, set_b_amp}  ; end
      20'h00028 : begin sys_ack <= sys_en;          sys_rdata <= {{32-RSZ-16{1'b0}},set_b_size}     ; end
      20'h0002C : begin sys_ack <= sys_en;          sys_rdata <= {{32-RSZ-16{1'b0}},set_b_ofs}      ; end
      20'h00030 : begin sys_ack <= sys_en;          sys_rdata <= {{32-RSZ-16{1'b0}},set_b_step}     ; end

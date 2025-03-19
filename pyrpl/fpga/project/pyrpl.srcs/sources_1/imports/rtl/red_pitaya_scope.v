@@ -122,7 +122,10 @@ module red_pitaya_scope #(
    output peak_a_valid,
    output     [RSZ -1:0] peak_b,
    output     [RSZ -1:0]  peak_b_index,
-   output peak_b_valid
+   output peak_b_valid,
+   output     [RSZ -1:0] peak_c,
+   output     [RSZ -1:0]  peak_c_index,
+   output peak_c_valid
 
 );
 
@@ -390,41 +393,50 @@ localparam  chForPeak_realAdc0 = 0,
             chForPeak_adc0 = 2,
             chForPeak_adc1 = 3;
 
-reg [1:0] chUsedByPeak0, chUsedByPeak1;
-reg [RSZ -1:0] peak_a_minIndex, peak_b_minIndex, peak_a_maxIndex, peak_b_maxIndex;
-reg [RSZ -1:0] peak_b_minValue, peak_a_minValue;
-reg [RSZ -1:0] signalForPeak0, signalForPeak1;
+reg [1:0] chUsedByPeak_a, chUsedByPeak_b, chUsedByPeak_c;
+reg [RSZ -1:0] peak_a_minIndex, peak_b_minIndex, peak_c_minIndex;
+reg [RSZ -1:0] peak_a_maxIndex, peak_b_maxIndex, peak_c_maxIndex;
+reg [RSZ -1:0] peak_a_minValue, peak_b_minValue, peak_c_minValue;
+reg [RSZ -1:0] signalForPeak_a, signalForPeak_b, signalForPeak_c;
 wire [RSZ*4 -1:0] availablePeakSignals = {adc_b_dat, adc_a_dat, real_adc_b_dat, real_adc_a_dat};
+wire [RSZ -1:0] intermediate_peak_c;
+wire [RSZ -1:0]  intermediate_peak_c_index;
+wire intermediate_peak_c_valid;
 always @(posedge adc_clk_i) begin
    if(~adc_rstn_i) begin
-      signalForPeak0 <= 0;
-      signalForPeak1 <= 0;
+      signalForPeak_a <= 0;
+      signalForPeak_b <= 0;
+      signalForPeak_c <= 0;
    end else begin
-      signalForPeak0 <= availablePeakSignals[RSZ*(chUsedByPeak0+1) -1-:RSZ];
-      signalForPeak1 <= availablePeakSignals[RSZ*(chUsedByPeak1+1) -1-:RSZ];
+      signalForPeak_a <= availablePeakSignals[RSZ*(chUsedByPeak_a+1) -1-:RSZ];
+      signalForPeak_b <= availablePeakSignals[RSZ*(chUsedByPeak_b+1) -1-:RSZ];
+      signalForPeak_c <= availablePeakSignals[RSZ*(chUsedByPeak_c+1) -1-:RSZ];
    end
 end
 
-peakFinder #(
+
+reg [RSZ -1:0] peak_flipIndex;
+flippedPeakFinder #(
    .dataSize          (RSZ),
    .indexSize         (RSZ),
    .areSignalsSigned  (1)
-)peakFinders[0:1](
+)peakFinders[0:2](
    .clk              (adc_clk_i),
    .reset            (!adc_rstn_i),
 
    .trigger          (peak_trig),
-   .in               ({signalForPeak0, signalForPeak1}),
+   .in               ({signalForPeak_a, signalForPeak_b, signalForPeak_c}),
    .in_valid         (adc_dv),
 
-   .indexRange_min   ({peak_a_minIndex, peak_b_minIndex}),
-   .indexRange_max   ({peak_a_maxIndex, peak_b_maxIndex}),
+   .indexRange_min   ({peak_a_minIndex, peak_b_minIndex, peak_c_minIndex}),
+   .indexRange_max   ({peak_a_maxIndex, peak_b_maxIndex, peak_c_maxIndex}),
 
-   .minValue         ({peak_a_minValue, peak_b_minValue}),
+   .minValue         ({peak_a_minValue, peak_b_minValue, peak_c_minValue}),
+   .flipIndex        (peak_flipIndex),
 
-   .max              ({peak_a, peak_b}),
-   .maxIndex         ({peak_a_index, peak_b_index}),
-   .max_valid        ({peak_a_valid, peak_b_valid})
+   .max              ({peak_a, peak_b, intermediate_peak_c}),
+   .maxIndex         ({peak_a_index, peak_b_index, intermediate_peak_c_index}),
+   .max_valid        ({peak_a_valid, peak_b_valid, intermediate_peak_c_valid})
 );
 
 //////////////// AXI IS DISABLED SINCE WE ARE NOT USING IT /////////////////////
@@ -900,16 +912,20 @@ if (adc_rstn_i == 1'b0) begin
    set_a_axi_en  <=   1'b0      ;
    set_b_axi_en  <=   1'b0      ;
 
-
    peak_a_minIndex <= 0;
    peak_a_maxIndex <= 2**(RSZ-1);
    peak_b_minIndex <= 0;
    peak_b_maxIndex <= 2**(RSZ-1);
+   peak_c_minIndex <= 0;
+   peak_c_maxIndex <= 2**(RSZ-1);
+   peak_flipIndex <= 0;
 
-   chUsedByPeak0 <= chForPeak_realAdc0;
-   chUsedByPeak1 <= chForPeak_realAdc1;
-   peak_b_minValue <= 0;
+   chUsedByPeak_a <= chForPeak_realAdc0;
+   chUsedByPeak_b <= chForPeak_realAdc1;
+   chUsedByPeak_c <= chForPeak_realAdc0;
    peak_a_minValue <= 0;
+   peak_b_minValue <= 0;
+   peak_c_minValue <= 0;
 
 
 end else begin
@@ -951,10 +967,31 @@ end else begin
       if (sys_addr[19:0]==20'h098)   peak_a_maxIndex <= sys_wdata ;
       if (sys_addr[19:0]==20'h09C)   peak_b_minIndex <= sys_wdata ;
       if (sys_addr[19:0]==20'h0A0)   peak_b_maxIndex <= sys_wdata ;
-      if (sys_addr[19:0]==20'h0B0)   {chUsedByPeak1, chUsedByPeak0} <= sys_wdata ;
+      if (sys_addr[19:0]==20'h0B0)   {chUsedByPeak_c, chUsedByPeak_b, chUsedByPeak_a} <= sys_wdata ;
       if (sys_addr[19:0]==20'h0B4)   {peak_b_minValue, peak_a_minValue} <= sys_wdata ;
+      if (sys_addr[19:0]==20'h0B8)   peak_flipIndex <= sys_wdata ;
+
+      if (sys_addr[19:0]==20'h0BC)   peak_c_minIndex <= sys_wdata ;
+      if (sys_addr[19:0]==20'h0C0)   peak_c_maxIndex <= sys_wdata ;
+      if (sys_addr[19:0]==20'h0CC)   {peak_c_minValue} <= sys_wdata ;
+      
    end
 end
+normalizedRatio#(
+   .inputSize     (16),
+   .ratioSize     (16),//ratio is unsigned, with 0 whole bits (only fractional bits)
+   .isInputSigned (1)
+) nr (
+   .clk        (adc_clk_i),
+   .reset      (!adc_rstn_i),
+   .min        (peak_a),
+   .max        (peak_b_index),
+   .middle     (intermediate_peak_c_index),
+   .ratio      (peak_c_index)
+);
+assign peak_c = intermediate_peak_c;
+assign peak_c_valid = intermediate_peak_c_valid & peak_b_valid & peak_a_valid;
+
 
 wire sys_en;
 assign sys_en = sys_wen | sys_ren;
@@ -1024,8 +1061,15 @@ end else begin
      20'h000A4 : begin sys_ack <= sys_en;          sys_rdata <= {peak_b_valid, peak_b, {(15-RSZ){1'b0}}, peak_a_valid, peak_a}        ; end
      20'h000A8 : begin sys_ack <= sys_en;          sys_rdata <= peak_a_index        ; end
      20'h000AC : begin sys_ack <= sys_en;          sys_rdata <= peak_b_index        ; end
-     20'h000B0 : begin sys_ack <= sys_en;          sys_rdata <= {chUsedByPeak1, chUsedByPeak0}        ; end
+     20'h000B0 : begin sys_ack <= sys_en;          sys_rdata <= {chUsedByPeak_c, chUsedByPeak_b, chUsedByPeak_a}        ; end
      20'h000B4 : begin sys_ack <= sys_en;          sys_rdata <= {peak_b_minValue, peak_a_minValue}        ; end
+     20'h000B8 : begin sys_ack <= sys_en;          sys_rdata <= peak_flipIndex        ; end
+     // peak c
+     20'h000BC : begin sys_ack <= sys_en;          sys_rdata <= peak_c_minIndex        ; end
+     20'h000C0 : begin sys_ack <= sys_en;          sys_rdata <= peak_c_maxIndex        ; end
+     20'h000C4 : begin sys_ack <= sys_en;          sys_rdata <= {intermediate_peak_c_valid, intermediate_peak_c}        ; end
+     20'h000C8 : begin sys_ack <= sys_en;          sys_rdata <= intermediate_peak_c_index        ; end
+     20'h000CC : begin sys_ack <= sys_en;          sys_rdata <= peak_c_minValue        ; end
 
     
      20'h00154 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, adc_a_i }         ; end
