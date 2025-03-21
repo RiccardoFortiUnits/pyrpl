@@ -399,7 +399,6 @@ reg [RSZ -1:0] peak_a_maxIndex, peak_b_maxIndex, peak_c_maxIndex;
 reg [RSZ -1:0] peak_a_minValue, peak_b_minValue, peak_c_minValue;
 reg [RSZ -1:0] signalForPeak_a, signalForPeak_b, signalForPeak_c;
 wire [RSZ*4 -1:0] availablePeakSignals = {adc_b_dat, adc_a_dat, real_adc_b_dat, real_adc_a_dat};
-wire [RSZ -1:0] intermediate_peak_c;
 wire [RSZ -1:0]  intermediate_peak_c_index;
 wire intermediate_peak_c_valid;
 always @(posedge adc_clk_i) begin
@@ -416,7 +415,7 @@ end
 
 
 reg [RSZ -1:0] peak_flipIndex;
-flippedPeakFinder #(
+peakFinder #(
    .dataSize          (RSZ),
    .indexSize         (RSZ),
    .areSignalsSigned  (1)
@@ -432,9 +431,9 @@ flippedPeakFinder #(
    .indexRange_max   ({peak_a_maxIndex, peak_b_maxIndex, peak_c_maxIndex}),
 
    .minValue         ({peak_a_minValue, peak_b_minValue, peak_c_minValue}),
-   .flipIndex        (peak_flipIndex),
+   // .flipIndex        (peak_flipIndex),
 
-   .max              ({peak_a, peak_b, intermediate_peak_c}),
+   .max              ({peak_a, peak_b, peak_c}),
    .maxIndex         ({peak_a_index, peak_b_index, intermediate_peak_c_index}),
    .max_valid        ({peak_a_valid, peak_b_valid, intermediate_peak_c_valid})
 );
@@ -978,18 +977,17 @@ end else begin
    end
 end
 normalizedRatio#(
-   .inputSize     (16),
-   .ratioSize     (16),//ratio is unsigned, with 0 whole bits (only fractional bits)
+   .inputSize     (RSZ),
+   .ratioSize     (RSZ),//ratio is unsigned, with 0 whole bits (only fractional bits)
    .isInputSigned (1)
 ) nr (
    .clk        (adc_clk_i),
    .reset      (!adc_rstn_i),
-   .min        (peak_a),
+   .min        (peak_a_index),
    .max        (peak_b_index),
    .middle     (intermediate_peak_c_index),
    .ratio      (peak_c_index)
 );
-assign peak_c = intermediate_peak_c;
 assign peak_c_valid = intermediate_peak_c_valid & peak_b_valid & peak_a_valid;
 
 
@@ -1067,8 +1065,8 @@ end else begin
      // peak c
      20'h000BC : begin sys_ack <= sys_en;          sys_rdata <= peak_c_minIndex        ; end
      20'h000C0 : begin sys_ack <= sys_en;          sys_rdata <= peak_c_maxIndex        ; end
-     20'h000C4 : begin sys_ack <= sys_en;          sys_rdata <= {intermediate_peak_c_valid, intermediate_peak_c}        ; end
-     20'h000C8 : begin sys_ack <= sys_en;          sys_rdata <= intermediate_peak_c_index        ; end
+     20'h000C4 : begin sys_ack <= sys_en;          sys_rdata <= {intermediate_peak_c_valid, peak_c_valid, peak_c}        ; end
+     20'h000C8 : begin sys_ack <= sys_en;          sys_rdata <= {intermediate_peak_c_index, {(16-RSZ){1'b0}}, peak_c_index}        ; end
      20'h000CC : begin sys_ack <= sys_en;          sys_rdata <= peak_c_minValue        ; end
 
     

@@ -5,7 +5,8 @@ module fractionalDivider#(
 	parameter FRAC_BITS_A = 8,
 	parameter FRAC_BITS_B = 8,
 	parameter FRAC_BITS_OUT = 12,
-	parameter areSignalsSigned = 1
+	parameter areSignalsSigned = 1,
+	parameter saturateOutput = 0
 )(
 	input wire clk,
 	input wire reset,
@@ -47,7 +48,8 @@ wire [numDen_WIDTH -1:0] a_shifted;
 		.inputFracSize	(FRAC_BITS_A),
 		.outputBitSize	(numDen_WIDTH),
 		.outputFracSize	(fracPad_a + FRAC_BITS_A + fracOutputPad_a),
-		.isSigned		(areSignalsSigned)
+		.isSigned		(areSignalsSigned),
+		.saturateOutput (saturateOutput)
 	)a_shifter(
 		.in				(a),
 		.out			(a_shifted)
@@ -58,7 +60,8 @@ wire [numDen_WIDTH -1:0] b_shifted;
 		.inputFracSize	(FRAC_BITS_B),
 		.outputBitSize	(numDen_WIDTH),
 		.outputFracSize	(fracPad_b + FRAC_BITS_B),
-		.isSigned		(areSignalsSigned)
+		.isSigned		(areSignalsSigned),
+		.saturateOutput (saturateOutput)
 	)b_shifter(
 		.in				(b),
 		.out			(b_shifted)
@@ -118,7 +121,8 @@ fixedPointShifter#(
 	.inputFracSize	(FRAC_BITS_rawQuotient),
 	.outputBitSize	(OUTPUT_WIDTH),
 	.outputFracSize	(FRAC_BITS_OUT),
-	.isSigned		(areSignalsSigned)
+	.isSigned		(areSignalsSigned),
+	.saturateOutput (saturateOutput)
 )quotient_shifter(
 	.in				(rawQuotient),
 	.out			(result)
@@ -129,7 +133,8 @@ fixedPointShifter#(
 	.inputFracSize	(FRAC_BITS_rawQuotient),
 	.outputBitSize	(OUTPUT_WIDTH),
 	.outputFracSize	(FRAC_BITS_OUT),
-	.isSigned		(areSignalsSigned)
+	.isSigned		(areSignalsSigned),
+	.saturateOutput (saturateOutput)
 )remainder_shifter(
 	.in				(rawRemain),
 	.out			(remain)

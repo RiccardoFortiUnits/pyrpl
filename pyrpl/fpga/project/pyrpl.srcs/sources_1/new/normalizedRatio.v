@@ -30,7 +30,8 @@ fractionalDivider #(
 	.FRAC_BITS_A		(0),
 	.FRAC_BITS_B		(0),
 	.FRAC_BITS_OUT		(ratioSize),
-	.areSignalsSigned	(0)// numerator and denominators will always be positive
+	.areSignalsSigned	(0),// numerator and denominators will always be positive
+	.saturateOutput     (0)
 ) fd(
 	.clk		(clk),
 	.reset		(reset),
