@@ -376,27 +376,27 @@ endgenerate
 
 wire trig_signal;
 //TRIG
-generate for (j = TRIG; j < IIR; j = j+1) begin
-   red_pitaya_trigger_block i_trigger (
-     // data
-     .clk_i        (  clk_i          ),  // clock
-     .rstn_i       (  rstn_i         ),  // reset - active low
-     .dat_i        (  input_signal [j] ),  // input data
-     .dat_o        (  output_direct[j]),  // output data
-     .signal_o     (  output_signal[j]),  // output signal
-     .phase1_i     (  asg1phase_i ),  // phase input
-     .trig_o       (  trig_signal ),
+//generate for (j = TRIG; j < IIR; j = j+1) begin
+//   red_pitaya_trigger_block i_trigger (
+//     // data
+//     .clk_i        (  clk_i          ),  // clock
+//     .rstn_i       (  rstn_i         ),  // reset - active low
+//     .dat_i        (  input_signal [j] ),  // input data
+//     .dat_o        (  output_direct[j]),  // output data
+//     .signal_o     (  output_signal[j]),  // output signal
+//     .phase1_i     (  asg1phase_i ),  // phase input
+//     .trig_o       (  trig_signal ),
 
-    //communincation with PS
-    .addr ( sys_addr[16-1:0] ),
-    .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-    .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-    .ack  ( module_ack[j] ),
-    .rdata (module_rdata[j]),
-     .wdata (sys_wdata)
-   );
-end
-endgenerate
+//    //communincation with PS
+//    .addr ( sys_addr[16-1:0] ),
+//    .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+//    .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+//    .ack  ( module_ack[j] ),
+//    .rdata (module_rdata[j]),
+//     .wdata (sys_wdata)
+//   );
+//end
+//endgenerate
 assign trig_o = trig_signal;
 
 // // IIR module 
