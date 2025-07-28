@@ -18,10 +18,12 @@ module peakFinder #(
 
 	output reg [dataSize -1:0] max,
 	output reg [indexSize -1:0] maxIndex,
-	output max_valid
+	output max_valid,
+	output inIndexRange
 );
 	reg [indexSize -1:0] counter;
-	wire inIndexRange = $unsigned(counter) >= $unsigned(indexRange_min);
+	wire inOrAfterIndexRange = $unsigned(counter) >= $unsigned(indexRange_min);
+	assign inIndexRange = inOrAfterIndexRange && ($unsigned(counter) <= $unsigned(indexRange_max));
 	// wire [dataSize -1:0] minValue = areSignalsSigned ? (1 << (dataSize-1)) : 0;
 	reg [dataSize -1:0] currentMax;
 	reg [indexSize -1:0] currentMaxIndex;
@@ -56,7 +58,7 @@ module peakFinder #(
 		end else if(trigger || running) begin// new value to test?
 			running <= 1;
 			if(in_valid)begin
-				if(inIndexRange && (
+				if(inOrAfterIndexRange && (
 	                   (areSignalsSigned && $signed(in) > $signed(currentMax)) ||
 	                   ((!areSignalsSigned) && $unsigned(in) > $unsigned(currentMax))
 	               )) begin

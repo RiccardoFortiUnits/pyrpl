@@ -125,8 +125,10 @@ module red_pitaya_scope #(
    output peak_b_valid,
    output     [RSZ -1:0] peak_c,
    output     [RSZ -1:0]  peak_c_index,
-   output peak_c_valid
-
+   output peak_c_valid,
+   output inPeakRange_a,
+   output inPeakRange_b,
+   output inPeakRange_c
 );
 
 reg             adc_arm_do   ;
@@ -435,7 +437,8 @@ peakFinder #(
 
    .max              ({peak_a, peak_b, peak_c}),
    .maxIndex         ({peak_a_index, peak_b_index, intermediate_peak_c_index}),
-   .max_valid        ({peak_a_valid, peak_b_valid, intermediate_peak_c_valid})
+   .max_valid        ({peak_a_valid, peak_b_valid, intermediate_peak_c_valid}),
+   .inIndexRange     ({inPeakRange_a, inPeakRange_b, inPeakRange_c})
 );
 
 //////////////// AXI IS DISABLED SINCE WE ARE NOT USING IT /////////////////////

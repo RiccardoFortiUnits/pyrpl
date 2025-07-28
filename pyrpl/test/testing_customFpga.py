@@ -12,7 +12,7 @@ Created on Mon Jun 17 18:01:10 2024
 # except:
 #     pass
 # rp = RedPitaya(
-#     hostname='rp-f0be3a.local', # the ip or hostname of the board
+#     hostname='rp-f0bd67.local', # the ip or hostname of the board
 #     port=2222,  # port for PyRPL datacommunication
 #     sshport=22,  # port of ssh server - default 22
 #     user='root',
@@ -63,8 +63,11 @@ Created on Mon Jun 17 18:01:10 2024
 # install_and_import("PyQt6")
 # install_and_import("yaml")
 
+
+
+
 from pyrpl import Pyrpl
 
-p = Pyrpl("a.yml")
+p = Pyrpl()
 
-input("press enter to close pyrpl")
+# input("press enter to close pyrpl")

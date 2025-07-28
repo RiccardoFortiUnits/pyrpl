@@ -21,11 +21,11 @@ Let's set up the ASG to output a sawtooth signal of amplitude 0.8 V
 
 import numpy as np
 from collections import OrderedDict
-from ..attributes import BoolRegister, FloatRegister, SelectRegister, SelectProperty, \
+from ..attributes import BoolRegister, FloatRegister, SelectRegister, SelectProperty, SelectRegister, \
                              IntRegister, LongRegister, PhaseRegister, FrequencyRegister, FloatProperty, digitalPinRegister
 from ..modules import HardwareModule, SignalModule
 from ..widgets.module_widgets import AsgWidget
-from . import all_output_directs, dsp_addr_base
+from . import all_output_directs, dsp_addr_base, all_inputs
 from .hk import HK
 
 
@@ -62,6 +62,14 @@ class WaveformAttribute(SelectProperty):
                 x = np.linspace(0, 2 * np.pi, instance.data_length,
                                 endpoint=False)
                 y = np.cos(x)
+            elif waveform == 'arccos':
+                print("using acrcos")
+                x = np.linspace(-1, 3, instance.data_length,
+                                endpoint=False)
+                y=np.zeros_like(x)
+                y[x <= 1] = np.pi - np.arccos(x[x <= 1])
+                y[x > 1] = np.arccos(x[x > 1] - 2)
+                y /= np.pi
             elif waveform == 'ramp':
                 y = np.linspace(-1.0, 3.0, instance.data_length,
                                 endpoint=False)
@@ -139,7 +147,9 @@ def make_asg(channel=0):
                            "output_direct",
                            "start_phase",
                            "repetitions",
-                           "external_trigger_pin"]
+                           "external_trigger_pin", 
+                           "amplitude_signal",
+                           "amplitude_source", ]
         _setup_attributes = _gui_attributes + ["cycles_per_burst"]
 
         _DATA_OFFSET = set_DATA_OFFSET
@@ -229,6 +239,12 @@ def make_asg(channel=0):
                                   # with smaller values and then boost them,
                                   #  but there is no real interest to do so.
                                   doc="amplitude of output waveform [volts]")
+        amplitude_source = SelectRegister(0x4 + _VALUE_OFFSET, startBit=14, bits=1, options = {"from signal" : 0, "from memory" : 1}, default = "from memory", doc = "select if the the amplitude should be given with the Amplitude value, or if oit should follow the value of the selected signal")
+        
+        amplitude_signal = SelectRegister(
+            - addr_base + dsp_addr_base('asg_ampl0' if _BIT_OFFSET == 0 else 'asg_ampl1'),
+                    options=all_inputs,
+                    doc="selects the signal that the amplitude will follow (if amplitude_source='from signal')")
 
         start_phase = PhaseRegister(0xC + _VALUE_OFFSET, bits=30,
                                     doc="Phase at which to start triggered waveforms [degrees]")
@@ -283,7 +299,7 @@ def make_asg(channel=0):
         def _noise_V2_per_Hz(self):
             return self._rmsamplitude**2/(125e6*self._frequency_correction/2)
 
-        waveforms = ['sin', 'cos', 'ramp', 'halframp', 'square', 'dc',
+        waveforms = ['sin', 'cos', 'ramp', 'halframp', 'square', 'dc', 'arccos',
                      'noise']
 
         waveform = WaveformAttribute(waveforms)
@@ -308,7 +324,7 @@ def make_asg(channel=0):
             #    self._reads(self._DATA_OFFSET, self.data_length),
             #             dtype=np.int32)
             x[x >= 2 ** 13] -= 2 ** 14
-            return np.array(x, dtype=np.float) / 2 ** 13
+            return np.array(x, dtype=float) / 2 ** 13
 
         @data.setter
         def data(self, data):
