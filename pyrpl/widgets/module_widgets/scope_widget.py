@@ -186,61 +186,61 @@ class ScopeWidget(AcquisitionModuleWidget):
             self.update_rolling_mode_visibility)
 
         self.layout_peaks = QtWidgets.QVBoxLayout()
-        self.layout_peak1 = QtWidgets.QHBoxLayout()
-        self.layout_peak2 = QtWidgets.QHBoxLayout()
-        self.layout_peak3 = QtWidgets.QHBoxLayout()
-        self.layout_peaks.addLayout(self.layout_peak1)
-        self.layout_peaks.addLayout(self.layout_peak2)
-        self.layout_peaks.addLayout(self.layout_peak3)
+        self.layout_peak_refL = QtWidgets.QHBoxLayout()
+        self.layout_peak_refR = QtWidgets.QHBoxLayout()
+        self.layout_peak_ctrl = QtWidgets.QHBoxLayout()
+        self.layout_peaks.addLayout(self.layout_peak_refL)
+        self.layout_peaks.addLayout(self.layout_peak_refR)
+        self.layout_peaks.addLayout(self.layout_peak_ctrl)
         
         self.minTime1 = aws["minTime1"]
         self.maxTime1 = aws["maxTime1"]
-        self.peak1_minValue = aws["peak1_minValue"]
-        self.peak1_input = aws["peak1_input"]
+        self.peak_refL_minValue = aws["peak_refL_minValue"]
+        self.peak_refL_input = aws["peak_refL_input"]
         self.minTime2 = aws["minTime2"]
         self.maxTime2 = aws["maxTime2"]
-        self.peak2_minValue = aws["peak2_minValue"]
-        self.peak2_input = aws["peak2_input"]
+        self.peak_refR_minValue = aws["peak_refR_minValue"]
+        self.peak_refR_input = aws["peak_refR_input"]
         self.minTime3 = aws["minTime3"]
         self.maxTime3 = aws["maxTime3"]
-        self.peak3_minValue = aws["peak3_minValue"]
-        self.peak3_input = aws["peak3_input"]
+        self.peak_ctrl_minValue = aws["peak_ctrl_minValue"]
+        self.peak_ctrl_input = aws["peak_ctrl_input"]
         self.attribute_layout.removeWidget(self.minTime1)
         self.attribute_layout.removeWidget(self.maxTime1)
-        self.attribute_layout.removeWidget(self.peak1_minValue)
-        self.attribute_layout.removeWidget(self.peak1_input)
+        self.attribute_layout.removeWidget(self.peak_refL_minValue)
+        self.attribute_layout.removeWidget(self.peak_refL_input)
         self.attribute_layout.removeWidget(self.minTime2)
         self.attribute_layout.removeWidget(self.maxTime2)
-        self.attribute_layout.removeWidget(self.peak2_minValue)
-        self.attribute_layout.removeWidget(self.peak2_input)
+        self.attribute_layout.removeWidget(self.peak_refR_minValue)
+        self.attribute_layout.removeWidget(self.peak_refR_input)
         self.attribute_layout.removeWidget(self.minTime3)
         self.attribute_layout.removeWidget(self.maxTime3)
-        self.attribute_layout.removeWidget(self.peak3_minValue)
-        self.attribute_layout.removeWidget(self.peak3_input)
-        self.layout_peak1.addWidget(self.minTime1)
-        self.layout_peak1.addWidget(self.maxTime1)
-        self.layout_peak1.addWidget(self.peak1_minValue)
-        self.layout_peak1.addWidget(self.peak1_input)
-        self.layout_peak2.addWidget(self.minTime2)
-        self.layout_peak2.addWidget(self.maxTime2)
-        self.layout_peak2.addWidget(self.peak2_minValue)
-        self.layout_peak2.addWidget(self.peak2_input)
-        self.layout_peak3.addWidget(self.minTime3)
-        self.layout_peak3.addWidget(self.maxTime3)
-        self.layout_peak3.addWidget(self.peak3_minValue)
-        self.layout_peak3.addWidget(self.peak3_input)
+        self.attribute_layout.removeWidget(self.peak_ctrl_minValue)
+        self.attribute_layout.removeWidget(self.peak_ctrl_input)
+        self.layout_peak_refL.addWidget(self.minTime1)
+        self.layout_peak_refL.addWidget(self.maxTime1)
+        self.layout_peak_refL.addWidget(self.peak_refL_minValue)
+        self.layout_peak_refL.addWidget(self.peak_refL_input)
+        self.layout_peak_refR.addWidget(self.minTime2)
+        self.layout_peak_refR.addWidget(self.maxTime2)
+        self.layout_peak_refR.addWidget(self.peak_refR_minValue)
+        self.layout_peak_refR.addWidget(self.peak_refR_input)
+        self.layout_peak_ctrl.addWidget(self.minTime3)
+        self.layout_peak_ctrl.addWidget(self.maxTime3)
+        self.layout_peak_ctrl.addWidget(self.peak_ctrl_minValue)
+        self.layout_peak_ctrl.addWidget(self.peak_ctrl_input)
 
-        self.updatePeakButton1 = QtWidgets.QPushButton("update peak1 timings")
+        self.updatePeakButton1 = QtWidgets.QPushButton("update peak_refL timings")
         self.updatePeakButton1.clicked.connect(self.updatePeakTimings1)
-        self.layout_peak1.addWidget(self.updatePeakButton1)
+        self.layout_peak_refL.addWidget(self.updatePeakButton1)
         
-        self.updatePeakButton2 = QtWidgets.QPushButton("update peak2 timings")
+        self.updatePeakButton2 = QtWidgets.QPushButton("update peak_refR timings")
         self.updatePeakButton2.clicked.connect(self.updatePeakTimings2)
-        self.layout_peak2.addWidget(self.updatePeakButton2)
+        self.layout_peak_refR.addWidget(self.updatePeakButton2)
         
-        self.updatePeakButton3 = QtWidgets.QPushButton("update peak3 timings")
+        self.updatePeakButton3 = QtWidgets.QPushButton("update peak_ctrl timings")
         self.updatePeakButton3.clicked.connect(self.updatePeakTimings3)
-        self.layout_peak3.addWidget(self.updatePeakButton3)
+        self.layout_peak_ctrl.addWidget(self.updatePeakButton3)
                 
         self.attribute_layout.addLayout(self.layout_peaks)
 

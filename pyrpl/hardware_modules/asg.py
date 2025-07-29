@@ -69,7 +69,7 @@ class WaveformAttribute(SelectProperty):
                 y=np.zeros_like(x)
                 y[x <= 1] = np.pi - np.arccos(x[x <= 1])
                 y[x > 1] = np.arccos(x[x > 1] - 2)
-                y /= np.pi
+                y = y/np.pi*2 -1
             elif waveform == 'ramp':
                 y = np.linspace(-1.0, 3.0, instance.data_length,
                                 endpoint=False)
@@ -233,11 +233,9 @@ def make_asg(channel=0):
 
         # formerly scale
         amplitude = AsgAmplitudeAttribute(0x4 + _VALUE_OFFSET, bits=14, bitmask=0x3FFF,
-                                  norm=2.**13, signed=False,
-                                  max=1.0,  # Internal fpga max is 2.0 V
-                                  # i.e. it is possible to define waveforms
-                                  # with smaller values and then boost them,
-                                  #  but there is no real interest to do so.
+                                  norm=2.**13, signed=True,
+                                  max=1.0,
+                                  min=-1.0,
                                   doc="amplitude of output waveform [volts]")
         amplitude_source = SelectRegister(0x4 + _VALUE_OFFSET, startBit=14, bits=1, options = {"from signal" : 0, "from memory" : 1}, default = "from memory", doc = "select if the the amplitude should be given with the Amplitude value, or if oit should follow the value of the selected signal")
         
