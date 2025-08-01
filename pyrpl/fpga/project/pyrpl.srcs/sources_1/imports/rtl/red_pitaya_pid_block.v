@@ -84,8 +84,8 @@ module red_pitaya_pid_block #(
    input                 sync_i          ,  // synchronization input, active high
    input signed     [ 14-1: 0] dat_i           ,  // input data
    output signed    [ 14-1: 0] dat_o           ,  // output data
-   input signed     [ 14-1: 0] diff_dat_i      ,  // input data for differential mode
-   output signed    [ 14-1: 0] diff_dat_o      ,  // input data for differential mode
+   input signed     [ 14-1: 0] setpoint_i      ,  // setpoint signal, used if setSetpointfromMemory==0
+
 
    // communication with PS
    input      [ 16-1: 0] addr,
@@ -115,45 +115,19 @@ reg [ 32-1: 0] set_filter;   // filter setting
 reg signed [ 14-1:0] out_max;
 reg signed [ 14-1:0] out_min;
 
-
-
-//-----------------------------
-// cascaded set of FILTERSTAGES low- or high-pass filters
-wire signed [14-1:0] dat_i_filtered;
-red_pitaya_filter_block #(
-     .STAGES(FILTERSTAGES),
-     .SHIFTBITS(FILTERSHIFTBITS),
-     .SIGNALBITS(14),
-     .MINBW(FILTERMINBW)
-  )
-  pidfilter
-  (
-  .clk_i(clk_i),
-  .rstn_i(rstn_i),
-  .set_filter(set_filter),
-  .dat_i(dat_i),
-  .dat_o(dat_i_filtered)
-  );
-
-//---------------------------------------------------------------------------------
-//  Set point error calculation - 1 cycle delay
-
 reg signed [ 15-1: 0] error        ;
+reg setSetpointfromMemory;
+wire signed [ 14-1: 0] usedSetpoint;
+assign usedSetpoint = setSetpointfromMemory ? set_sp : setpoint_i;
 
 always @(posedge clk_i) begin
    if (rstn_i == 1'b0) begin
       error <= 15'h0 ;
    end
    else begin
-      if (enable_differential_mode == 1'b1)
-         error <= $signed(dat_i_filtered) - $signed(diff_dat_i) ;
-      else
-         error <= $signed(dat_i_filtered) - $signed(set_sp) ;
+         error <= $signed(dat_i) - $signed(usedSetpoint) ;
    end
 end
-
-// send filtered signal to other pid module for differential processing
-assign diff_dat_o = dat_i_filtered;
 
 //---------------------------------------------------------------------------------
 //  Proportional part - 1 cycle delay
@@ -304,11 +278,12 @@ always @(posedge clk_i) begin
       ival_write <= 1'b0;
       out_min <= {1'b1,{14-1{1'b0}}};
       out_max <= {1'b0,{14-1{1'b1}}};
+      setSetpointfromMemory <= 1;
    end
    else begin
       if (wen) begin
          if (addr==16'h100)   set_ival <= wdata[16-1:0];
-         if (addr==16'h104)   set_sp  <= wdata[14-1:0];
+         if (addr==16'h104)   {setSetpointfromMemory, set_sp}  <= wdata[1+14-1:0];
          if (addr==16'h108)   set_kp  <= wdata[GAINBITS-1:0];
          if (addr==16'h10C)   set_ki  <= wdata[GAINBITS-1:0];
          if (addr==16'h110)   set_kd  <= wdata[GAINBITS-1:0];
@@ -324,7 +299,7 @@ always @(posedge clk_i) begin
 
 	  casez (addr)
 	     16'h100 : begin ack <= wen|ren; rdata <= int_shr; end
-	     16'h104 : begin ack <= wen|ren; rdata <= {{32-14{1'b0}},set_sp}; end
+	     16'h104 : begin ack <= wen|ren; rdata <= {{32-14-1{1'b0}}, setSetpointfromMemory, set_sp}; end
 	     16'h108 : begin ack <= wen|ren; rdata <= {{32-GAINBITS{1'b0}},set_kp}; end
 	     16'h10C : begin ack <= wen|ren; rdata <= {{32-GAINBITS{1'b0}},set_ki}; end
 	     16'h110 : begin ack <= wen|ren; rdata <= {{32-GAINBITS{1'b0}},set_kd}; end
