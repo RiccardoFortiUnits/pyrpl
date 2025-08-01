@@ -4,83 +4,83 @@ PID modules available: pid0 to pid2.
 
 .. code:: python
 
-    print r.pid0.help()
+	print r.pid0.help()
 
 Proportional and integral gain
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code:: python
 
-    #make shortcut
-    pid = r.pid0
+	#make shortcut
+	pid = r.pid0
 
-    #turn off by setting gains to zero
-    pid.p,pid.i = 0,0
-    print("P/I gain when turned off:", pid.i,pid.p)
-
-.. code:: python
-
-    # small nonzero numbers set gain to minimum value - avoids rounding off to zero gain
-    pid.p = 1e-100
-    pid.i = 1e-100
-    print("Minimum proportional gain: ", pid.p)
-    print("Minimum integral unity-gain frequency [Hz]: ", pid.i)
+	#turn off by setting gains to zero
+	pid.p,pid.i = 0,0
+	print("P/I gain when turned off:", pid.i,pid.p)
 
 .. code:: python
 
-    # saturation at maximum values
-    pid.p = 1e100
-    pid.i = 1e100
-    print("Maximum proportional gain: ", pid.p)
-    print("Maximum integral unity-gain frequency [Hz]: ", pid.i)
+	# small nonzero numbers set gain to minimum value - avoids rounding off to zero gain
+	pid.p = 1e-100
+	pid.i = 1e-100
+	print("Minimum proportional gain: ", pid.p)
+	print("Minimum integral unity-gain frequency [Hz]: ", pid.i)
+
+.. code:: python
+
+	# saturation at maximum values
+	pid.p = 1e100
+	pid.i = 1e100
+	print("Maximum proportional gain: ", pid.p)
+	print("Maximum integral unity-gain frequency [Hz]: ", pid.i)
 
 Control with the integral value register
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code:: python
 
-    import numpy as np
-    #make shortcut
-    pid = r.pid0
+	import numpy as np
+	#make shortcut
+	pid = r.pid0
 
-    # set input to asg1
-    pid.input = "asg1"
+	# set input to asg1
+	pid.input = "asg1"
 
-    # set asg to constant 0.1 Volts
-    r.asg1.setup(waveform="dc", offset = 0.1)
+	# set asg to constant 0.1 Volts
+	r.asg1.setup(waveform="dc", offset = 0.1)
 
-    # set scope ch1 to pid0
-    r.scope.input1 = 'pid0'
+	# set scope ch1 to pid0
+	r.scope.input1 = 'pid0'
 
-    #turn off the gains for now
-    pid.p,pid.i = 0, 0
+	#turn off the gains for now
+	pid.p,pid.i = 0, 0
 
-    #set integral value to zero
-    pid.ival = 0
+	#set integral value to zero
+	pid.ival = 0
 
-    #prepare data recording
-    from time import time
-    times, ivals, outputs = [], [], []
+	#prepare data recording
+	from time import time
+	times, ivals, outputs = [], [], []
 
-    # turn on integrator to whatever negative gain
-    pid.i = -10
+	# turn on integrator to whatever negative gain
+	pid.i = -10
 
-    # set integral value above the maximum positive voltage
-    pid.ival = 1.5
+	# set integral value above the maximum positive voltage
+	pid.ival = 1.5
 
-    #take 1000 points - jitter of the ethernet delay will add a noise here but we dont care
-    for n in range(1000):
-        times.append(time())
-        ivals.append(pid.ival)
-        outputs.append(r.scope.voltage_in1)
+	#take 1000 points - jitter of the ethernet delay will add a noise here but we dont care
+	for n in range(1000):
+		times.append(time())
+		ivals.append(pid.ival)
+		outputs.append(r.scope.voltage_in1)
 
-    #plot
-    import matplotlib.pyplot as plt
-    %matplotlib inline
-    times = np.array(times)-min(times)
-    plt.plot(times,ivals,times,outputs)
-    plt.xlabel("Time [s]")
-    plt.ylabel("Voltage")
+	#plot
+	import matplotlib.pyplot as plt
+	%matplotlib inline
+	times = np.array(times)-min(times)
+	plt.plot(times,ivals,times,outputs)
+	plt.xlabel("Time [s]")
+	plt.ylabel("Voltage")
 
 Again, what do we see? We set up the pid module with a constant
 (positive) input from the ASG. We then turned on the integrator (with
@@ -106,32 +106,32 @@ take values that scale as the powers of 2.
 
 .. code:: python
 
-    # off by default
-    r.pid0.inputfilter
+	# off by default
+	r.pid0.inputfilter
 
 .. code:: python
 
-    # minimum cutoff frequency is 1.1 Hz, maximum 3.1 MHz (for now)
-    r.pid0.inputfilter = [1,1e10,-1,-1e10]
-    print(r.pid0.inputfilter)
+	# minimum cutoff frequency is 1.1 Hz, maximum 3.1 MHz (for now)
+	r.pid0.inputfilter = [1,1e10,-1,-1e10]
+	print(r.pid0.inputfilter)
 
 .. code:: python
 
-    # not setting a coefficient turns that filter off
-    r.pid0.inputfilter = [0,4,8]
-    print(r.pid0.inputfilter)
+	# not setting a coefficient turns that filter off
+	r.pid0.inputfilter = [0,4,8]
+	print(r.pid0.inputfilter)
 
 .. code:: python
 
-    # setting without list also works
-    r.pid0.inputfilter = -2000
-    print(r.pid0.inputfilter)
+	# setting without list also works
+	r.pid0.inputfilter = -2000
+	print(r.pid0.inputfilter)
 
 .. code:: python
 
-    # turn off again
-    r.pid0.inputfilter = []
-    print(r.pid0.inputfilter)
+	# turn off again
+	r.pid0.inputfilter = []
+	print(r.pid0.inputfilter)
 
 You should now go back to the Scope and ASG example above and play
 around with the setting of these filters to convince yourself that they
@@ -147,466 +147,464 @@ from . import FilterModule
 from ..widgets.module_widgets import PidWidget
 from ..pyrpl_utils import sorted_dict
 import logging
+from . import DSP_INPUTS, dsp_addr_base, all_inputs
 
 logger = logging.getLogger(name=__name__)
 
 class IValAttribute(FloatProperty):
-    """
-    Attribute for integrator value
-    """
-    def get_value(self, obj):
-        return float(obj._to_pyint(obj._read(0x100), bitlength=16))\
-               / 2 ** 13
-        # bitlength used to be 32 until 16/7/2016
-        # still, FPGA has an asymmetric representation for reading and writing
-        # from/to this register
+	"""
+	Attribute for integrator value
+	"""
+	def get_value(self, obj):
+		return float(obj._to_pyint(obj._read(0x100), bitlength=16))\
+			   / 2 ** 13
+		# bitlength used to be 32 until 16/7/2016
+		# still, FPGA has an asymmetric representation for reading and writing
+		# from/to this register
 
-    def set_value(self, obj, value):
-        """set the value of the register holding the integrator's sum [volts]"""
-        return obj._write(0x100, obj._from_pyint(
-            int(round(value * 2 ** 13)), bitlength=16))
+	def set_value(self, obj, value):
+		"""set the value of the register holding the integrator's sum [volts]"""
+		return obj._write(0x100, obj._from_pyint(
+			int(round(value * 2 ** 13)), bitlength=16))
 
 
 class SignalLauncherPid(SignalLauncher):
-    update_ival = QtCore.Signal()
-    # the widget decides at the other hand if it has to be done or not
-    # depending on the visibility
-    def __init__(self, module):
-        super(SignalLauncherPid, self).__init__(module)
-        self.timer_ival = QtCore.QTimer()
-        self.timer_ival.setInterval(1000)  # max. refresh rate: 1 Hz
-        self.timer_ival.timeout.connect(self.update_ival)
-        self.timer_ival.setSingleShot(False)
-        self.timer_ival.start()
+	update_ival = QtCore.Signal()
+	# the widget decides at the other hand if it has to be done or not
+	# depending on the visibility
+	def __init__(self, module):
+		super(SignalLauncherPid, self).__init__(module)
+		self.timer_ival = QtCore.QTimer()
+		self.timer_ival.setInterval(1000)  # max. refresh rate: 1 Hz
+		self.timer_ival.timeout.connect(self.update_ival)
+		self.timer_ival.setSingleShot(False)
+		self.timer_ival.start()
 
-    def _clear(self):
-        """
-        kill all timers
-        """
-        self.timer_ival.stop()
-        super(SignalLauncherPid, self)._clear()
+	def _clear(self):
+		"""
+		kill all timers
+		"""
+		self.timer_ival.stop()
+		super(SignalLauncherPid, self)._clear()
 
 
 class Pid(FilterModule):
-    """
-    A proportional/Integrator/Differential filter.
+	"""
+	A proportional/Integrator/Differential filter.
 
-    The PID filter consists of a 4th order filter input stage, followed by a
-    proportional and integral stage in parallel.
+	The PID filter consists of a 4th order filter input stage, followed by a
+	proportional and integral stage in parallel.
 
-    .. warning:: at the moment, the differential stage of PIDs is disabled.
+	.. warning:: at the moment, the differential stage of PIDs is disabled.
 
-    Example:
+	Example:
 
-    .. code-block :: python
+	.. code-block :: python
 
-        from pyrpl import Pyrpl
-        pid = Pyrpl().rp.pid0
+		from pyrpl import Pyrpl
+		pid = Pyrpl().rp.pid0
 
-        # set a second order low-pass filter with 100 Hz cutoff frequency
-        pid.inputfilter = [100, 100]
-        # set asg0 as input
-        pid.input = 'asg0'
-        # setpoint at -0.1
-        pid.setpoint = -0.1
-        # integral gain at 0.1
-        pid.i = 0.1
-        # proportional gain at 0.1
-        pid.p = 0.1
+		# set a second order low-pass filter with 100 Hz cutoff frequency
+		pid.inputfilter = [100, 100]
+		# set asg0 as input
+		pid.input = 'asg0'
+		# setpoint at -0.1
+		pid.setpoint = -0.1
+		# integral gain at 0.1
+		pid.i = 0.1
+		# proportional gain at 0.1
+		pid.p = 0.1
 
-    .. code-block :: python
+	.. code-block :: python
 
-        >>> print(pid.ival)
-        0.43545
+		>>> print(pid.ival)
+		0.43545
 
-    .. code-block :: python
+	.. code-block :: python
 
-        >>> print(pid.ival)
-        0.763324
-    """
-    _widget_class = PidWidget
-    _signal_launcher = SignalLauncherPid
-    _setup_attributes = ["input",
-                         "output_direct",
-                         "setpoint",
-                         "p",
-                         "i",
-                         #"d",
-                        #  "inputfilter",
-                         "max_voltage",
-                         "min_voltage",
-                         "pause_gains",
-                         "paused",
-                         "differential_mode_enabled",
-                         "useGenericTrigger"
-                         ]
-    _gui_attributes = _setup_attributes + ["ival"]
+		>>> print(pid.ival)
+		0.763324
+	"""
+	_widget_class = PidWidget
+	_signal_launcher = SignalLauncherPid
+	_setup_attributes = ["input",
+						 "output_direct",
+						 "setpoint",
+						 "p",
+						 "i",
+						 #"d",
+						#  "inputfilter",
+						 "max_voltage",
+						 "min_voltage",
+						 "pause_gains",
+						 "paused",
+						 "useGenericTrigger",
+						 "setpoint_signal",
+						 "setpoint_source",
+						 ]
+	_gui_attributes = _setup_attributes + ["ival"]
 
-    # the function is here so the metaclass generates a setup(**kwds) function
-    def _setup(self):
-        """
-        sets up the pid (just setting the attributes is OK).
-        """
-        pass
+	# the function is here so the metaclass generates a setup(**kwds) function
+	def _setup(self):
+		"""
+		sets up the pid (just setting the attributes is OK).
+		"""
+		pass
 
-    _delay = 3  # min delay in cycles from input to output_signal of the module
-    # with integrator and derivative gain, delay is rather 4 cycles
+	_delay = 3  # min delay in cycles from input to output_signal of the module
+	# with integrator and derivative gain, delay is rather 4 cycles
 
-    _PSR = 12  # Register(0x200)
+	_PSR = 12  # Register(0x200)
 
-    _ISR = 32  # Register(0x204)
+	_ISR = 32  # Register(0x204)
 
-    _DSR = 10  # Register(0x208)
+	_DSR = 10  # Register(0x208)
 
-    _GAINBITS = 24  # Register(0x20C)
+	_GAINBITS = 24  # Register(0x20C)
+	
+	ival = IValAttribute(min=-4, max=4, increment= 8. / 2**16, doc="Current "
+			"value of the integrator memory (i.e. pid output voltage offset)")
 
-    ival = IValAttribute(min=-4, max=4, increment= 8. / 2**16, doc="Current "
-            "value of the integrator memory (i.e. pid output voltage offset)")
+	setpoint = FloatRegister(0x104, startBit=0,  bits=14, norm= 2 **13,
+							 doc="pid setpoint [volts]")
+	setpoint_source = SelectRegister(0x104, startBit=14, bits=1, options = {"from signal" : 0, "from memory" : 1}, default = "from memory", doc = "select if the the setpoint should be given with the Setpoint value, or if it should follow the value of the selected signal")
+	setpoint_signal = SelectRegister(
+			 dsp_addr_base("pid0_setpoint_signal") - dsp_addr_base("pid0"),
+					options=all_inputs,
+					doc="selects the signal that the amplitude will follow (if amplitude_source='from signal')")
+	min_voltage = FloatRegister(0x124, bits=14, norm= 2 **13,
+								doc="minimum output signal [volts]")
+	max_voltage = FloatRegister(0x128, bits=14, norm= 2 **13,
+								doc="maximum output signal [volts]")
 
-    setpoint = FloatRegister(0x104, bits=14, norm= 2 **13,
-                             doc="pid setpoint [volts]")
+	p = GainRegister(0x108, bits=_GAINBITS, norm= 2 **_PSR,
+					  doc="pid proportional gain [1]")
+	i = GainRegister(0x10C, bits=_GAINBITS, norm= 2 **_ISR * 2.0 * np.pi *
+												  8e-9,
+					  doc="pid integral unity-gain frequency [Hz]")
+	#d = GainRegister(0x110, bits=_GAINBITS, norm= 2 ** _DSR /( 2.0 *np. pi *
+	#                                                        8e-9),
+	#                  invert=True,
+	#                  doc="pid derivative unity-gain frequency [Hz]. Off
+	# when 0.")
+	
+	pause_gains = SelectRegister(0x12C,
+								 options=sorted_dict(
+									   off=0,
+									   i=1,
+									   p=2,
+									   pi=3,
+									   d=4,
+									   id=5,
+									   pd=6,
+									   pid=7),
+								 bitmask=0b111,
+								 doc="Selects which gains are frozen during pausing/synchronization."
+								 )
 
-    min_voltage = FloatRegister(0x124, bits=14, norm= 2 **13,
-                                doc="minimum output signal [volts]")
-    max_voltage = FloatRegister(0x128, bits=14, norm= 2 **13,
-                                doc="maximum output signal [volts]")
 
-    p = GainRegister(0x108, bits=_GAINBITS, norm= 2 **_PSR,
-                      doc="pid proportional gain [1]")
-    i = GainRegister(0x10C, bits=_GAINBITS, norm= 2 **_ISR * 2.0 * np.pi *
-                                                  8e-9,
-                      doc="pid integral unity-gain frequency [Hz]")
-    #d = GainRegister(0x110, bits=_GAINBITS, norm= 2 ** _DSR /( 2.0 *np. pi *
-    #                                                        8e-9),
-    #                  invert=True,
-    #                  doc="pid derivative unity-gain frequency [Hz]. Off
-    # when 0.")
+	paused = PauseRegister(0xC,
+						   invert=True,
+						   doc="While True, the gains selected with `pause` are "
+							   "temporarily set to zero ")
 
-    pause_gains = SelectRegister(0x12C,
-                                 options=sorted_dict(
-                                       off=0,
-                                       i=1,
-                                       p=2,
-                                       pi=3,
-                                       d=4,
-                                       id=5,
-                                       pd=6,
-                                       pid=7),
-                                 bitmask=0b111,
-                                 doc="Selects which gains are frozen during pausing/synchronization."
-                                 )
+	@property
+	def proportional(self):
+		return self.p
 
-    differential_mode_enabled = BoolRegister(0x12C,
-                                             bit=3,
-                                             doc="If True, the differential mode is enabled. "
-                                                 "In this mode, the setpoint is given by the "
-                                                 "input signal of another pid module. "
-                                                 "Only pid0 and pid1 can be paired in "
-                                                 "differential mode. "
-                                             )
+	@property
+	def integral(self):
+		return self.i
 
-    paused = PauseRegister(0xC,
-                           invert=True,
-                           doc="While True, the gains selected with `pause` are "
-                               "temporarily set to zero ")
+	@property
+	def derivative(self):
+		return self.d
 
-    @property
-    def proportional(self):
-        return self.p
+	@property
+	def reg_integral(self):
+		return self.ival
 
-    @property
-    def integral(self):
-        return self.i
+	@proportional.setter
+	def proportional(self, v):
+		self.p = v
 
-    @property
-    def derivative(self):
-        return self.d
+	@integral.setter
+	def integral(self, v):
+		self.i = v
 
-    @property
-    def reg_integral(self):
-        return self.ival
+	@derivative.setter
+	def derivative(self, v):
+		self.d = v
 
-    @proportional.setter
-    def proportional(self, v):
-        self.p = v
+	@reg_integral.setter
+	def reg_integral(self, v):
+		self.ival = v
 
-    @integral.setter
-    def integral(self, v):
-        self.i = v
+	# deactivated for performance reasons
+	# normalization_on = BoolRegister(0x130, 0,
+	#                                 doc="if True the PID is used "
+	#                                     "as a normalizer")
+	#
+	# # current normalization gain is p-register
+	# normalization_i = FloatRegister(0x10C, bits=_GAINBITS,
+	#                                 norm=2 ** (_ISR) * 2.0 * np.pi *
+	#                                      8e-9 / 2 ** 13 / 1.5625,
+	#                                 # 1.5625 is empirical value,
+	#                                 # no time/idea to do the maths
+	#                                 doc="stablization crossover frequency [Hz]")
+	#
+	# @property
+	# def normalization_gain(self):
+	#     """ current gain in the normalization """
+	#     return self.p / 2.0
+	#
+	# normalization_inputoffset = FloatRegister(0x110, bits=(14 + _DSR),
+	#                                           norm=2 ** (13 + _DSR),
+	#                                           doc="normalization inputoffset [volts]")
 
-    @derivative.setter
-    def derivative(self, v):
-        self.d = v
+	def transfer_function(self, frequencies, extradelay=0):
+		"""
+		Returns a complex np.array containing the transfer function of the
+		current PID module setting for the given frequency array. The
+		settings for p, i, d and inputfilter, as well as delay are aken into
+		account for the modelisation. There is a slight dependency of delay
+		on the setting of inputfilter, i.e. about 2 extracycles per filter
+		that is not set to 0, which is however taken into account.
 
-    @reg_integral.setter
-    def reg_integral(self, v):
-        self.ival = v
+		Parameters
+		----------
+		frequencies: np.array or float
+			Frequencies to compute the transfer function for
+		extradelay: float
+			External delay to add to the transfer function (in s). If zero,
+			only the delay for internal propagation from input to
+			output_signal is used. If the module is fed to analog inputs and
+			outputs, an extra delay of the order of 200 ns must be passed as
+			an argument for the correct delay modelisation.
 
-    # deactivated for performance reasons
-    # normalization_on = BoolRegister(0x130, 0,
-    #                                 doc="if True the PID is used "
-    #                                     "as a normalizer")
-    #
-    # # current normalization gain is p-register
-    # normalization_i = FloatRegister(0x10C, bits=_GAINBITS,
-    #                                 norm=2 ** (_ISR) * 2.0 * np.pi *
-    #                                      8e-9 / 2 ** 13 / 1.5625,
-    #                                 # 1.5625 is empirical value,
-    #                                 # no time/idea to do the maths
-    #                                 doc="stablization crossover frequency [Hz]")
-    #
-    # @property
-    # def normalization_gain(self):
-    #     """ current gain in the normalization """
-    #     return self.p / 2.0
-    #
-    # normalization_inputoffset = FloatRegister(0x110, bits=(14 + _DSR),
-    #                                           norm=2 ** (13 + _DSR),
-    #                                           doc="normalization inputoffset [volts]")
+		Returns
+		-------
+		tf: np.array(..., dtype=complex)
+			The complex open loop transfer function of the module.
+		"""
+		return Pid._transfer_function(frequencies,
+									  p=self.p,
+									  i=self.i,
+									  d=0,  # d is currently not available
+									  filter_values=self.inputfilter,
+									  extradelay_s=extradelay,
+									  module_delay_cycle=self._delay,
+									  frequency_correction=self._frequency_correction)
 
-    def transfer_function(self, frequencies, extradelay=0):
-        """
-        Returns a complex np.array containing the transfer function of the
-        current PID module setting for the given frequency array. The
-        settings for p, i, d and inputfilter, as well as delay are aken into
-        account for the modelisation. There is a slight dependency of delay
-        on the setting of inputfilter, i.e. about 2 extracycles per filter
-        that is not set to 0, which is however taken into account.
+	@classmethod
+	def _transfer_function(cls,
+						   frequencies,
+						   p,
+						   i,
+						   filter_values=list(),
+						   d=0,
+						   module_delay_cycle=_delay,
+						   extradelay_s=0.0,
+						   frequency_correction=1.0):
+		return Pid._pid_transfer_function(frequencies,
+								 p=p,
+								 i=i,
+								 d=d,
+								 frequency_correction=frequency_correction)\
+			* Pid._filter_transfer_function(frequencies,
+								 filter_values=filter_values,
+								 frequency_correction=frequency_correction)\
+			* Pid._delay_transfer_function(frequencies,
+								 module_delay_cycle=module_delay_cycle,
+								 extradelay_s=extradelay_s,
+								 frequency_correction=frequency_correction)
 
-        Parameters
-        ----------
-        frequencies: np.array or float
-            Frequencies to compute the transfer function for
-        extradelay: float
-            External delay to add to the transfer function (in s). If zero,
-            only the delay for internal propagation from input to
-            output_signal is used. If the module is fed to analog inputs and
-            outputs, an extra delay of the order of 200 ns must be passed as
-            an argument for the correct delay modelisation.
+	@classmethod
+	def _pid_transfer_function(cls,
+							   frequencies, p, i, d=0,
+							   frequency_correction=1.):
+		"""
+		returns the transfer function of a generic pid module
+		delay is the module delay as found in pid._delay, p, i and d are the
+		proportional, integral, and differential gains
+		frequency_correction is the module frequency_correction as
+		found in pid._frequency_correction
+		"""
 
-        Returns
-        -------
-        tf: np.array(..., dtype=complex)
-            The complex open loop transfer function of the module.
-        """
-        return Pid._transfer_function(frequencies,
-                                      p=self.p,
-                                      i=self.i,
-                                      d=0,  # d is currently not available
-                                      filter_values=self.inputfilter,
-                                      extradelay_s=extradelay,
-                                      module_delay_cycle=self._delay,
-                                      frequency_correction=self._frequency_correction)
+		frequencies = np.array(frequencies, dtype=complex)
+		# integrator with one cycle of extra delay
+		tf = i / (frequencies * 1j) \
+			* np.exp(-1j * 8e-9 * frequency_correction *
+				  frequencies * 2 * np.pi)
+		# proportional (delay in self._delay included)
+		tf += p
+		# derivative action with one cycle of extra delay
+		# if self.d != 0:
+		#    tf += frequencies*1j/self.d \
+		#          * np.exp(-1j * 8e-9 * self._frequency_correction *
+		#                   frequencies * 2 * np.pi)
+		# add delay
+		delay = 0 # module_delay * 8e-9 / self._frequency_correction
+		tf *= np.exp(-1j * delay * frequencies * 2 * np.pi)
+		return tf
 
-    @classmethod
-    def _transfer_function(cls,
-                           frequencies,
-                           p,
-                           i,
-                           filter_values=list(),
-                           d=0,
-                           module_delay_cycle=_delay,
-                           extradelay_s=0.0,
-                           frequency_correction=1.0):
-        return Pid._pid_transfer_function(frequencies,
-                                 p=p,
-                                 i=i,
-                                 d=d,
-                                 frequency_correction=frequency_correction)\
-            * Pid._filter_transfer_function(frequencies,
-                                 filter_values=filter_values,
-                                 frequency_correction=frequency_correction)\
-            * Pid._delay_transfer_function(frequencies,
-                                 module_delay_cycle=module_delay_cycle,
-                                 extradelay_s=extradelay_s,
-                                 frequency_correction=frequency_correction)
+	@classmethod
+	def _delay_transfer_function(cls,
+								 frequencies,
+								 module_delay_cycle=_delay,
+								 extradelay_s=0,
+								 frequency_correction=1.0):
+		"""
+		Transfer function of the eventual extradelay of a pid module
+		"""
+		delay = module_delay_cycle * 8e-9 / frequency_correction + extradelay_s
+		frequencies = np.array(frequencies, dtype=complex)
+		tf = np.ones(len(frequencies), dtype=complex)
+		tf *= np.exp(-1j * delay * frequencies * 2 * np.pi)
+		return tf
 
-    @classmethod
-    def _pid_transfer_function(cls,
-                               frequencies, p, i, d=0,
-                               frequency_correction=1.):
-        """
-        returns the transfer function of a generic pid module
-        delay is the module delay as found in pid._delay, p, i and d are the
-        proportional, integral, and differential gains
-        frequency_correction is the module frequency_correction as
-        found in pid._frequency_correction
-        """
-
-        frequencies = np.array(frequencies, dtype=complex)
-        # integrator with one cycle of extra delay
-        tf = i / (frequencies * 1j) \
-            * np.exp(-1j * 8e-9 * frequency_correction *
-                  frequencies * 2 * np.pi)
-        # proportional (delay in self._delay included)
-        tf += p
-        # derivative action with one cycle of extra delay
-        # if self.d != 0:
-        #    tf += frequencies*1j/self.d \
-        #          * np.exp(-1j * 8e-9 * self._frequency_correction *
-        #                   frequencies * 2 * np.pi)
-        # add delay
-        delay = 0 # module_delay * 8e-9 / self._frequency_correction
-        tf *= np.exp(-1j * delay * frequencies * 2 * np.pi)
-        return tf
-
-    @classmethod
-    def _delay_transfer_function(cls,
-                                 frequencies,
-                                 module_delay_cycle=_delay,
-                                 extradelay_s=0,
-                                 frequency_correction=1.0):
-        """
-        Transfer function of the eventual extradelay of a pid module
-        """
-        delay = module_delay_cycle * 8e-9 / frequency_correction + extradelay_s
-        frequencies = np.array(frequencies, dtype=complex)
-        tf = np.ones(len(frequencies), dtype=complex)
-        tf *= np.exp(-1j * delay * frequencies * 2 * np.pi)
-        return tf
-
-    @classmethod
-    def _filter_transfer_function(cls,
-                                  frequencies, filter_values,
-                                  frequency_correction=1.):
-        """
-        Transfer function of the inputfilter part of a pid module
-        """
-        frequencies = np.array(frequencies, dtype=complex)
-        module_delay = 0
-        tf = np.ones(len(frequencies), dtype=complex)
-        # input filter modelisation
-        if not isinstance(filter_values, list):
-            filter_values = list([filter_values])
-        for f in filter_values:
-            if f == 0:
-                continue
-            elif f > 0:  # lowpass
-                tf /= (1.0 + 1j * frequencies / f)
-                module_delay += 2  # two cycles extra delay per lowpass
-            elif f < 0:  # highpass
-                tf /= (1.0 + 1j * f / frequencies)
-                # plus is correct here since f already has a minus sign
-                module_delay += 1  # one cycle extra delay per highpass
-        delay = module_delay * 8e-9 / frequency_correction
-        tf *= np.exp(-1j * delay * frequencies * 2 * np.pi)
-        return tf
+	@classmethod
+	def _filter_transfer_function(cls,
+								  frequencies, filter_values,
+								  frequency_correction=1.):
+		"""
+		Transfer function of the inputfilter part of a pid module
+		"""
+		frequencies = np.array(frequencies, dtype=complex)
+		module_delay = 0
+		tf = np.ones(len(frequencies), dtype=complex)
+		# input filter modelisation
+		if not isinstance(filter_values, list):
+			filter_values = list([filter_values])
+		for f in filter_values:
+			if f == 0:
+				continue
+			elif f > 0:  # lowpass
+				tf /= (1.0 + 1j * frequencies / f)
+				module_delay += 2  # two cycles extra delay per lowpass
+			elif f < 0:  # highpass
+				tf /= (1.0 + 1j * f / frequencies)
+				# plus is correct here since f already has a minus sign
+				module_delay += 1  # one cycle extra delay per highpass
+		delay = module_delay * 8e-9 / frequency_correction
+		tf *= np.exp(-1j * delay * frequencies * 2 * np.pi)
+		return tf
 
 class PidNouveau(FilterModule):
-    #todo c'è da fare qualcosa qui?
-    _widget_class = PidWidget
-    _signal_launcher = SignalLauncherPid
-    _setup_attributes = ["input",
-                          "output_direct",
-                          "pidSetPoint",
-                          "p",
-                          "i",
-                          "d",
-                          ]
-    _gui_attributes = _setup_attributes
+	#todo c'è da fare qualcosa qui?
+	_widget_class = PidWidget
+	_signal_launcher = SignalLauncherPid
+	_setup_attributes = ["input",
+						  "output_direct",
+						  "pidSetPoint",
+						  "p",
+						  "i",
+						  "d",
+						  ]
+	_gui_attributes = _setup_attributes
 
-    # the function is here so the metaclass generates a setup(**kwds) function
-    def _setup(self):
-        """
-        sets up the pid (just setting the attributes is OK).
-        """
-        pass
+	# the function is here so the metaclass generates a setup(**kwds) function
+	def _setup(self):
+		"""
+		sets up the pid (just setting the attributes is OK).
+		"""
+		pass
 
-    _delay = 4
+	_delay = 4
 
-    _PSR = 12  # Register(0x200)
+	_PSR = 12  # Register(0x200)
 
-    _ISR = 24  # Register(0x204)
+	_ISR = 24  # Register(0x204)
 
-    _DSR = 10  # Register(0x208)
+	_DSR = 10  # Register(0x208)
 
-    _GAINBITS = 28  # totalBits_coeffs
+	_GAINBITS = 28  # totalBits_coeffs
 
-    active = BoolRegister(0x0, 0, invert=True, doc="enable/disable the PID")
-    
-    feedbackConfig = SelectRegister(0x4, startBit = 0x0, bits = 2, options={'noFeedback': 0x0, 'negativeFeedback': 0x1, 'positiveFeedback':0x2, 'reverseOutput':0x3},
-                                    doc="simulate a feedback in the PID module (i.e., the output of the PID will be added/subctracted from the input)")
-    useDelay = BoolRegister(0x4,0x2,doc="enable/disable an artificial delay (whose length is determined by the parameter delayLength)")
-    delayLength = FloatRegister(0x4,bits=0xA,startBit=0x3, norm=125e6, min=8e-9, max = 8e-9*600,
-                                doc="time of artificial delay added to the pid module")
-    useFilter = BoolRegister(0x4,0xD,doc="enable/disable an IIR filter (set its coefficients with function setFilter())")
-    useLinearizer = BoolRegister(0x4,0xE,doc="enable/disable a linearizer module (set it with function setLLinearizer())")
-    saturationConfig = SelectRegister(0x4, startBit = 0xf, bits = 2, options={'disabled': 0x0, 'stopAtSaturation': 0x1, 'resetAtSaturation':0x2})
-    useDisableTrigger = BoolRegister(0x4,0x11,doc="enable/disable the possibility to temporarly disable the PID with a signal on a digital pin")
-    disableTriggerPin = digitalPinRegister(0x4, startBit=0x12)
-    pidSetPoint = FloatRegister(0x10, bits=24, norm= 2 **23,
-                              doc="pid setpoint [volts]")
+	active = BoolRegister(0x0, 0, invert=True, doc="enable/disable the PID")
+	
+	feedbackConfig = SelectRegister(0x4, startBit = 0x0, bits = 2, options={'noFeedback': 0x0, 'negativeFeedback': 0x1, 'positiveFeedback':0x2, 'reverseOutput':0x3},
+									doc="simulate a feedback in the PID module (i.e., the output of the PID will be added/subctracted from the input)")
+	useDelay = BoolRegister(0x4,0x2,doc="enable/disable an artificial delay (whose length is determined by the parameter delayLength)")
+	delayLength = FloatRegister(0x4,bits=0xA,startBit=0x3, norm=125e6, min=8e-9, max = 8e-9*600,
+								doc="time of artificial delay added to the pid module")
+	useFilter = BoolRegister(0x4,0xD,doc="enable/disable an IIR filter (set its coefficients with function setFilter())")
+	useLinearizer = BoolRegister(0x4,0xE,doc="enable/disable a linearizer module (set it with function setLLinearizer())")
+	saturationConfig = SelectRegister(0x4, startBit = 0xf, bits = 2, options={'disabled': 0x0, 'stopAtSaturation': 0x1, 'resetAtSaturation':0x2})
+	useDisableTrigger = BoolRegister(0x4,0x11,doc="enable/disable the possibility to temporarly disable the PID with a signal on a digital pin")
+	disableTriggerPin = digitalPinRegister(0x4, startBit=0x12)
+	pidSetPoint = FloatRegister(0x10, bits=24, norm= 2 **23,
+							  doc="pid setpoint [volts]")
 
-    p = GainRegister(0x14, bits=_GAINBITS, norm= 2 ** _PSR,
-                      doc="pid proportional gain")
-    i = GainRegister(0x18, bits=_GAINBITS, norm= 2 ** _ISR,
-                      doc="pid integral gain")
-    d = GainRegister(0x1C, bits=_GAINBITS, norm= 2 ** _DSR,
-                      doc="pid derivative gain")
-    
-    _filterMaxCoefficients = 8
-    denNumSplit = IntRegister(0x60,4,startBit=0)
-    
-    for i in range(8):    
-        locals()['filterCoefficient' + str(i)] = GainRegister(0x64+i*4,bits=28, startBit=0,norm=2**20)
-        
-        locals()['linearizer_x' + str(i)] = GainRegister(0xA0+i*8,bits=0xF, startBit=0,norm=2**13)
-        locals()['linearizer_q' + str(i)] = GainRegister(0xA0+i*8,bits=0xF, startBit=0xF,norm=2**13)
-        locals()['linearizer_m' + str(i)] = GainRegister(0xA4+i*8,bits=32, startBit=0,norm=2**24)
-    
-    def setLLinearizer(self, enable = True, x = [-1, 1], y = [-1, 1]):
-        if(len(x) > self._filterMaxCoefficients+1 or len(y) != len(x)):
-            logger.error(f"incorrect number of coefficients! max allowed: {self._filterMaxCoefficients}, x and y should have the same length")
-            return
-        
-        def segmentedCoefficient(x,y):
-            '''
-                transforms the segmented function (x,y) into the list of ramps y[i](x) = q[i] + ((s[i] - x) * m[i]),
-                s[i] is the start input value of the ramp
-                q[i] is the start output value of the ramp ( y[i](s[i]) = q[i])
-                m[i] is the slope of the ramp
-            '''
-            a = np.array(x[0:len(x)-1])
-            b = np.array(x[1:])
-            c = np.array(y[0:len(y)-1])
-            d = np.array(y[1:])
-            
-            m = (d-c) / (b-a)
-            s = a
-            q = c
-            return (s,q,m)
-        
-        (s,q,m) = segmentedCoefficient(x,y)
-        
-        s = np.append(s,[-1] * (self._filterMaxCoefficients - len(m)))
-        q = np.append(q,[0] * (self._filterMaxCoefficients - len(m)))
-        m = np.append(m,[0] * (self._filterMaxCoefficients - len(m)))
-        
-        for i in range(self._filterMaxCoefficients):
-            setattr(self,'linearizer_x'+str(i), s[i])
-            setattr(self,'linearizer_q'+str(i), q[i])
-            setattr(self,'linearizer_m'+str(i), m[i])
-            
-        self.useLinearizer = enable
+	p = GainRegister(0x14, bits=_GAINBITS, norm= 2 ** _PSR,
+					  doc="pid proportional gain")
+	i = GainRegister(0x18, bits=_GAINBITS, norm= 2 ** _ISR,
+					  doc="pid integral gain")
+	d = GainRegister(0x1C, bits=_GAINBITS, norm= 2 ** _DSR,
+					  doc="pid derivative gain")
+	
+	_filterMaxCoefficients = 8
+	denNumSplit = IntRegister(0x60,4,startBit=0)
+	
+	for i in range(8):    
+		locals()['filterCoefficient' + str(i)] = GainRegister(0x64+i*4,bits=28, startBit=0,norm=2**20)
+		
+		locals()['linearizer_x' + str(i)] = GainRegister(0xA0+i*8,bits=0xF, startBit=0,norm=2**13)
+		locals()['linearizer_q' + str(i)] = GainRegister(0xA0+i*8,bits=0xF, startBit=0xF,norm=2**13)
+		locals()['linearizer_m' + str(i)] = GainRegister(0xA4+i*8,bits=32, startBit=0,norm=2**24)
+	
+	def setLLinearizer(self, enable = True, x = [-1, 1], y = [-1, 1]):
+		if(len(x) > self._filterMaxCoefficients+1 or len(y) != len(x)):
+			logger.error(f"incorrect number of coefficients! max allowed: {self._filterMaxCoefficients}, x and y should have the same length")
+			return
+		
+		def segmentedCoefficient(x,y):
+			'''
+				transforms the segmented function (x,y) into the list of ramps y[i](x) = q[i] + ((s[i] - x) * m[i]),
+				s[i] is the start input value of the ramp
+				q[i] is the start output value of the ramp ( y[i](s[i]) = q[i])
+				m[i] is the slope of the ramp
+			'''
+			a = np.array(x[0:len(x)-1])
+			b = np.array(x[1:])
+			c = np.array(y[0:len(y)-1])
+			d = np.array(y[1:])
+			
+			m = (d-c) / (b-a)
+			s = a
+			q = c
+			return (s,q,m)
+		
+		(s,q,m) = segmentedCoefficient(x,y)
+		
+		s = np.append(s,[-1] * (self._filterMaxCoefficients - len(m)))
+		q = np.append(q,[0] * (self._filterMaxCoefficients - len(m)))
+		m = np.append(m,[0] * (self._filterMaxCoefficients - len(m)))
+		
+		for i in range(self._filterMaxCoefficients):
+			setattr(self,'linearizer_x'+str(i), s[i])
+			setattr(self,'linearizer_q'+str(i), q[i])
+			setattr(self,'linearizer_m'+str(i), m[i])
+			
+		self.useLinearizer = enable
 
-    @property
-    def proportional(self):
-        return self.p
-    @proportional.setter
-    def proportional(self, v):
-        self.p = v
+	@property
+	def proportional(self):
+		return self.p
+	@proportional.setter
+	def proportional(self, v):
+		self.p = v
 
-    @property
-    def integral(self):
-        return self.i
-    @integral.setter
-    def integral(self, v):
-        self.i = v
+	@property
+	def integral(self):
+		return self.i
+	@integral.setter
+	def integral(self, v):
+		self.i = v
 
-    @property
-    def derivative(self):
-        return self.d
-    @derivative.setter
-    def derivative(self, v):
-        self.d = v
-    
+	@property
+	def derivative(self):
+		return self.d
+	@derivative.setter
+	def derivative(self, v):
+		self.d = v
+	

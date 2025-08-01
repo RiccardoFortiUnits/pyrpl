@@ -237,7 +237,7 @@ def make_asg(channel=0):
                                   max=1.0,
                                   min=-1.0,
                                   doc="amplitude of output waveform [volts]")
-        amplitude_source = SelectRegister(0x4 + _VALUE_OFFSET, startBit=14, bits=1, options = {"from signal" : 0, "from memory" : 1}, default = "from memory", doc = "select if the the amplitude should be given with the Amplitude value, or if oit should follow the value of the selected signal")
+        amplitude_source = SelectRegister(0x4 + _VALUE_OFFSET, startBit=14, bits=1, options = {"from signal" : 0, "from memory" : 1}, default = "from memory", doc = "select if the the amplitude should be given with the Amplitude value, or if it should follow the value of the selected signal")
         
         amplitude_signal = SelectRegister(
             - addr_base + dsp_addr_base('asg_ampl0' if _BIT_OFFSET == 0 else 'asg_ampl1'),

@@ -19,8 +19,6 @@ def parse_verilog_indexes(verilog_path):
 	# Split into lines and process each line
 	for line in section.splitlines():
 		line = line.strip()
-		if not line or line.startswith('/*'):
-			continue
 		# Split by ';' to separate input and output columns
 		parts = [p.strip() for p in line.split(';')]
 		# Process input column
@@ -43,7 +41,7 @@ inputOrders = [
 	"iq0", "iq1", "iq2", "iq2_2", 
 	"pid0", "pid1", "pid2", 
 	"asg0", "asg1", 
-	"linearizer", "ramp", 
+	"lin", "ramp", 
 	"trig", "iir", 
 	"off", ]
 outputOrders = [

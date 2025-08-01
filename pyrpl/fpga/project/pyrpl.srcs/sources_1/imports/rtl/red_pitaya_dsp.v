@@ -26,11 +26,11 @@ This module hosts the different submodules used for digital signal processing.
 The first half of this file manages the connection between different submodules by
 implementing a bus between them: 
 
-connecting the output_signal of submodule i to the input_signal of submodule j is 
+connecting the signal_arrivingFrom of submodule i to the signal_goingTo of submodule j is 
 done by setting the register 
-input_select[j] <= i;
+switchSignal[j] <= i;
  
-Similarly, a second, possibly different output is allowed for each module: output_signal.
+Similarly, a second, possibly different output is allowed for each module: signal_arrivingFrom.
 This output is added to the analog output 1 and/or 2 depending on the value
 of the register output_direct_selectDAC: setting the first bit enables output1, the 2nd bit enables output 2.
 Example:
@@ -126,22 +126,22 @@ should not be used.
 ///////////////////////////////////// localparam MODULES = 7;
 ///////////////////////////////////// localparam nOfDSP_directOutputs = 7;//directOutputs are the outputs tha can be outputed to the DACs
 
-/*			input					output						*/
+/*			arrivingFrom						goingTo						*/
 /*§§#§§*/
-localparam	PID0					= 0;			/*modules use both input and output*/;
-localparam	PID1					= 1;			/*modules use both input and output*/;
-localparam	PID2					= 2;			/*modules use both input and output*/;
-localparam	LIN						= 3;			/*modules use both input and output*/;
-localparam	RAMP					= 4;			/*modules use both input and output*/;
-localparam	ASG0					= 5;	localparam	SCOPE1 					= 5;
-localparam	ASG1					= 6;	localparam	SCOPE2 					= 6;
-localparam	IN1						= 7;	localparam	DIG0					= 7;
-localparam	IN2						= 8;	localparam	DIG1					= 8;
-localparam	OUT1					= 9;	localparam	ASG_AMPL0				= 9;
-localparam	OUT2					= 10;	localparam	ASG_AMPL1				= 10;
-										;	localparam	PID0_SETPOINT_SIGNAL	= 11;
-										;	localparam	PID1_SETPOINT_SIGNAL	= 12;
-										;	localparam	PID2_SETPOINT_SIGNAL	= 13;
+localparam	PID0					= 0;			/*modules use both input and outpt ;*/
+localparam	PID1					= 1;			/*modules use both input and outpt ;*/
+localparam	PID2					= 2;			/*modules use both input and outpt ;*/
+localparam	LIN						= 3;			/*modules use both input and outpt ;*/
+localparam	RAMP					= 4;			/*modules use both input and outpt ;*/
+localparam	ASG0					= 5;		localparam	SCOPE1 					= 5;
+localparam	ASG1					= 6;		localparam	SCOPE2 					= 6;
+localparam	IN1						= 7;		localparam	DIG0					= 7;
+localparam	IN2						= 8;		localparam	DIG1					= 8;
+localparam	OUT1					= 9;		localparam	ASG_AMPL0				= 9;
+localparam	OUT2					= 10;		localparam	ASG_AMPL1				= 10;
+										/*;*/	localparam	PID0_SETPOINT_SIGNAL	= 11;
+										/*;*/	localparam	PID1_SETPOINT_SIGNAL	= 12;
+										/*;*/	localparam	PID2_SETPOINT_SIGNAL	= 13;
 /*§§#§§*/
 localparam nOfDSP_outputs = 14, 		nOfDSP_inputs = 11;
 localparam MODULES = 7;
@@ -171,14 +171,14 @@ localparam s_OFF  = 2'b00;
 
 
 // the selected input signal of each module: modules and extramodules have inputs
-// extraoutputs are treated like extramodules that do not provide their own output_signal
-wire [14-1:0] input_signal [nOfDSP_outputs -1:0];
+// extraoutputs are treated like extramodules that do not provide their own signal_arrivingFrom
+wire [14-1:0] signal_goingTo [nOfDSP_outputs -1:0];
 // the selected input signal NUMBER of each module
-reg [LOG_OUTPUT_MODULES-1:0] input_select [nOfDSP_outputs -1:0];
+reg [LOG_OUTPUT_MODULES-1:0] switchSignal [nOfDSP_outputs -1:0];
 
 // the output of each module for internal routing, including 'virtual outputs' for the EXTRAINPUTS
-wire [14-1:0] output_signal [nOfDSP_inputs-1+1:0];
-wire [nOfDSP_inputs-1+1:0] output_valid;
+wire [14-1:0] signal_arrivingFrom [nOfDSP_inputs-1+1:0];
+wire [nOfDSP_inputs-1+1:0] isValid_arrivingFrom;
 
 // the output of each module that is added to the chosen DAC
 reg [2-1:0] output_direct_selectDAC [nOfDSP_directOutputs-1:0]; 
@@ -188,32 +188,36 @@ reg [2-1:0] output_direct_selectDAC [nOfDSP_directOutputs-1:0];
 reg [MODULES-1:0] sync_fromMemory;
 reg [MODULES-1:0] sync_alsoUseGenericTrigger;
 wire [MODULES-1:0] sync = sync_fromMemory & (~sync_alsoUseGenericTrigger | {MODULES{generic_module_trigger}});//disables module[i] when sync_fromMemory[i] == 0 or (if sync_alsoUseGenericTrigger == 1) generic_module_trigger == 0
-//todo add output_valid[input_select[j]] to the formula for sync
+//todo add isValid_arrivingFrom[switchSignal[j]] to the formula for sync
 
 // bus read data of individual modules (only needed for 'real' modules)
 wire [ 32-1: 0] module_rdata [MODULES-1:0];  
 wire            module_ack   [MODULES-1:0];
 
 //connect scope
-assign scope1_o = input_signal[SCOPE1];
-assign scope2_o = input_signal[SCOPE2];
+assign scope1_o = signal_goingTo[SCOPE1];
+assign scope2_o = signal_goingTo[SCOPE2];
+assign asg_a_amp_o = signal_goingTo[ASG_AMPL0];
+assign asg_b_amp_o = signal_goingTo[ASG_AMPL1];
+assign extDigital0 = signal_goingTo[DIG0];
+assign extDigital1 = signal_goingTo[DIG1];
 
 //connect asg output
-assign output_signal[ASG0] = asg1_i;
-assign output_signal[ASG1] = asg2_i;
+assign signal_arrivingFrom[ASG0] = asg1_i;
+assign signal_arrivingFrom[ASG1] = asg2_i;
 
 //connect dac/adc to internal signals
-assign output_signal[IN1] = dat_a_i;
-assign output_signal[IN2] = dat_b_i;
-assign output_signal[OUT1] = dat_a_o;
-assign output_signal[OUT2] = dat_b_o;
-// assign output_signal[PEAK1] = peak_a;
-// assign output_signal[PEAK2] = peak_b;
-// assign output_signal[PEAK3] = peak_c;
-// assign output_signal[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is a positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
-// assign output_signal[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
-// assign output_signal[PEAK_IDX3] = {~peak_c_index[13], peak_c_index[12:0]};
-assign output_valid = -1;
+assign signal_arrivingFrom[IN1] = dat_a_i;
+assign signal_arrivingFrom[IN2] = dat_b_i;
+assign signal_arrivingFrom[OUT1] = dat_a_o;
+assign signal_arrivingFrom[OUT2] = dat_b_o;
+// assign signal_arrivingFrom[PEAK1] = peak_a;
+// assign signal_arrivingFrom[PEAK2] = peak_b;
+// assign signal_arrivingFrom[PEAK3] = peak_c;
+// assign signal_arrivingFrom[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is a positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
+// assign signal_arrivingFrom[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
+// assign signal_arrivingFrom[PEAK_IDX3] = {~peak_c_index[13], peak_c_index[12:0]};
+assign isValid_arrivingFrom = -1;
 
 wire  signed [   14+LOG_DIRECT_OUTPUT_MODULES -1: 0] sum1; 
 wire  signed [   14+LOG_DIRECT_OUTPUT_MODULES -1: 0] sum2; 
@@ -227,7 +231,7 @@ genvar j;
 //select inputs
 generate 
    for (j = 0; j < nOfDSP_outputs; j = j+1) begin
-        assign input_signal[j] = (input_select[j]==NONE) ? 14'b0 : output_signal[input_select[j]];
+        assign signal_goingTo[j] = (switchSignal[j]==NONE) ? 14'b0 : signal_arrivingFrom[switchSignal[j]];
    end
 endgenerate
 
@@ -238,8 +242,8 @@ wire  signed [(nOfDSP_directOutputs)*14 -1: 0] signalToSum2;
 generate
   //first, put all the signals to be added at the start of signalToSum
   for (j=0;j<nOfDSP_directOutputs;j=j+1) begin
-     assign signalToSum1[(j+1)*14 -1-:14] = output_signal[j]&s_OUT1 ? {{LOG_OUTPUT_MODULES{output_signal[j][14-1]}},output_signal[j]} : {14+LOG_OUTPUT_MODULES{1'b0}};
-     assign signalToSum2[(j+1)*14 -1-:14] = output_signal[j]&s_OUT2 ? {{LOG_OUTPUT_MODULES{output_signal[j][14-1]}},output_signal[j]} : {14+LOG_OUTPUT_MODULES{1'b0}};
+     assign signalToSum1[(j+1)*14 -1-:14] = output_direct_selectDAC[j]&s_OUT1 ? signal_arrivingFrom[j] : 0;//{{LOG_OUTPUT_MODULES{signal_arrivingFrom[j][14-1]}},signal_arrivingFrom[j]} : {14+LOG_OUTPUT_MODULES{1'b0}};
+     assign signalToSum2[(j+1)*14 -1-:14] = output_direct_selectDAC[j]&s_OUT2 ? signal_arrivingFrom[j] : 0;//{{LOG_OUTPUT_MODULES{signal_arrivingFrom[j][14-1]}},signal_arrivingFrom[j]} : {14+LOG_OUTPUT_MODULES{1'b0}};
   end
 endgenerate
 
@@ -269,7 +273,7 @@ always @(posedge clk_i) begin
    if (rstn_i == 1'b0) begin
       //default settings for backwards compatibility with original code
       for(i=0;i<nOfDSP_outputs;i=i+1)begin
-      	input_select [i] <= IN1;
+      	switchSignal [i] <= IN1;
       end
       
       for(i=0;i<nOfDSP_inputs;i=i+1)begin
@@ -282,7 +286,7 @@ always @(posedge clk_i) begin
    end
    else begin
       if (sys_wen) begin
-         if (sys_addr[16-1:0]==16'h00)     input_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]] <= sys_wdata[LOG_INPUT_MODULES -1:0];
+         if (sys_addr[16-1:0]==16'h00)     switchSignal[sys_addr[16+LOG_OUTPUT_MODULES-1:16]] <= sys_wdata[LOG_INPUT_MODULES -1:0];
          if (sys_addr[16-1:0]==16'h04)    { sync_alsoUseGenericTrigger[sys_addr[16+LOG_OUTPUT_MODULES-1:16]], output_direct_selectDAC[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]} <= sys_wdata;
          if (sys_addr[16-1:0]==16'h0C)                                               sync_fromMemory <= sys_wdata[MODULES -1:0];
       end
@@ -298,11 +302,11 @@ if (rstn_i == 1'b0) begin
 end else begin
    sys_err <= 1'b0 ;
    casez (sys_addr[16-1:0])
-      20'h00 : begin sys_ack <= sys_en;          sys_rdata <= {{32- LOG_INPUT_MODULES{1'b0}},input_select[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]}; end 
+      20'h00 : begin sys_ack <= sys_en;          sys_rdata <= {{32- LOG_INPUT_MODULES{1'b0}},switchSignal[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]}; end 
       20'h04 : begin sys_ack <= sys_en;          sys_rdata <= {sync_alsoUseGenericTrigger[sys_addr[16+LOG_OUTPUT_MODULES-1:16]], output_direct_selectDAC[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]}; end
       20'h08 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 2{1'b0}},dat_b_saturated,dac_a_saturated}; end
       20'h0C : begin sys_ack <= sys_en;          sys_rdata <= {{32-MODULES{1'b0}},sync_fromMemory} ; end
-      20'h10 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 14{1'b0}},output_signal[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]} ; end
+      20'h10 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 14{1'b0}},signal_arrivingFrom[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]} ; end
       default : begin sys_ack <= module_ack[sys_addr[16+LOG_OUTPUT_MODULES-1:16]];    sys_rdata <=  module_rdata[sys_addr[16+LOG_OUTPUT_MODULES-1:16]]  ; end
    endcase
 end
@@ -316,8 +320,8 @@ end
 
 // wire [14-1:0] diff_input_signal [3-1:0];
 // wire [14-1:0] diff_output_signal [3-1:0];
-// //assign diff_input_signal[0] = input_signal[1]; // difference input of PID0 is PID1
-// //assign diff_input_signal[1] = input_signal[0]; // difference input of PID1 is PID0
+// //assign diff_input_signal[0] = signal_goingTo[1]; // difference input of PID0 is PID1
+// //assign diff_input_signal[1] = signal_goingTo[0]; // difference input of PID1 is PID0
 // assign diff_input_signal[0] = diff_output_signal[1]; // difference input of PID0 is PID1
 // assign diff_input_signal[1] = diff_output_signal[0]; // difference input of PID1 is PID0
 // assign diff_input_signal[2] = {14{1'b0}};      // difference input of PID2 is zero
@@ -327,10 +331,10 @@ generate for (j = PID0; j < LIN; j = j+1) begin
      // data
      .clk_i        (  clk_i          ),  // clock
      .rstn_i       (  rstn_i         ),  // reset - active low
-     .sync_i       (  sync[j] & output_valid[input_select[j]] ),  // syncronization of different dsp modules
-     .dat_i        (  input_signal [j] ),  // input data
-     .dat_o        (  output_signal[j]),  // output data
-     .setpoint_i   (  input_signal[PID0_SETPOINT_SIGNAL + j]),  // output data
+     .sync_i       (  sync[j] & isValid_arrivingFrom[switchSignal[j]] ),  // syncronization of different dsp modules
+     .dat_i        (  signal_goingTo [j] ),  // input data
+     .dat_o        (  signal_arrivingFrom[j]),  // output data
+     .setpoint_i   (  signal_goingTo[PID0_SETPOINT_SIGNAL + j]),  // output data
     // .diff_dat_i   (  diff_input_signal[j] ),  // input data for differential mode
     // .diff_dat_o   (  diff_output_signal[j] ),  // output data for differential mode
 
@@ -359,8 +363,8 @@ endgenerate
 //     )sf(
 //         .clk           (clk_i),
 //         .reset         (!rstn_i),
-//         .in            (input_signal [j]),
-//         .out           (output_signal[j]),
+//         .in            (signal_goingTo [j]),
+//         .out           (signal_arrivingFrom[j]),
         
 //         //communincation with PS
 //         .addr ( sys_addr[16-1:0] ),
@@ -386,7 +390,7 @@ endgenerate
 //         .reset    (!rstn_i),
 //         .trigger  (ramp_trigger),
         
-//         .out           (output_signal[j]),
+//         .out           (signal_arrivingFrom[j]),
 //         //communincation with PS
 //         .addr ( sys_addr[16-1:0] ),
 //         .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
@@ -399,3 +403,50 @@ endgenerate
 // end endgenerate
 
 endmodule
+
+
+/*
+
+add wave -position insertpoint sim:/red_pitaya_dsp/*
+force -freeze sim:/red_pitaya_dsp/clk_i 1 0, 0 {50 ps} -r 100
+force -freeze sim:/red_pitaya_dsp/rstn_i z0 0
+force -freeze sim:/red_pitaya_dsp/dat_a_i 1234 0
+noforce sim:/red_pitaya_dsp/dat_b_i
+force -freeze sim:/red_pitaya_dsp/dat_b_i 5678 0
+force -freeze sim:/red_pitaya_dsp/asg1_i aabb 0
+force -freeze sim:/red_pitaya_dsp/asg2_i ccdd 0
+force -freeze sim:/red_pitaya_dsp/asg_a_amp_o 7000 0
+force -freeze sim:/red_pitaya_dsp/asg_b_amp_o 1000 0
+noforce sim:/red_pitaya_dsp/asg_a_amp_o
+noforce sim:/red_pitaya_dsp/asg_b_amp_o
+force -freeze sim:/red_pitaya_dsp/asg1phase_i 0 0
+force -freeze sim:/red_pitaya_dsp/ramp_trigger 0 0
+force -freeze sim:/red_pitaya_dsp/generic_module_trigger 0 0
+force -freeze sim:/red_pitaya_dsp/sys_addr 0 0
+force -freeze sim:/red_pitaya_dsp/sys_wdata 0 0
+force -freeze sim:/red_pitaya_dsp/sys_sel z0 0
+force -freeze sim:/red_pitaya_dsp/sys_wen z0 0
+force -freeze sim:/red_pitaya_dsp/sys_ren z0 0
+force -freeze sim:/red_pitaya_dsp/peak_a 0 0
+force -freeze sim:/red_pitaya_dsp/peak_a_index 0 0
+force -freeze sim:/red_pitaya_dsp/peak_a_valid z0 0
+force -freeze sim:/red_pitaya_dsp/peak_b 0000 0
+force -freeze sim:/red_pitaya_dsp/peak_b_index 0 0
+force -freeze sim:/red_pitaya_dsp/peak_b_valid z0 0
+force -freeze sim:/red_pitaya_dsp/peak_c zzzz000000 0
+force -freeze sim:/red_pitaya_dsp/peak_c_index zzzz00000000 0
+force -freeze sim:/red_pitaya_dsp/peak_c_valid z0 0
+run
+run
+run
+force -freeze sim:/red_pitaya_dsp/rstn_i 01 0
+run
+run
+run
+run
+run
+run
+
+
+
+*/
