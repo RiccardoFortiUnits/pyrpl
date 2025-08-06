@@ -48,6 +48,10 @@ class rampFunction(ArrayRegister):
 		stepIncreases = self.stepIncreases.get_value(obj)
 		timeSteps = self.timeSteps.get_value(obj)
 		nOfSteps = self.nOfSteps.get_value(obj)
+		try:
+			firstUnusedIndex = nOfSteps.index(0) + 1
+		except:
+			firstUnusedIndex = len(nOfSteps)
 
 		# try:#remove all the "0"s at the end of the list
 		#     listEnd = next(i for i, x in enumerate(nOfSteps) if x == 0)
@@ -60,7 +64,7 @@ class rampFunction(ArrayRegister):
 		rampTimes = np.array(timeSteps) * np.array(nOfSteps)
 		x = np.concatenate((np.zeros(1), np.cumsum(rampTimes)))
 		y = np.array(startPoints + [startPoints[-1]+stepIncreases[-1]*nOfSteps[-1]])
-		return [list(x),list(y)]
+		return [list(x)[:firstUnusedIndex],list(y)[:firstUnusedIndex]]
 	
 	@staticmethod    
 	def findBestRatio(r, A, B):
