@@ -30,8 +30,8 @@ class Pwm(DspModule):
 
     _gui_attributes = _setup_attributes
 
-    def __init__(self, rp, name=None):
-        super(Pwm, self).__init__(rp, name=name)
+    def __init__(self, rp, name=None, index = 0):
+        super(Pwm, self).__init__(rp, name=name, index = index)
         # because pwm's input is using adc-input's plug
         self.name = name
         # # the PWM inputs have the same index as the ADCs

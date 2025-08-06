@@ -84,7 +84,7 @@ class BaseProperty(BaseAttribute):
 				 default=None,
 				 doc="",
 				 ignore_errors=False,
-				 call_setup=False):
+				 call_setup=False, **kwargs):
 		"""
 		default: if provided, the value is initialized to it
 		"""
@@ -194,7 +194,7 @@ class BaseRegister(BaseProperty):
 	Interface for basic register of type int. To convert the value between register format and python readable
 	format, registers need to implement "from_python" and "to_python" functions"""
 	default = None
-	def __init__(self, address, bitmask=None, bits=None, startBit=None, **kwargs):
+	def __init__(self, address, bitmask=None, bits=None, startBit=None, isAddressStatic = False, **kwargs):
 		if address & 0x3 != 0:
 			logger.error("FPGA address 0x%X is not word aligned (not divisible by 4), trying to read from this address will result in a bus error", address)
 			
@@ -208,31 +208,32 @@ class BaseRegister(BaseProperty):
 		self.bitmask = bitmask
 		self.bits = bits
 		self.startBit = startBit
+		self.isAddressStatic = isAddressStatic
 		BaseProperty.__init__(self, **kwargs)
 
 	def _writes(self, obj, addr, v):
-		return obj._writes(addr, v)
+		return obj._writes(addr, v, not self.isAddressStatic)
 
 	def _reads(self, obj, addr, l):
-		return obj._reads(addr, l)
+		return obj._reads(addr, l, not self.isAddressStatic)
 
 	def _write(self, obj, addr, v):
-		return obj._write(addr, v)
+		return obj._write(addr, v, not self.isAddressStatic)
 
 	def _read(self, obj, addr):
-		return obj._read(addr)
+		return obj._read(addr, not self.isAddressStatic)
 
 	def get_value(self, obj):
 		"""
 		Retrieves the value that is physically on the redpitaya device.
 		"""
 		# self.parent = obj  # store obj in memory
-		val = obj._read(self.address)
+		val = obj._read(self.address, not self.isAddressStatic)
 		if self.bitmask is None:
-			print(f"address {hex(self.address + obj._addr_base)}, reading {hex(val)}")
+			# print(f"address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
 			return self.to_python(obj, val)
 		else:
-			print(f"address {hex(self.address + obj._addr_base)}, reading {hex(val)}")
+			# print(f"address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
 			retVal = val & self.bitmask
 			if self.startBit is not None: 
 				# try:
@@ -247,17 +248,17 @@ class BaseRegister(BaseProperty):
 		Sets the value on the redpitaya device.
 		"""
 		if self.bitmask is None:
-			obj._write(self.address, self.from_python(obj, val))
-			print(f"address {hex(self.address + obj._addr_base)}, writing {hex(self.from_python(obj, val))}")
+			obj._write(self.address, self.from_python(obj, val), not self.isAddressStatic)
+			# print(f"address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(self.from_python(obj, val))}")
 		else:
-			act = obj._read(self.address)
+			act = obj._read(self.address, not self.isAddressStatic)
 			new = act & (~self.bitmask)
 			addValue = int(self.from_python(obj, val))
 			if self.startBit is not None: 
 				addValue <<= self.startBit
 			new |= (addValue & self.bitmask)
-			obj._write(self.address, new)
-			print(f"address {hex(self.address + obj._addr_base)}, writing {hex(new)}")
+			obj._write(self.address, new, not self.isAddressStatic)
+			# print(f"address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(new)}")
 				
 
 	def __set__(self, obj, value):
@@ -336,9 +337,9 @@ class BoolRegister(BaseRegister, BoolProperty):
 		if self.invert:
 			val = not val
 		if val:
-			towrite = obj._read(self.address) | (1 << self.bit)
+			towrite = obj._read(self.address, not self.isAddressStatic) | (1 << self.bit)
 		else:
-			towrite = obj._read(self.address) & (~(1 << self.bit))
+			towrite = obj._read(self.address, not self.isAddressStatic) & (~(1 << self.bit))
 		return towrite
 
 
@@ -388,10 +389,10 @@ class IORegister(BoolRegister):
 			self.outputmode = v
 		self.address = self.write_address if v else self.read_address
 		if v:
-			v = obj._read(self.direction_address) | (1 << self.bit)
+			v = obj._read(self.direction_address, not self.isAddressStatic) | (1 << self.bit)
 		else:
-			v = obj._read(self.direction_address) & (~(1 << self.bit))
-		obj._write(self.direction_address, v)
+			v = obj._read(self.direction_address, not self.isAddressStatic) & (~(1 << self.bit))
+		obj._write(self.direction_address, v, not self.isAddressStatic)
 
 	def get_value(self, obj):
 		self.direction(obj)
@@ -595,7 +596,7 @@ class ConstantIntRegister(IntRegister):
 class LongRegister(IntRegister):
 	"""Interface for register of python type int/long with arbitrary length 'bits' (effectively unsigned)"""
 	def get_value(self, obj):
-		values = obj._reads(self.address, self.size)
+		values = obj._reads(self.address, self.size, not self.isAddressStatic)
 		value = int(0)
 		for i in range(self.size):
 			value += int(values[i]) << (32 * i)
@@ -611,12 +612,12 @@ class LongRegister(IntRegister):
 			for i in range(self.size):
 				values[i] = (val >> (32 * i)) & 0xFFFFFFFF
 		else:
-			act = obj._reads(self.address, self.size)
+			act = obj._reads(self.address, self.size, not self.isAddressStatic)
 			for i in range(self.size):
 				localbitmask = (self.bitmask >> 32 * i) & 0xFFFFFFFF
 				values[i] = ((val >> (32 * i)) & localbitmask) | \
 							(int(act[i]) & (~localbitmask))
-		obj._writes(self.address, values)
+		obj._writes(self.address, values, not self.isAddressStatic)
 
 
 class FloatProperty(NumberProperty):
@@ -894,7 +895,7 @@ class FilterRegister(BaseRegister, FilterProperty):
 		# in order to only read the corresponding register once
 		var_name = "_" + self.name + "_" + attr_name
 		if not hasattr(obj, var_name):
-			setattr(obj, var_name, obj._read(getattr(self, attr_name)))
+			setattr(obj, var_name, obj._read(getattr(self, attr_name)), not self.isAddressStatic)
 		return getattr(obj, var_name)
 
 	def _FILTERSTAGES(self, obj):
@@ -1695,7 +1696,7 @@ class digitalPinRegister(BaseRegister, digitalPinProperty):
 	Register for selecting a digital pin
 	"""
 	def __init__(self, address, bits=4, startBit=None, **kwargs):
-		BaseRegister.__init__(self, address=address, bitmask=None, bits=bits, startBit=startBit)
+		BaseRegister.__init__(self, address=address, bitmask=None, bits=bits, startBit=startBit, **kwargs)
 		digitalPinProperty.__init__(self, **kwargs)
 		
 	def to_python(self, obj, value):

@@ -265,8 +265,8 @@ class Scope(HardwareModule, AcquisitionModule):
                        ]
     
     lastInputs = [None, None]
-    def __init__(self, parent, name=None):
-        super(Scope, self).__init__(parent, name=name)
+    def __init__(self, parent, name=None, index = 0):
+        super(Scope, self).__init__(parent, name=name, index = 0)
         try:
             self.isDac1Modified = self.parent.c.scope["DAC1_modified"]
         except:

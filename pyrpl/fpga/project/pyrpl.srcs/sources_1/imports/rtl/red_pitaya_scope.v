@@ -67,7 +67,8 @@
  */
 
 module red_pitaya_scope #(
-  parameter RSZ = 14  // RAM size 2^RSZ
+	parameter version = "peaks",
+  	parameter RSZ = 14  // RAM size 2^RSZ
 )(
 
    // ADC
@@ -391,9 +392,9 @@ always @(posedge adc_clk_i) begin
 end
 
 localparam  chForPeak_realAdc0 = 0,
-            chForPeak_realAdc1 = 1,
-            chForPeak_adc0 = 2,
-            chForPeak_adc1 = 3;
+			chForPeak_realAdc1 = 1,
+			chForPeak_adc0 = 2,
+			chForPeak_adc1 = 3;
 
 reg [1:0] chUsedByPeak_a, chUsedByPeak_b, chUsedByPeak_c;
 reg [RSZ -1:0] peak_a_minIndex, peak_b_minIndex, peak_c_minIndex;
@@ -403,44 +404,61 @@ reg [RSZ -1:0] signalForPeak_a, signalForPeak_b, signalForPeak_c;
 wire [RSZ*4 -1:0] availablePeakSignals = {adc_b_dat, adc_a_dat, real_adc_b_dat, real_adc_a_dat};
 wire [RSZ -1:0]  intermediate_peak_c_index;
 wire intermediate_peak_c_valid;
-always @(posedge adc_clk_i) begin
-   if(~adc_rstn_i) begin
-      signalForPeak_a <= 0;
-      signalForPeak_b <= 0;
-      signalForPeak_c <= 0;
-   end else begin
-      signalForPeak_a <= availablePeakSignals[RSZ*(chUsedByPeak_a+1) -1-:RSZ];
-      signalForPeak_b <= availablePeakSignals[RSZ*(chUsedByPeak_b+1) -1-:RSZ];
-      signalForPeak_c <= availablePeakSignals[RSZ*(chUsedByPeak_c+1) -1-:RSZ];
-   end
-end
-
-
 reg [RSZ -1:0] peak_flipIndex;
-peakFinder #(
-   .dataSize          (RSZ),
-   .indexSize         (RSZ),
-   .areSignalsSigned  (1)
-)peakFinders[0:2](
-   .clk              (adc_clk_i),
-   .reset            (!adc_rstn_i),
 
-   .trigger          (peak_trig),
-   .in               ({signalForPeak_a, signalForPeak_b, signalForPeak_c}),
-   .in_valid         (adc_dv),
+generate
+	if(version == "peaks")begin
+		always @(posedge adc_clk_i) begin
+			if(~adc_rstn_i) begin
+				signalForPeak_a <= 0;
+				signalForPeak_b <= 0;
+				signalForPeak_c <= 0;
+			end else begin
+				signalForPeak_a <= availablePeakSignals[RSZ*(chUsedByPeak_a+1) -1-:RSZ];
+				signalForPeak_b <= availablePeakSignals[RSZ*(chUsedByPeak_b+1) -1-:RSZ];
+				signalForPeak_c <= availablePeakSignals[RSZ*(chUsedByPeak_c+1) -1-:RSZ];
+			end
+		end
 
-   .indexRange_min   ({peak_a_minIndex, peak_b_minIndex, peak_c_minIndex}),
-   .indexRange_max   ({peak_a_maxIndex, peak_b_maxIndex, peak_c_maxIndex}),
 
-   .minValue         ({peak_a_minValue, peak_b_minValue, peak_c_minValue}),
-   // .flipIndex        (peak_flipIndex),
+		peakFinder #(
+		.dataSize          (RSZ),
+		.indexSize         (RSZ),
+		.areSignalsSigned  (1)
+		)peakFinders[0:2](
+		.clk              (adc_clk_i),
+		.reset            (!adc_rstn_i),
 
-   .max              ({peak_a, peak_b, peak_c}),
-   .maxIndex         ({peak_a_index, peak_b_index, intermediate_peak_c_index}),
-   .max_valid        ({peak_a_valid, peak_b_valid, intermediate_peak_c_valid}),
-   .inIndexRange     ({inPeakRange_a, inPeakRange_b, inPeakRange_c})
-);
+		.trigger          (peak_trig),
+		.in               ({signalForPeak_a, signalForPeak_b, signalForPeak_c}),
+		.in_valid         (adc_dv),
 
+		.indexRange_min   ({peak_a_minIndex, peak_b_minIndex, peak_c_minIndex}),
+		.indexRange_max   ({peak_a_maxIndex, peak_b_maxIndex, peak_c_maxIndex}),
+
+		.minValue         ({peak_a_minValue, peak_b_minValue, peak_c_minValue}),
+		// .flipIndex        (peak_flipIndex),
+
+		.max              ({peak_a, peak_b, peak_c}),
+		.maxIndex         ({peak_a_index, peak_b_index, intermediate_peak_c_index}),
+		.max_valid        ({peak_a_valid, peak_b_valid, intermediate_peak_c_valid}),
+		.inIndexRange     ({inPeakRange_a, inPeakRange_b, inPeakRange_c})
+		);
+	
+		normalizedRatio#(
+			.inputSize     (RSZ),
+			.ratioSize     (RSZ),//ratio is unsigned, with 0 whole bits (only fractional bits)
+			.isInputSigned (1)
+		) nr (
+			.clk        (adc_clk_i),
+			.reset      (!adc_rstn_i),
+			.min        (peak_a_index),
+			.max        (peak_b_index),
+			.middle     (intermediate_peak_c_index),
+			.ratio      (peak_c_index)
+		);
+	end
+endgenerate
 //////////////// AXI IS DISABLED SINCE WE ARE NOT USING IT /////////////////////
 
 //---------------------------------------------------------------------------------
@@ -913,7 +931,7 @@ if (adc_rstn_i == 1'b0) begin
    set_deb_len   <=  20'd62500  ;
    set_a_axi_en  <=   1'b0      ;
    set_b_axi_en  <=   1'b0      ;
-
+	
    peak_a_minIndex <= 0;
    peak_a_maxIndex <= 2**(RSZ-1);
    peak_b_minIndex <= 0;
@@ -979,18 +997,7 @@ end else begin
       
    end
 end
-normalizedRatio#(
-   .inputSize     (RSZ),
-   .ratioSize     (RSZ),//ratio is unsigned, with 0 whole bits (only fractional bits)
-   .isInputSigned (1)
-) nr (
-   .clk        (adc_clk_i),
-   .reset      (!adc_rstn_i),
-   .min        (peak_a_index),
-   .max        (peak_b_index),
-   .middle     (intermediate_peak_c_index),
-   .ratio      (peak_c_index)
-);
+
 assign peak_c_valid = intermediate_peak_c_valid & peak_b_valid & peak_a_valid;
 
 

@@ -137,6 +137,9 @@
    output [ 8-1: 0] led_o       
 );
 
+localparam version = 1 ? "ramp&lin" : "peaks";
+
+
 //---------------------------------------------------------------------------------
 //
 //  Connections to PS
@@ -434,7 +437,7 @@ wire [14 -1:0] peak_a, peak_b, peak_c;
 wire peak_a_valid, peak_b_valid, peak_c_valid;
 wire [14 -1:0] peak_a_index, peak_b_index, peak_c_index;
 
-red_pitaya_scope i_scope (
+red_pitaya_scope #(.version(version)) i_scope (
   // ADC
   .adc_a_i         (  to_scope_a /*adc_a*/       ),  // CH 1
   .adc_b_i         (  to_scope_b /*adc_a*/       ),  // CH 2
@@ -530,7 +533,7 @@ assign sys_rdata[6*32+31 -:32] = sys_rdata[4*32+31 -:32];
 assign sys_rdata[7*32+31 -:32] = sys_rdata[4*32+31 -:32];
 assign sys_err[5] = sys_err[4]; assign sys_err[6] = sys_err[4]; assign sys_err[7] = sys_err[4];
 assign sys_ack[5] = sys_ack[4]; assign sys_ack[6] = sys_ack[4]; assign sys_ack[7] = sys_ack[4];
-red_pitaya_dsp i_dsp (
+red_pitaya_dsp #(.version(version)) i_dsp (
    // signals
   .clk_i           (  adc_clk                    ),  // clock
   .rstn_i          (  adc_rstn                   ),  // reset - active low

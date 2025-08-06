@@ -101,7 +101,7 @@ class RedPitaya(object):
         logging.getLogger().setLevel(logging.DEBUG)"""
         if(isDefaultFpga):
             self.cls_modules = [rp.HK, rp.AMS, rp.Scope, rp.Sampler, rp.Asg0, rp.Asg1] + \
-                      [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 3 + [rp.Trig] + [ rp.IIR]# + [rp.linearizer] + [rp.Ramp]
+                      [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 3 + [rp.Trig] + [ rp.IIR] + [rp.linearizer] + [rp.Ramp] * 2
         else:
             self.cls_modules = [rp.HK, rp.AmsNouveau, rp.PidNouveau, rp.PidNouveau]
         self.logger = logging.getLogger(name=__name__)
@@ -475,8 +475,8 @@ class RedPitaya(object):
         self.client = redpitaya_client.DummyClient()
         self.makemodules()
 
-    def makemodule(self, name, cls):
-        module = cls(self, name)
+    def makemodule(self, name, cls, index):
+        module = cls(self, name, index)
         setattr(self, name, module)
         self.modules[name] = module
 
@@ -484,9 +484,9 @@ class RedPitaya(object):
         """
         Automatically generates modules from the list RedPitaya.cls_modules
         """
-        names = get_unique_name_list_from_class_list(self.cls_modules)
-        for cls, name in zip(self.cls_modules, names):
-            self.makemodule(name, cls)
+        names, indexes = get_unique_name_list_from_class_list(self.cls_modules)
+        for cls, name, index in zip(self.cls_modules, names, indexes):
+            self.makemodule(name, cls, index)
 
     def make_a_slave(self, port=None, monitor_server_name=None, gui=False):
         if port is None:

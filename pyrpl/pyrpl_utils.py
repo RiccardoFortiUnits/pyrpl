@@ -37,19 +37,22 @@ def get_unique_name_list_from_class_list(cls_list):
     # e.g. all_names = ['hk, ..., 'pwm', 'pwm', ...
     all_names = [cls.__name__.lower() for cls in cls_list]
     final_names = []
+    indexes = []
     for name in all_names:
         # how many times does the name occur?
         occurences = all_names.count(name)
         if occurences == 1:
             # for single names, leave as-is
             final_names.append(name)
+            indexes.append(0)
         else:
             # for multiple name, assign name+str(lowest_free_number)
             for i in range(occurences):
                 if not name+str(i) in final_names:
                     final_names.append(name+str(i))
+                    indexes.append(i)
                     break
-    return final_names
+    return final_names, indexes
 
 
 def get_class_name_from_module_name(module_name):

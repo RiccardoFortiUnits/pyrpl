@@ -41,7 +41,7 @@ inputOrders = [
 	"iq0", "iq1", "iq2", "iq2_2", 
 	"pid0", "pid1", "pid2", 
 	"asg0", "asg1", 
-	"lin", "ramp", 
+	"linearizer", "ramp0", "ramp1", 
 	"trig", "iir", 
 	"off", ]
 outputOrders = [
@@ -275,13 +275,13 @@ class DspModule(HardwareModule, SignalModule):
 		r.iq0.output_direct = 'out1'
 	"""
 
-	def __init__(self, rp, name):
+	def __init__(self, rp, name, index = 0):
 		try:
 			self._number = DSP_INPUTS[name]
 		except KeyError:
 			self._number = DSP_ONLY_OUTPUTS[name]
 		self.addr_base = dsp_addr_base(name)
-		super(DspModule, self).__init__(rp, name)
+		super(DspModule, self).__init__(rp, name, index)
 
 	_delay = 0  # delay of the module from input to output_signal (in cycles)
 

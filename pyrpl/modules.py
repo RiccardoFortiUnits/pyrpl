@@ -732,13 +732,14 @@ class HardwareModule(Module):
 
     parent = None  # parent will be redpitaya instance
 
-    def __init__(self, parent, name=None):
+    def __init__(self, parent, name=None, index = 0):
         """ Creates the prototype of a RedPitaya Module interface
 
         if no name provided, will use cls.name
         """
         self._client = parent.client
         self._addr_base = self.addr_base
+        self._index = index
         self._rp = parent
         super(HardwareModule, self).__init__(parent, name=name)
         #self.__doc__ = "Available registers: \r\n\r\n" + self.help()
@@ -766,17 +767,22 @@ class HardwareModule(Module):
                                  "'frequency_correction'. ", self.name)
             return 1.0
 
-    def _reads(self, addr, length):
-        return self._client.reads(self._addr_base + addr, length)
+    def _reads(self, addr, length, addAddressBase = True):
+        if addAddressBase:
+            return self._client.reads(self._addr_base + addr, length)
+        return self._client.reads(addr, length)
 
-    def _writes(self, addr, values):
-        self._client.writes(self._addr_base + addr, values)
+    def _writes(self, addr, values, addAddressBase = True):
+        if addAddressBase:
+            self._client.writes(self._addr_base + addr, values)
+        else:
+            self._client.writes(addr, values)
 
-    def _read(self, addr):
-        return int(self._reads(addr, 1)[0])
+    def _read(self, addr, addAddressBase = True):
+        return int(self._reads(addr, 1, addAddressBase)[0])
 
-    def _write(self, addr, value):
-        self._writes(addr, [int(value)])
+    def _write(self, addr, value, addAddressBase = True):
+        self._writes(addr, [int(value)], addAddressBase)
 
     def _to_pyint(self, v, bitlength=14):
         v = v & (2 ** bitlength - 1)

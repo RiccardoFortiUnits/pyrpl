@@ -164,8 +164,8 @@ def make_asg(channel=0):
         output_directs = None
         addr_base = 0x40200000
 
-        def __init__(self, parent, name=None):
-            super(Asg, self).__init__(parent, name=name)
+        def __init__(self, parent, name=None, index = 0):
+            super(Asg, self).__init__(parent, name=name, index=index)
             self._counter_wrap = self._default_counter_wrap
             self._writtendata = np.zeros(self.data_length)
 

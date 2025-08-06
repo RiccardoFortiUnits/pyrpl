@@ -51,7 +51,9 @@ should not be used.
 *************************************************************/
 
 
-(* use_dsp = "yes" *) module red_pitaya_dsp(
+(* use_dsp = "yes" *) module red_pitaya_dsp#(
+	parameter version = "peaks"
+	)(
    // signals
    input                 clk_i           ,  //!< processing clock
    input                 rstn_i          ,  //!< processing reset - active low
@@ -102,50 +104,27 @@ should not be used.
 );
 
 
-
-///////////////////////////////////// /*			input					output						*/
-///////////////////////////////////// localparam	PID0		= 0			/*modules use both input and output*/;
-///////////////////////////////////// localparam	PID1		= 1			/*modules use both input and output*/;
-///////////////////////////////////// localparam	PID2		= 2			/*modules use both input and output*/;
-///////////////////////////////////// localparam	TRIG		= 3			/*modules use both input and output*/;
-///////////////////////////////////// localparam	LIN			= 5			/*modules use both input and output*/;
-///////////////////////////////////// localparam	RAMP		= 6			/*modules use both input and output*/;
-///////////////////////////////////// localparam	ASG0		= 7,		SCOPE1 					= 7;
-///////////////////////////////////// localparam	ASG1		= 8,		SCOPE2 					= 8;
-///////////////////////////////////// localparam	IN1		= 9,		PWM0					= 9;
-///////////////////////////////////// localparam	IN2		= 10,		PWM1					= 10;
-///////////////////////////////////// localparam	OUT1		= 11,		DIG0				= 11;
-///////////////////////////////////// localparam	OUT2		= 12,		DIG1				= 12;
-///////////////////////////////////// localparam	PEAK1		= 13,		ASG_AMPL0				= 13;
-///////////////////////////////////// localparam	PEAK2		= 14,		ASG_AMPL1				= 14;
-///////////////////////////////////// localparam	PEAK3		= 15,		PID0_SETPOINT_SIGNAL	= 15;
-///////////////////////////////////// localparam	PEAK_IDX1	= 16,		PID1_SETPOINT_SIGNAL	= 16;
-///////////////////////////////////// localparam	PEAK_IDX2	= 17,		PID2_SETPOINT_SIGNAL	= 17;
-///////////////////////////////////// localparam	PEAK_IDX3	= 18 									;
-///////////////////////////////////// localparam nOfDSP_outputs = 19, 		nOfDSP_inputs = 18;
-///////////////////////////////////// localparam MODULES = 7;
-///////////////////////////////////// localparam nOfDSP_directOutputs = 7;//directOutputs are the outputs tha can be outputed to the DACs
-
 /*			arrivingFrom						goingTo						*/
 /*§§#§§*/
 localparam	PID0					= 0;			/*modules use both input and outpt ;*/
 localparam	PID1					= 1;			/*modules use both input and outpt ;*/
 localparam	PID2					= 2;			/*modules use both input and outpt ;*/
-localparam	LIN						= 3;			/*modules use both input and outpt ;*/
-localparam	RAMP					= 4;			/*modules use both input and outpt ;*/
-localparam	ASG0					= 5;		localparam	SCOPE1 					= 5;
-localparam	ASG1					= 6;		localparam	SCOPE2 					= 6;
-localparam	IN1						= 7;		localparam	DIG0					= 7;
-localparam	IN2						= 8;		localparam	DIG1					= 8;
-localparam	OUT1					= 9;		localparam	ASG_AMPL0				= 9;
-localparam	OUT2					= 10;		localparam	ASG_AMPL1				= 10;
-										/*;*/	localparam	PID0_SETPOINT_SIGNAL	= 11;
-										/*;*/	localparam	PID1_SETPOINT_SIGNAL	= 12;
-										/*;*/	localparam	PID2_SETPOINT_SIGNAL	= 13;
+localparam	LINEARIZER				= 3;			/*modules use both input and outpt ;*/
+localparam	RAMP0					= 4;			/*modules use both input and outpt ;*/
+localparam	RAMP1					= 5;			/*modules use both input and outpt ;*/
+localparam	ASG0					= 6;		localparam	SCOPE1 					= 6;
+localparam	ASG1					= 7;		localparam	SCOPE2 					= 7;
+localparam	IN1						= 8;		localparam	DIG0					= 8;
+localparam	IN2						= 9;		localparam	DIG1					= 9;
+localparam	OUT1					= 10;		localparam	ASG_AMPL0				= 10;
+localparam	OUT2					= 11;		localparam	ASG_AMPL1				= 11;
+										/*;*/	localparam	PID0_SETPOINT_SIGNAL	= 12;
+										/*;*/	localparam	PID1_SETPOINT_SIGNAL	= 13;
+										/*;*/	localparam	PID2_SETPOINT_SIGNAL	= 14;
 /*§§#§§*/
-localparam nOfDSP_outputs = 14, 		nOfDSP_inputs = 11;
-localparam MODULES = 7;
-localparam nOfDSP_directOutputs = 7;//directOutputs are the outputs tha can be outputed to the DACs
+localparam nOfDSP_outputs = 15, 		nOfDSP_inputs = 12;
+localparam MODULES = 8;
+localparam nOfDSP_directOutputs = 10;//directOutputs are the outputs tha can be outputed to the DACs
 
 localparam LOG_INPUT_MODULES = $clog2(nOfDSP_inputs);
 localparam LOG_OUTPUT_MODULES = $clog2(nOfDSP_outputs);
@@ -157,7 +136,7 @@ initial begin
    if (LOG_OUTPUT_MODULES > 4)begin
         $error("LOG_OUTPUT_MODULES is too high, the current memory architecture does not allow for a number higher than 4. you would need to change the memory structure");
    end
-   if(NONE <= nOfDSP_outputs)begin
+   if(NONE <= nOfDSP_inputs)begin
         $error("nOfDSP_outputs is too high, there's no space for index NONE");
    end
 end
@@ -326,7 +305,7 @@ end
 // assign diff_input_signal[1] = diff_output_signal[0]; // difference input of PID1 is PID0
 // assign diff_input_signal[2] = {14{1'b0}};      // difference input of PID2 is zero
 
-generate for (j = PID0; j < LIN; j = j+1) begin
+generate for (j = PID0; j < LINEARIZER; j = j+1) begin
    red_pitaya_pid_block i_pid (
      // data
      .clk_i        (  clk_i          ),  // clock
@@ -350,57 +329,63 @@ end
 endgenerate
 
 // segmented function, for linearizations
-// generate 
-// 	for (j = LIN; j < RAMP; j = j+1) begin
+generate 
+	if(version == "ramp&lin")begin
+		for (j = LINEARIZER; j < RAMP0; j = j+1) begin
 
-//     segmentedFunction#(
-//         .nOfEdges          (8),
-//         .totalBits_IO      (14),
-//         .fracBits_IO       (0),
-//         .totalBits_m       (20),
-//         .fracBits_m        (14),
-//         .areSignalsSigned  (1)
-//     )sf(
-//         .clk           (clk_i),
-//         .reset         (!rstn_i),
-//         .in            (signal_goingTo [j]),
-//         .out           (signal_arrivingFrom[j]),
-        
-//         //communincation with PS
-//         .addr ( sys_addr[16-1:0] ),
-//         .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-//         .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-//         .ack  ( module_ack[j] ),
-//         .rdata (module_rdata[j]),
-//         .wdata (sys_wdata)
-//     );
-   
-// end endgenerate
+			segmentedFunction#(
+				.nOfEdges          (8),
+				.totalBits_IO      (14),
+				.fracBits_IO       (0),
+				.totalBits_m       (20),
+				.fracBits_m        (14),
+				.areSignalsSigned  (1)
+			)sf(
+				.clk           (clk_i),
+				.reset         (!rstn_i),
+				.in            (signal_goingTo [j]),
+				.out           (signal_arrivingFrom[j]),
+				
+				//communincation with PS
+				.addr ( sys_addr[16-1:0] ),
+				.wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+				.ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+				.ack  ( module_ack[j] ),
+				.rdata (module_rdata[j]),
+				.wdata (sys_wdata)
+			);
+		end   
+	end 
+endgenerate
 
 // sequence of ramp functions, for arbitrary functions with strict timings (useful to make sequences of ramps with very different time frames, if you tried to do this with the normal asg, the very fast ramps would not be that precise)
-// generate for (j = RAMP; j < MODULES; j = j+1) begin
+generate
+	if(version == "ramp&lin")begin
+		for (j = RAMP0; j < ASG0; j = j+1) begin
 
-//     ramp#(
-//         .nOfRamps                   (8),
-//         .data_size                  (14),
-//         .time_size                  (24),
-//         .inhibitionTimeForTrigger   (500)//4e-6s
-//     )rmp(
-//         .clk      (clk_i),
-//         .reset    (!rstn_i),
-//         .trigger  (ramp_trigger),
-        
-//         .out           (signal_arrivingFrom[j]),
-//         //communincation with PS
-//         .addr ( sys_addr[16-1:0] ),
-//         .wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
-//         .ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
-//         .ack  ( module_ack[j] ),
-//         .rdata (module_rdata[j]),
-//         .wdata (sys_wdata)
-//     );
-   
-// end endgenerate
+			ramp#(
+				.nOfRamps                   (8),
+				.data_size                  (14),
+				.time_size                  (24),
+				.inhibitionTimeForTrigger   (500)//4e-6s
+			)rmp(
+				.clk      (clk_i),
+				.reset    (!rstn_i),
+				.trigger  (ramp_trigger),
+				
+				.out           (signal_arrivingFrom[j]),
+				//communincation with PS
+				.addr ( sys_addr[16-1:0] ),
+				.wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+				.ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+				.ack  ( module_ack[j] ),
+				.rdata (module_rdata[j]),
+				.wdata (sys_wdata)
+			);
+		
+		end
+	end
+endgenerate
 
 endmodule
 

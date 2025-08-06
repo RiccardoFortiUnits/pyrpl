@@ -29,16 +29,19 @@ class rampWidget(ModuleWidget):
         self.config_layout = QtWidgets.QHBoxLayout()
         self.main_layout.addLayout(self.config_layout)
 
+        self.output_direct = self.attribute_widgets['output_direct']
         self.idleConfig_widget = self.attribute_widgets['idleConfiguration']
         self.useMultTriggers_widget = self.attribute_widgets['useMultipleTriggers']
         self.defaultValue_widget = self.attribute_widgets['defaultValue']
         self.usedRamps_widget = self.attribute_widgets['usedRamps']
         self.external_trigger_widget = self.attribute_widgets['external_trigger_pin']
+        self.attribute_layout.removeWidget(self.output_direct)
         self.attribute_layout.removeWidget(self.idleConfig_widget)
         self.attribute_layout.removeWidget(self.useMultTriggers_widget)
         self.attribute_layout.removeWidget(self.defaultValue_widget)
         self.attribute_layout.removeWidget(self.usedRamps_widget)
         self.attribute_layout.removeWidget(self.external_trigger_widget)
+        self.config_layout.addWidget(self.output_direct)
         self.config_layout.addWidget(self.idleConfig_widget)
         self.config_layout.addWidget(self.useMultTriggers_widget)
         self.config_layout.addWidget(self.defaultValue_widget)

@@ -355,10 +355,10 @@ class Pyrpl(object):
         # software modules are Managers for various modules plus those defined in the config file
         # soft_mod_names = ['Asgs', 'Iqs', 'Pids', 'Scopes', 'Iirs', 'Trigs','Pwms',
         #                 'Hks', 'Linearizers', 'Ramps'] + self.c.pyrpl.modules
-        soft_mod_names = ['Asgs', 'Pids', 'Scopes', 'Trigs','Pwms', 'Hks'] + self.c.pyrpl.modules
+        soft_mod_names = ['Asgs', 'Pids', 'Scopes', 'Trigs','Pwms', 'Hks', 'Linearizers', 'Ramps'] + self.c.pyrpl.modules
         module_classes = [get_module(cls_name)
                           for cls_name in soft_mod_names]
-        module_names = pyrpl_utils.\
+        module_names, indexes = pyrpl_utils.\
             get_unique_name_list_from_class_list(module_classes)
         for cls, name in zip(module_classes, module_names):
             # some modules have generator function, e.g. Lockbox
