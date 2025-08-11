@@ -53,7 +53,7 @@ class TestClass(TestPyrpl):
                       input1_baseband="asg0",
                       trace_average=1)
             sa.stop()
-            asg = self.pyrpl.rp.asg0
+            asg = self.redpitaya.asg0
             asg.setup(frequency=1e5,
                       amplitude=1.0,
                       trigger_source='immediately',
@@ -85,17 +85,17 @@ class TestClass(TestPyrpl):
         applied for internal signals (however, the sinc correction is
         applied in practice).
         """
-        self.asg = self.pyrpl.rp.asg0
+        self.asg = self.redpitaya.asg0
 
         # 1. Test flatness for small spans with a bandpass filter to avoid
         # aliasing
 
-        self.asg = self.pyrpl.rp.asg0
+        self.asg = self.redpitaya.asg0
         self.asg.setup(amplitude=0.4,
                        waveform='noise',
                        trigger_source='immediately')
 
-        self.iq = self.pyrpl.rp.iq0
+        self.iq = self.redpitaya.iq0
         self.iq.setup(input=self.asg,
                 acbandwidth=10,
                 gain=1.0,
@@ -163,12 +163,12 @@ class TestClass(TestPyrpl):
         Measure the transfer function of an iq filter by measuring the
         cross-spectrum between white-noise input and output
         """
-        self.asg = self.pyrpl.rp.asg0
+        self.asg = self.redpitaya.asg0
         self.asg.setup(amplitude=0.4,
                        waveform='noise',
                        trigger_source='immediately')
 
-        self.iq = self.pyrpl.rp.iq0
+        self.iq = self.redpitaya.iq0
 
         # for some reason, the theoretical transfer function calculated with
         # the setting below seems wrong...
@@ -217,7 +217,7 @@ class TestClass(TestPyrpl):
                                               input="asg0",
                                               trace_average=1)
             self.pyrpl.spectrumanalyzer.stop()
-            asg = self.pyrpl.rp.asg0
+            asg = self.redpitaya.asg0
             asg.setup(frequency=1e5,
                       amplitude=1,
                       trigger_source='immediately',

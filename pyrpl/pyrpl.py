@@ -306,35 +306,47 @@ class Pyrpl(object):
             self.c.pyrpl.loglevel = kwargs.pop('loglevel')
         pyrpl_utils.setloglevel(level=self.c.pyrpl.loglevel,
                                 loggername='pyrpl')
-        # initialize RedPitaya object with the configured or default parameters
-        self.c._get_or_create('redpitaya')
-        self.c.redpitaya._update(kwargs)
-        self.name = pyrplbranch.name
-        self.rp = RedPitaya(config=self.c)
-        self.redpitaya = self.rp  # alias
-        self.rp.parent=self
         self.widgets = [] # placeholder for widgets
         # create software modules...
         self.load_software_modules()
-        # load all setup_attributes for modules that do not have an owner
-        for module in self.software_modules + self.hardware_modules:
+        for module in self.software_modules:
             if module.owner is None:
                 module._load_setup_attributes()
-                # try:
-                #     module._load_setup_attributes()
-                # except BaseException as e:
-                #     self.logger.error('Something went wrong when loading the '
-                #                       'stored setup_attributes of module "%s". '
-                #                       'If you do not know what this means, you should '
-                #                       'be able to fix this error by deleting the '
-                #                       'corresponding section "%s" in your config file %s. '
-                #                       'Error message: %s',
-                #                       module.name, module.name, self.c._filename, e)
-                #     raise e
+        
+        self.rps = {}
+        for device in list(self.c._keys()):
+            if device != "pyrpl":
+                if hasattr(self.c[device], "redpitaya"):
+                    self.addRedPitaya(device, reloadGUI = False)
+        if len(self.rps) == 0:
+            self.addRedPitaya(None, reloadGUI = False)
+        self.show_gui()
+        
+    def addRedPitaya(self, name = None, reloadGUI = True, **configs):
         # make the gui if applicable
         if self.c.redpitaya.gui:
             self.show_gui()
-
+        if name is None:
+            renameDevice = True
+            name = "_unnamed_"
+        else:
+            renameDevice = False
+        self.c._get_or_create(f'{name}.redpitaya')
+        self.c[name].redpitaya._update(configs)
+        self.name = self.c.pyrpl.name
+        self.rps[name] = RedPitaya(config=self.c[name])
+        self.redpitaya = self.rps  # alias
+        self.rps[name].parent=self
+        # initialize RedPitaya object with the configured or default parameters
+        self.rps[name].load_software_modules()
+        if renameDevice:
+            newName = self.c[name].redpitaya.hostname.replace(".","_")
+            self.c[name]._rename(newName)
+            self.rps[newName] = self.rps.pop(name)
+        if reloadGUI:
+            self._reloadGUI()
+        
+        
     def show_gui(self):
         if len(self.widgets) == 0:
             widget = self._create_widget()
@@ -355,7 +367,7 @@ class Pyrpl(object):
         # software modules are Managers for various modules plus those defined in the config file
         # soft_mod_names = ['Asgs', 'Iqs', 'Pids', 'Scopes', 'Iirs', 'Trigs','Pwms',
         #                 'Hks', 'Linearizers', 'Ramps'] + self.c.pyrpl.modules
-        soft_mod_names = ['Asgs', 'Pids', 'Scopes', 'Trigs','Pwms', 'Hks', 'Linearizers', 'Ramps'] + self.c.pyrpl.modules
+        soft_mod_names = self.c.pyrpl.modules
         module_classes = [get_module(cls_name)
                           for cls_name in soft_mod_names]
         module_names, indexes = pyrpl_utils.\
@@ -383,8 +395,8 @@ class Pyrpl(object):
         """
         List of all hardware modules loaded in this configuration.
         """
-        if self.rp is not None:
-            return list(self.rp.modules.values())
+        if self.rps is not None:
+            return [module for dev in self.rps.values() for module in dev.modules.values()]
         else:
             return []
 
@@ -399,7 +411,13 @@ class Pyrpl(object):
         widget = PyrplWidget(self)
         self.widgets.append(widget)
         return widget
-
+    def _reloadGUI(self):
+        for widget in self.widgets:
+            widget._clear()
+        while len(self.widgets)>0:  # Close all widgets
+            w = self.widgets.pop()
+            del w
+        self.show_gui()
     def _clear(self):
         """
         kill all timers and closes the connection to the redpitaya

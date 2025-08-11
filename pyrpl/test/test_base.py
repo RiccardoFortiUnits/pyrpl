@@ -42,7 +42,7 @@ class TestPyrpl(object):
         cls.pyrpl = Pyrpl(config=cls.tmp_config_file,
                           source=cls.source_config_file)
         # self.pyrpl.create_widget() # create a second widget to be sure
-        cls.r = cls.pyrpl.rp
+        cls.r = cls.redpitaya
         # get an estimate of the read/write time
         N = 10
         t0 = time()

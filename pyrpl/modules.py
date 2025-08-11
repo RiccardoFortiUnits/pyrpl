@@ -458,6 +458,26 @@ class Module(with_metaclass(ModuleMetaClass, object)):
                                          "that is parent of the module %s." %
                                          (self.name))
         return parent
+    @property
+    def redpitaya(self):
+        """
+        Recursively looks through parent modules until redpitaya instance is
+        reached. use it for redpitaya modules
+        """
+        from .redpitaya import RedPitaya
+        parent = self.parent
+        passedparents = set()
+        while (not isinstance(parent, RedPitaya)):
+            # remember the parents that were tried before to avoid circles
+            passedparents.add(parent)
+            # go up in hierarchy
+            parent = parent.parent
+            # check if this parent has occured before in order to avoid an infinite loop
+            if parent in passedparents:
+                raise ExpectedPyrplError("Unable to find a Redpitaya instance "
+                                         "that is parent of the module %s." %
+                                         (self.name))
+        return parent
 
     def get_setup_attributes(self):
         """

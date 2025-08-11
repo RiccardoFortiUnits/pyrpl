@@ -80,7 +80,7 @@
  * 
  */
 
-(* use_dsp = "yes" *) module red_pitaya_top (
+(* use_dsp = "yes" *) module red_pitaya_top #(parameter versionIndex=-1)(
    // PS connections
    inout  [54-1: 0] FIXED_IO_mio       ,
    inout            FIXED_IO_ps_clk    ,
@@ -137,8 +137,11 @@
    output [ 8-1: 0] led_o       
 );
 
-localparam version = 1 ? "ramp&lin" : "peaks";
+localparam version = versionIndex ? "ramp&lin" : "peaks";
 
+initial begin
+    $info("_______version________ %s", version);
+end
 
 //---------------------------------------------------------------------------------
 //

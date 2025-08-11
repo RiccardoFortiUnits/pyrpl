@@ -5,6 +5,7 @@ from ..pyrpl_utils import sorted_dict, recursive_getattr, recursive_setattr
 from ..errors import ExpectedPyrplError
 import math
 import re
+import os
 
 def parse_verilog_indexes(verilog_path):
 	with open(verilog_path, 'r') as f:
@@ -34,7 +35,9 @@ def parse_verilog_indexes(verilog_path):
 				name, idx = m.groups()
 				output_dict[str.lower(name)] = int(idx)
 	return input_dict, output_dict
-DSP_INPUTS_unordered, DSP_ONLY_OUTPUTS_unordered = parse_verilog_indexes("../fpga/project/pyrpl.srcs/sources_1/imports/rtl/red_pitaya_dsp.v")
+
+currentFolder = os.path.dirname(os.path.realpath(__file__))
+DSP_INPUTS_unordered, DSP_ONLY_OUTPUTS_unordered = parse_verilog_indexes(f"{currentFolder}/../fpga/project/pyrpl.srcs/sources_1/imports/rtl/red_pitaya_dsp.v")
 inputOrders = [
 	"in1", "in2", "out1", "out2", 
 	"peak1", "peak2", "peak3", "peakIndex1", "peakIndex2", "peakIndex3", 
@@ -161,7 +164,7 @@ class InputSelectProperty(SelectProperty):
 	def validate_and_normalize(self, obj, value):
 		if isinstance(value, SignalModule):
 			# try to construct the path from the pyrpl module
-			pyrpl, rp = value.pyrpl, value.pyrpl.rp
+			pyrpl, rp = value.pyrpl, value.redpitaya
 			name = value.name
 			fullname = name
 			module = value.parent

@@ -27,23 +27,23 @@ class TestModuleWidgets(TestPyrpl):
     def test_scope_widget(self):
         if self.pyrpl is None:
             return
-        widget = self.pyrpl.rp.scope._create_widget()
+        widget = self.redpitaya.scope._create_widget()
         for attr in widget.attribute_widgets:
             if isinstance(attr, SelectAttributeWidget):
                 for option in attr.options:
                     to_set = attr.widget.findText(str(option))
                     # it would be a pain to select an element with a QTest
                     attr.widget.setCurrentIndex(to_set)
-                    assert (getattr(self.pyrpl.rp.scope, attr.attribute_name) == option)
+                    assert (getattr(self.redpitaya.scope, attr.attribute_name) == option)
             elif isinstance(attr, BoolAttributeWidget):
                 for i in range(2):
                     QTest.mouseClick(attr.widget, Qt.LeftButton)
-                    assert (getattr(self.pyrpl.rp.scope, attr.attribute_name) ==
+                    assert (getattr(self.redpitaya.scope, attr.attribute_name) ==
                         (attr.widget.checkState() == 2))
             elif isinstance(attr, NumberAttributeWidget):
                 for i in range(3):
                     attr.widget.stepUp()
-                    assert(abs(getattr(self.pyrpl.rp.scope, attr.attribute_name) -
+                    assert(abs(getattr(self.redpitaya.scope, attr.attribute_name) -
                                attr.widget.value()) < 0.0001)
 
     def test_asg_gui(self):

@@ -128,7 +128,7 @@ class OutputSignal(Signal):
         """
         ival, max, min = self.pid.ival, self.max_voltage, \
                          self.min_voltage
-        sample = getattr(self.pyrpl.rp.sampler, self.pid.name)
+        sample = getattr(self.redpitaya.sampler, self.pid.name)
         # criterion for saturation: integrator value saturated
         # and current value (including pid) as well
         if (ival > max or ival < min) and (sample > max or sample < min):
@@ -141,12 +141,12 @@ class OutputSignal(Signal):
         self.pid.min_voltage = self.min_voltage
         if self.output_channel.startswith('out'):
             self.pid.output_direct = self.output_channel
-            for pwm in [self.pyrpl.rp.pwm0, self.pyrpl.rp.pwm1]:
+            for pwm in [self.redpitaya.pwm0, self.redpitaya.pwm1]:
                 if pwm.input == self.pid.name:
                     pwm.input = 'off'
         elif self.output_channel.startswith('pwm'):
             self.pid.output_direct = 'off'
-            pwm = getattr(self.pyrpl.rp, self.output_channel)
+            pwm = getattr(self.redpitaya, self.output_channel)
             pwm.input = self.pid
         else:
             raise NotImplementedError(
@@ -233,7 +233,7 @@ class OutputSignal(Signal):
             self.pid.i = 0
             self.pid.setpoint = input.expected_signal(setpoint) + input.calibration_data._analog_offset
             if self.extra_module != 'None':
-                module = getattr(self.pyrpl.rp, self.extra_module)
+                module = getattr(self.redpitaya, self.extra_module)
                 module.input = input.signal()
                 self.pid.input = module
                 if self.extra_module=='iir':
@@ -329,7 +329,7 @@ class OutputSignal(Signal):
             frequency_correction=self.pid._frequency_correction,
             filter_values=self.additional_filter)
         if self.extra_module == 'iir':
-            result *= self.pyrpl.rp.iir.transfer_function(freqs)
+            result *= self.redpitaya.iir.transfer_function(freqs)
         return result
 
     def transfer_function(self, freqs):
@@ -355,7 +355,7 @@ class OutputSignal(Signal):
             frequency_correction=self.pid._frequency_correction,
             filter_values=self.additional_filter)
         if self.extra_module=='iir':
-            result*=self.pyrpl.rp.iir.transfer_function(freqs)/self.pyrpl.rp.iir.gain
+            result*=self.redpitaya.iir.transfer_function(freqs)/self.redpitaya.iir.gain
         return result
 
 

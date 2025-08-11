@@ -143,9 +143,37 @@ class PyrplWidget(QtWidgets.QMainWindow):
         self.menu_modules = self.menuBar().addMenu("Modules")
         self.module_actions = []
 
+        # Add main software modules
         for module in self.parent.software_modules:
             self.add_dock_widget(module._create_widget, module.name)
-        # self.showMaximized()  # maximized by default
+
+        # Add sub-menus for each device in self.parent.rps
+        self.device_menus = {}
+        for device_name, device in self.parent.rps.items():
+            device_menu = self.menu_modules.addMenu(device_name)
+            self.device_menus[device_name] = device_menu
+            for module in getattr(device, "software_modules", []):
+                # Add dock widget for device module
+                self.add_dock_widget(module._create_widget, f"{device_name}.{module.name}")
+                # Create action for the module
+                action = QtWidgets.QAction(module.name, device_menu)
+                action.setCheckable(True)
+                self.module_actions.append(action)
+                device_menu.addAction(action)
+                dock_widget = self.dock_widgets[f"{device_name}.{module.name}"]
+                # Sync menu and widget visibility
+                action.changed.connect(lambda a=action, w=dock_widget: w.setVisible(a.isChecked()))
+                dock_widget.visibilityChanged.connect(lambda v, a=action, w=dock_widget: a.setChecked(w.isVisible()))
+                dock_widget.visibilityChanged.connect(self.hide_centralbutton)
+                self.set_background_color(dock_widget)
+        # Add "Add new device" menu
+        self.menu_add_device = self.menuBar().addMenu("Add new device")
+        self.action_add_redpitaya = QtWidgets.QAction("RedPitaya", self)
+        self.menu_add_device.addAction(self.action_add_redpitaya)
+        def addPitaya(**args):
+            pyrpl_instance.addRedPitaya(name = None, reloadGUI = True)
+        self.action_add_redpitaya.triggered.connect(addPitaya)
+
 
         self.centralwidget = QtWidgets.QFrame()
         self.setCentralWidget(self.centralwidget)

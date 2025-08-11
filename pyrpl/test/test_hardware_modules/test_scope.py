@@ -120,7 +120,7 @@ class TestScope(TestPyrpl):
         """
         Make sure the scope returns to rolling mode after being freed
         """
-        self.pyrpl.rp.scope.setup(duration=0.2,
+        self.redpitaya.scope.setup(duration=0.2,
                             trigger_delay=0.,
                             trigger_source='immediately',
                             input1='in1',
@@ -128,10 +128,10 @@ class TestScope(TestPyrpl):
                             ch1_active=True,
                             ch2_active=True,
                             rolling_mode=True)
-        #self.pyrpl.rp.scope.run_continuous = True
-        self.pyrpl.rp.scope.continuous()
+        #self.redpitaya.scope.run_continuous = True
+        self.redpitaya.scope.continuous()
         sleep(1)
-        assert self.pyrpl.rp.scope.run_continuous
+        assert self.redpitaya.scope.run_continuous
         with self.pyrpl.scopes.pop("myapplication") as sco:
             sco.setup(duration=0.5,
                       trigger_delay=0.,
@@ -144,14 +144,14 @@ class TestScope(TestPyrpl):
             sco.stop()
             assert not self.data_changing()
             curve = sco.single()
-            assert not self.pyrpl.rp.scope.run_continuous
+            assert not self.redpitaya.scope.run_continuous
             print('exiting')
-        assert self.pyrpl.rp.scope.run_continuous
+        assert self.redpitaya.scope.run_continuous
         assert self.data_changing()
         sleep(1)
         assert self.data_changing()  # Make sure scope is not blocked
             # after one buffer loop
-        self.pyrpl.rp.scope.stop()
+        self.redpitaya.scope.stop()
 
     def test_no_write_in_config(self):
         """
@@ -159,7 +159,7 @@ class TestScope(TestPyrpl):
         even in running mode.
         """
         # check whether something else is writing continuously to config file
-        self.pyrpl.rp.scope.stop()
+        self.redpitaya.scope.stop()
         sleep(1.0)
         old = self.pyrpl.c._save_counter
         sleep(1.0)
@@ -167,21 +167,21 @@ class TestScope(TestPyrpl):
         assert (old == new), (old, new, "scope is not the reason")
         # next, check whether the scope does this
         for rolling_mode in (True, False):
-            self.pyrpl.rp.scope.setup(duration=0.005,
+            self.redpitaya.scope.setup(duration=0.005,
                                       trigger_delay=0.,
                                       input1='in1',
                                       ch1_active=True,
                                       ch2_active=True,
                                       rolling_mode=True,
                                       trace_average=1)
-            self.pyrpl.rp.scope.continuous()
+            self.redpitaya.scope.continuous()
             sleep(1.0)
             APP.processEvents()
             old = self.pyrpl.c._save_counter
             sleep(1.0)
             APP.processEvents()
             new = self.pyrpl.c._save_counter
-            self.pyrpl.rp.scope.stop()
+            self.redpitaya.scope.stop()
             assert(old==new), (old, new, "scope is the problem", rolling_mode)
 
     def test_save_curve_old(self):
@@ -207,8 +207,8 @@ class TestScope(TestPyrpl):
         self.curves += [curve1, curve2]  # for later deletion
 
     def test_save_curve(self):
-        self.pyrpl.rp.scope.stop()
-        self.pyrpl.rp.scope.setup(duration=0.005,
+        self.redpitaya.scope.stop()
+        self.redpitaya.scope.setup(duration=0.005,
                                   trigger_delay=0.,
                                   input1='in1',
                                   ch1_active=True,
@@ -216,9 +216,9 @@ class TestScope(TestPyrpl):
                                   rolling_mode=True,
                                   trace_average=1,
                                   running_state="stopped")
-        self.pyrpl.rp.scope.single()
-        curves = self.pyrpl.rp.scope.save_curve()
+        self.redpitaya.scope.single()
+        curves = self.redpitaya.scope.save_curve()
         for i in range(2):
             for j in range(2):
-                assert len(curves[i].data[j]) == self.pyrpl.rp.scope.data_length
+                assert len(curves[i].data[j]) == self.redpitaya.scope.data_length
         self.curves += curves  # makes sure teardown will delete the curves

@@ -10,13 +10,13 @@ from pyrpl.test.test_base import TestPyrpl
 class TestScope(TestPyrpl):
     def setup(self):
         self.asg = self.pyrpl.asgs.pop("trigtest")
-        self.t = self.pyrpl.rp.trig
+        self.t = self.redpitaya.trig
 
     def teardown(self):
         self.pyrpl.asgs.free(self.asg)
 
     def test_trigger(self):
-        self.asg = self.pyrpl.rp.asg0
+        self.asg = self.redpitaya.asg0
         # asg off, confirm trigger remains armed
         self.asg.setup(amplitude=0,
                        offset=0.5,
@@ -40,12 +40,12 @@ class TestScope(TestPyrpl):
                        trigger_source='immediately')
         assert self.t.armed == False
         # confirm that trigger outputs the right phase
-        asg0phase = self.t.output_signal_to_phase(self.pyrpl.rp.sampler.trig)
+        asg0phase = self.t.output_signal_to_phase(self.redpitaya.sampler.trig)
         assert abs(asg0phase)<=1.0, asg0phase
         # confirm that trigger outputs right phase for neg edge as well
         self.t.trigger_source='neg_edge'
         self.t.armed=True
-        asg0phase = self.t.output_signal_to_phase(self.pyrpl.rp.sampler.trig)
+        asg0phase = self.t.output_signal_to_phase(self.redpitaya.sampler.trig)
         assert abs(asg0phase-180.0)<=1.0, asg0phase
         # test auto_rearm
         self.asg.frequency = 10e6 # do this at high frequency

@@ -20,9 +20,11 @@ from . import redpitaya_client
 from . import hardware_modules as rp
 from .sshshell import SshShell
 from .pyrpl_utils import get_unique_name_list_from_class_list, update_with_typeconversion
-from .memory import MemoryTree
+from .memory import MemoryTree, MemoryBranch
 from .errors import ExpectedPyrplError
 from .widgets.startup_widget import HostnameSelectorWidget
+from .software_modules import get_module
+from . import pyrpl_utils
 
 import logging
 import os
@@ -107,7 +109,7 @@ class RedPitaya(object):
         self.logger = logging.getLogger(name=__name__)
         #self.license()
         # make or retrieve the config file
-        if isinstance(config, MemoryTree):
+        if isinstance(config, MemoryBranch):
             self.c = config
         else:
             self.c = MemoryTree(config)
@@ -117,7 +119,7 @@ class RedPitaya(object):
         # 3. config file
         # 4. command line arguments
         # 5. (if missing information) request from GUI or command-line
-        self.parameters = defaultparameters # BEWARE: By not copying the
+        self.parameters = defaultparameters.copy() # BEWARE: By not copying the
         # dictionary, defaultparameters are modified in the session (which
         # can be advantageous for instance with hostname in unit_tests)
 
@@ -510,3 +512,50 @@ class RedPitaya(object):
         return int(self.client._reads(address, 1))
     def writeRAM(self, address, value):
         self.client._writes(address, [int(value)])
+        
+	
+    @property
+    def hardware_modules(self):
+        """
+        List of all hardware modules loaded in this configuration.
+        """
+        if self.modules is not None:
+            return list(self.modules.values())
+        else:
+            return []
+    def load_software_modules(self):
+        """
+        load all software modules defined as root element of the config file.
+        """
+        self.software_modules = []
+        # software modules are Managers for various modules plus those defined in the config file
+        # soft_mod_names = ['Asgs', 'Iqs', 'Pids', 'Scopes', 'Iirs', 'Trigs','Pwms',
+        #                 'Hks', 'Linearizers', 'Ramps'] + self.c.pyrpl.modules
+        soft_mod_names = ['Asgs', 'Pids', 'Scopes', 'Trigs','Pwms', 'Hks', 'Linearizers', 'Ramps']
+        module_classes = [get_module(cls_name)
+                          for cls_name in soft_mod_names]
+        module_names, indexes = pyrpl_utils.\
+            get_unique_name_list_from_class_list(module_classes)
+        for cls, name in zip(module_classes, module_names):
+            # some modules have generator function, e.g. Lockbox
+            # @classmethod
+            # def make_Lockbox(cls, parent, name): ...
+            try:
+                if hasattr(cls, "_make_"+cls.__name__):
+                    module = getattr(cls, "_make_"+cls.__name__)(self, name)
+                else:
+                    module = cls(self, name)
+            except BaseException as e:
+                self.logger.error('Something went wrong when loading the software module "%s": %s',
+                                  name, e)
+                raise e
+            else:
+                setattr(self, module.name, module)
+                self.software_modules.append(module)
+                self.logger.debug("Created software module %s", name)
+        
+        # load all setup_attributes for modules that do not have an owner
+        for module in self.software_modules + self.hardware_modules:
+            if module.owner is None:
+                module._load_setup_attributes()
+        # make the gui if applicable

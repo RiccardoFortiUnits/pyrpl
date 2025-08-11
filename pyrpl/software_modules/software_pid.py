@@ -90,8 +90,8 @@ class SoftwarePidController(Module):
     _ival = FloatProperty(default=0)
     reset_ival_on_restart = BoolProperty(default=True)
     setpoint = FloatProperty(default=0)
-    input = StringProperty(default='pyrpl.rp.sampler.in1')
-    output = StringProperty(default='pyrpl.rp.asg0.offset')
+    input = StringProperty(default='redpitaya.sampler.in1')
+    output = StringProperty(default='redpitaya.asg0.offset')
     output_max = FloatProperty(default=np.inf)
     output_min = FloatProperty(default=-np.inf)
 

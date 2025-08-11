@@ -125,7 +125,7 @@ class Signal(LockboxModule, SignalModule):
                 t = self.sampler_time
             # get fresh data
             self._lastmean, self._lastrms, self._lastmax, self._lastmin\
-                = self.pyrpl.rp.sampler.stats(self.signal(), t=t)
+                = self.redpitaya.sampler.stats(self.signal(), t=t)
             # subtract analog offset from all non-relative values
             self._lastmean -= self.calibration_data._analog_offset
             self._lastmax -= self.calibration_data._analog_offset

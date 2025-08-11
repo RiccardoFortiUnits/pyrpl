@@ -121,13 +121,13 @@ class TestNA(TestPyrpl):
                           trace_average=1)
             tic = time.time()
             # debug read/write calls with audio output
-            self.pyrpl.rp.client._sound_debug = False
+            self.redpitaya.client._sound_debug = False
             sine(1200, 0.5)
             result = self.na.single_async()
             sleep(0.1)
             # start counting points only after acquisition setup
-            old_read = self.pyrpl.rp.client._read_counter
-            old_write = self.pyrpl.rp.client._write_counter
+            old_read = self.redpitaya.client._read_counter
+            old_write = self.redpitaya.client._write_counter
             sine(1400, 0.5)
             wait(result, 10)
             sine(1500, 0.5)
@@ -136,14 +136,14 @@ class TestNA(TestPyrpl):
             sine(1600, 0.5)
             max_rw_points = self.na.points
             sleep(0.1)
-            print("Reads: %d %d %d. " % (self.pyrpl.rp.client._read_counter, old_read, max_rw_points))
-            assert self.pyrpl.rp.client._read_counter - old_read <= 2*max_rw_points,(self.pyrpl.rp.client._read_counter, old_read, max_rw_points)
+            print("Reads: %d %d %d. " % (self.redpitaya.client._read_counter, old_read, max_rw_points))
+            assert self.redpitaya.client._read_counter - old_read <= 2*max_rw_points,(self.redpitaya.client._read_counter, old_read, max_rw_points)
             # twice because now we also read the# amplitude from the iq module
-            print("Writes: %d %d %d. " % (self.pyrpl.rp.client._write_counter, old_write, max_rw_points))
-            assert self.pyrpl.rp.client._write_counter - old_write <= max_rw_points, \
-                (self.pyrpl.rp.client._write_counter, old_write, max_rw_points)
+            print("Writes: %d %d %d. " % (self.redpitaya.client._write_counter, old_write, max_rw_points))
+            assert self.redpitaya.client._write_counter - old_write <= max_rw_points, \
+                (self.redpitaya.client._write_counter, old_write, max_rw_points)
             sine(1700, 0.5)
-            self.pyrpl.rp.client._sound_debug = False
+            self.redpitaya.client._sound_debug = False
             # check duration
             duration = (time.time() - tic)/self.na.points
             # Allow twice as long with gui

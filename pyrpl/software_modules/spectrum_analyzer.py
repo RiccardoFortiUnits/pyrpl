@@ -353,7 +353,7 @@ class SpectrumAnalyzer(AcquisitionModule):
     @property
     def iq(self):
         if not hasattr(self, '_iq'):
-            self._iq = self.pyrpl.rp.iq2  # can't use the normal pop
+            self._iq = self.redpitaya.iq2  # can't use the normal pop
             # mechanism because we specifically want the customized iq2
             self._iq.owner = self.name
         return self._iq
@@ -383,7 +383,7 @@ class SpectrumAnalyzer(AcquisitionModule):
 
     @property
     def scope(self):
-        return self.pyrpl.rp.scope
+        return self.redpitaya.scope
 
     @property
     def duration(self):

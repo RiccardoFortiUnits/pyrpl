@@ -68,7 +68,7 @@ class TestPidNaIq(TestPyrpl):
         """
         error_threshold = 0.3 # 0.15 is ok for all but -3 MHz filter
         # testing one pid is enough
-        pid = self.pyrpl.rp.pid0
+        pid = self.redpitaya.pid0
         na = self.pyrpl.na
         na.setup(start_freq=10e3,
                  stop_freq=5e6,
@@ -367,7 +367,7 @@ class TestPidNaIq(TestPyrpl):
         """
         tests the differential pid feature of pid0 and pid1
         """
-        rp = self.pyrpl.rp
+        rp = self.redpitaya
         pid0, pid1, pid2 = rp.pid0, rp.pid1, rp.pid2
         for pid in [pid0, pid1, pid2]:
             # we start with all gains off and ival reset, so the output should be 0
@@ -430,7 +430,7 @@ class TestPidNaIq(TestPyrpl):
         """
         tests the sync feature of different pid modules
         """
-        rp = self.pyrpl.rp
+        rp = self.redpitaya
         pids = [rp.pid0, rp.pid1, rp.pid2]
         for pid in pids:
             # we start with all gains off and ival reset, so the output should be 0
@@ -477,7 +477,7 @@ class TestPidNaIq(TestPyrpl):
         """
         tests the sync feature of different iq modules
         """
-        rp = self.pyrpl.rp
+        rp = self.redpitaya
         iqs = [rp.iq0, rp.iq1, rp.iq2]
         for iq in iqs:
             iq.setup(input='iq0',

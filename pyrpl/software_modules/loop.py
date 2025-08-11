@@ -113,16 +113,16 @@ class Loop(Module):
     @property
     def fpga_time(self):
         """ current FPGA time in s since startup """
-        return 8e-9 * self.pyrpl.rp.trig.current_timestamp / \
-               self.pyrpl.rp.frequency_correction \
+        return 8e-9 * self.redpitaya.trig.current_timestamp / \
+               self.redpitaya.frequency_correction \
                - self.loop_start_time
 
     @property
     def trigger_time(self):
         """ FPGA time in s when trigger even occured (same frame of reference
         as self.time())"""
-        return 8e-9 * self.pyrpl.rp.trig.trigger_timestamp / \
-               self.pyrpl.rp.frequency_correction \
+        return 8e-9 * self.redpitaya.trig.trigger_timestamp / \
+               self.redpitaya.frequency_correction \
                - self.loop_start_time
 
 

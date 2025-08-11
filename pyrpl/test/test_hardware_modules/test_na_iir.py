@@ -22,7 +22,7 @@ class TestIir(TestPyrpl):
 
     def test_pz_interface(self):
         """ tests that poles and real/comples_poles remain sync'ed"""
-        iir = self.pyrpl.rp.iir
+        iir = self.redpitaya.iir
         iir.poles = [-1000j-2032, -34343j-3424, -1221, -43254.4]
         assert iir.real_poles == [-1221, -43254.4], iir.real_poles
         assert iir.complex_poles == [1000j-2032, 34343j-3424], \
@@ -64,7 +64,7 @@ class TestIir(TestPyrpl):
         # This test is only to confirm that all of the biquads are working.
         # setup na
         na = self.pyrpl.networkanalyzer
-        iir = self.pyrpl.rp.iir
+        iir = self.redpitaya.iir
         na.setup(start_freq=3e3,
                  stop_freq=1e6,
                  points=301,
@@ -127,7 +127,8 @@ class TestIir(TestPyrpl):
         # setup na
         na = self.pyrpl.networkanalyzer
         self.pyrpl.na = na
-        iir = pyrpl.rp.iir
+        rp = list(pyrpl.rps.values())[0]
+        iir = rp.iir
 
         params = []
         # setting 0

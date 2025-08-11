@@ -211,7 +211,7 @@ class SlowOutputProperty(FloatProperty):
     def get_value(self, obj):
         if obj is None:
             return self
-        return (obj.pyrpl.rp.pid0.ival+1.)*0.9 # Ival goes from -1 to +1 while pwm goes from 0 to 1.8V
+        return (obj.redpitaya.pid0.ival+1.)*0.9 # Ival goes from -1 to +1 while pwm goes from 0 to 1.8V
 
     def set_value(self, obj, val):
         if val > self.max:
@@ -221,7 +221,7 @@ class SlowOutputProperty(FloatProperty):
             obj._logger.warning("Coarse cannot go above min. value of %s!",
                                 self.min)
 
-            obj.pyrpl.rp.pid0.ival = (val/0.9-1.)
+            obj.redpitaya.pid0.ival = (val/0.9-1.)
 
 
 

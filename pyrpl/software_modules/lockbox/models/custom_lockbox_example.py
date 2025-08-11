@@ -141,7 +141,7 @@ class GalvanicIsolationLoopLockbox(Lockbox):
     def galvanic_isolation_loop_function(self):
         """ the loop function to be executed"""
         # read an output value from this lockbox and set it as the output of the second redpitaya
-        self.second_pyrpl.rp.asg0.offset = self.pyrpl.rp.sampler.pid0
+        self.second_pyrpl.rp.asg0.offset = self.redpitaya.sampler.pid0
         # only for debugging:
         # self.second_pyrpl.rp.asg0.offset = np.sin(2 * np.pi * time() - self.galvanic_isolation_loop.loop_start_time)
 
@@ -158,7 +158,7 @@ class ShortLoopLockbox(Lockbox):
         """ if you pass an instance_method of the lockbox, it should take two arguments:
         the instance of the lockbox (self) and the instance of the loop"""
         loop_self.plot.append(green=np.sin(2*np.pi*loop_self.time),
-                              red=lockbox_self.pyrpl.rp.sampler.in1)
+                              red=lockbox_self.redpitaya.sampler.in1)
         if loop_self.n > 100:  # auto-stop after 1000 cycles
             loop_self._clear()
 

@@ -26,7 +26,12 @@ class TestInput(TestPyrpl):
         self.p.lockbox.sequence[0].input = self.p.lockbox.inputs.port1
         assert self.p.lockbox.sequence[0].input == 'port1', \
             self.p.lockbox.sequence[0].input
-        self.p.rp.pid0.input = self.p.lockbox.inputs.port2
-        assert self.p.rp.pid0.input == 'lockbox.inputs.port2', self.p.rp.pid0.input
-        self.p.rp.pid0.input = self.p.lockbox.sequence[0].input
-        assert self.p.rp.pid0.input == 'lockbox.inputs.port1', self.p.rp.pid0.input
+        # self.p.rp.pid0.input = self.p.lockbox.inputs.port2
+        # assert self.p.rp.pid0.input == 'lockbox.inputs.port2', self.p.rp.pid0.input
+        # self.p.rp.pid0.input = self.p.lockbox.sequence[0].input
+        # assert self.p.rp.pid0.input == 'lockbox.inputs.port1', self.p.rp.pid0.input
+        rp = list(self.p.rps.values())[0]
+        rp.pid0.input = self.p.lockbox.inputs.port2
+        assert rp.pid0.input == 'lockbox.inputs.port2', rp.pid0.input
+        rp.pid0.input = self.p.lockbox.sequence[0].input
+        assert rp.pid0.input == 'lockbox.inputs.port1', rp.pid0.input

@@ -56,7 +56,7 @@ class TestLockbox(TestPyrpl):
         system with a pid.
         :return:
         """
-        pid = self.pyrpl.rp.pid1
+        pid = self.redpitaya.pid1
         self.pyrpl.lockbox.classname = 'Interferometer'
         lockbox = self.pyrpl.lockbox
         pid.i = -1
@@ -82,9 +82,9 @@ class TestLockbox(TestPyrpl):
     def test_calibrate(self):
         self.setup_fake_system()
         lockbox = self.pyrpl.lockbox
-        self.pyrpl.rp.pid1.i = 0
-        self.pyrpl.rp.pid1.p = 1
-        self.pyrpl.rp.pid1.ival = 0
+        self.redpitaya.pid1.i = 0
+        self.redpitaya.pid1.p = 1
+        self.redpitaya.pid1.ival = 0
         lockbox.calibrate_all()
         cal = lockbox.inputs.port1.calibration_data
         assert abs(cal.mean - 0.1) < 0.01, cal.mean
@@ -95,7 +95,7 @@ class TestLockbox(TestPyrpl):
     def test_sleep_while_locked(self):
         self.setup_fake_system()
         self.lockbox.lock()
-        pid = self.pyrpl.rp.pid1
+        pid = self.redpitaya.pid1
         async def unlock_later(time_s):
             await sleep_async(time_s)
             pid.ival = 1
@@ -123,7 +123,7 @@ class TestLockbox(TestPyrpl):
         assert self.lockbox.classname == 'Interferometer'
 
         self.lockbox.sequence[0].function_call = "increment"
-        pid = self.pyrpl.rp.pid1
+        pid = self.redpitaya.pid1
 
         async def unlock_later(time_s):
             await sleep_async(time_s)
