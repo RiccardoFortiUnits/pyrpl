@@ -323,9 +323,6 @@ class Pyrpl(object):
         self.show_gui()
         
     def addRedPitaya(self, name = None, reloadGUI = True, **configs):
-        # make the gui if applicable
-        if self.c.redpitaya.gui:
-            self.show_gui()
         if name is None:
             renameDevice = True
             name = "_unnamed_"

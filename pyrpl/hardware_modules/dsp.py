@@ -40,7 +40,7 @@ currentFolder = os.path.dirname(os.path.realpath(__file__))
 DSP_INPUTS_unordered, DSP_ONLY_OUTPUTS_unordered = parse_verilog_indexes(f"{currentFolder}/../fpga/project/pyrpl.srcs/sources_1/imports/rtl/red_pitaya_dsp.v")
 inputOrders = [
 	"in1", "in2", "out1", "out2", 
-	"peak1", "peak2", "peak3", "peakIndex1", "peakIndex2", "peakIndex3", 
+	"peak1", "peak2", "peak3", "peak_idx1", "peak_idx2", "peak_idx3", 
 	"iq0", "iq1", "iq2", "iq2_2", 
 	"pid0", "pid1", "pid2", 
 	"asg0", "asg1", 
@@ -75,9 +75,9 @@ DSP_ONLY_OUTPUTS = orderDictionary(DSP_ONLY_OUTPUTS_unordered, outputOrders, 0)
 # 	('peak1', 17), #same as asg
 # 	('peak2', 18),
 # 	('peak3', 19),
-# 	('peakIndex1', 20),
-# 	('peakIndex2', 21),
-# 	('peakIndex3', 22),
+# 	('peak_idx1', 20),
+# 	('peak_idx2', 21),
+# 	('peak_idx3', 22),
 # 	('iq0', 5),
 # 	('iq1', 6),
 # 	('iq2', 7),

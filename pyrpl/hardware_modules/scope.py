@@ -349,13 +349,13 @@ class Scope(HardwareModule, AcquisitionModule):
         return list(all_inputs(self).keys())
 
     # the scope inputs and asg outputs have the same dsp id
-    input1 = InputSelectRegister(- addr_base + dsp_addr_base('asg0') + 0x0,
+    input1 = InputSelectRegister(- addr_base + dsp_addr_base('scope0') + 0x0,
                                  options=all_inputs,
                                  default='in1',
                                  ignore_errors=True,
                                  doc="selects the input signal of the module")
 
-    input2 = InputSelectRegister(- addr_base + dsp_addr_base('asg1') + 0x0,
+    input2 = InputSelectRegister(- addr_base + dsp_addr_base('scope1') + 0x0,
                                  options=all_inputs,
                                  default='in2',
                                  ignore_errors=True,

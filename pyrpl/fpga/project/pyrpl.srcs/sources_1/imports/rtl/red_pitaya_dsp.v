@@ -62,8 +62,8 @@ should not be used.
    output     [ 14-1: 0] dat_a_o         ,  //!< output data CHA
    output     [ 14-1: 0] dat_b_o         ,  //!< output data CHB
 
+   output     [ 14-1: 0] scope0_o,
    output     [ 14-1: 0] scope1_o,
-   output     [ 14-1: 0] scope2_o,
    input      [ 14-1: 0] asg1_i,
    input      [ 14-1: 0] asg2_i,
    output     [ 14-1: 0] asg_a_amp_o,
@@ -112,32 +112,36 @@ localparam	PID2					= 2;			/*modules use both input and outpt ;*/
 localparam	LINEARIZER				= 3;			/*modules use both input and outpt ;*/
 localparam	RAMP0					= 4;			/*modules use both input and outpt ;*/
 localparam	RAMP1					= 5;			/*modules use both input and outpt ;*/
-localparam	ASG0					= 6;		localparam	SCOPE1 					= 6;
-localparam	ASG1					= 7;		localparam	SCOPE2 					= 7;
+localparam	ASG0					= 6;		localparam	SCOPE0 					= 6;
+localparam	ASG1					= 7;		localparam	SCOPE1 					= 7;
 localparam	IN1						= 8;		localparam	DIG0					= 8;
 localparam	IN2						= 9;		localparam	DIG1					= 9;
 localparam	OUT1					= 10;		localparam	ASG_AMPL0				= 10;
 localparam	OUT2					= 11;		localparam	ASG_AMPL1				= 11;
-										/*;*/	localparam	PID0_SETPOINT_SIGNAL	= 12;
-										/*;*/	localparam	PID1_SETPOINT_SIGNAL	= 13;
-										/*;*/	localparam	PID2_SETPOINT_SIGNAL	= 14;
+localparam	PEAK1					= 12;		localparam	PID0_SETPOINT_SIGNAL	= 12;
+localparam	PEAK2					= 13;		localparam	PID1_SETPOINT_SIGNAL	= 13;
+localparam	PEAK3					= 14;		localparam	PID2_SETPOINT_SIGNAL	= 14;
+localparam	PEAK_IDX1				= 15;											/*;*/
+localparam	PEAK_IDX2				= 16;											/*;*/
+localparam	PEAK_IDX3				= 17;											/*;*/
 /*§§#§§*/
-localparam nOfDSP_outputs = 15, 		nOfDSP_inputs = 12;
+
+localparam nOfDSP_arrivingIn = 18, 				nOfDSP_goingOut = 15;
 localparam MODULES = 8;
 localparam nOfDSP_directOutputs = 10;//directOutputs are the outputs tha can be outputed to the DACs
 
-localparam LOG_INPUT_MODULES = $clog2(nOfDSP_inputs);
-localparam LOG_OUTPUT_MODULES = $clog2(nOfDSP_outputs);
+localparam LOG_INPUT_MODULES = $clog2(nOfDSP_arrivingIn);
+localparam LOG_OUTPUT_MODULES = $clog2(nOfDSP_goingOut);
 localparam LOG_DIRECT_OUTPUT_MODULES = $clog2(nOfDSP_directOutputs);
 
 localparam NONE = 2**LOG_INPUT_MODULES-1; //code for no module; only used to switch off PWM outputs
 
 initial begin
-   if (LOG_OUTPUT_MODULES > 4)begin
+   if (LOG_OUTPUT_MODULES > 6)begin
         $error("LOG_OUTPUT_MODULES is too high, the current memory architecture does not allow for a number higher than 4. you would need to change the memory structure");
    end
-   if(NONE <= nOfDSP_inputs)begin
-        $error("nOfDSP_outputs is too high, there's no space for index NONE");
+   if(NONE <= nOfDSP_arrivingIn)begin
+        $error("nOfDSP_goingOut is too high, there's no space for index NONE");
    end
 end
 
@@ -151,13 +155,13 @@ localparam s_OFF  = 2'b00;
 
 // the selected input signal of each module: modules and extramodules have inputs
 // extraoutputs are treated like extramodules that do not provide their own signal_arrivingFrom
-wire [14-1:0] signal_goingTo [nOfDSP_outputs -1:0];
+wire [14-1:0] signal_goingTo [nOfDSP_goingOut -1:0];
 // the selected input signal NUMBER of each module
-reg [LOG_OUTPUT_MODULES-1:0] switchSignal [nOfDSP_outputs -1:0];
+reg [LOG_INPUT_MODULES-1:0] switchSignal [nOfDSP_goingOut -1:0];
 
 // the output of each module for internal routing, including 'virtual outputs' for the EXTRAINPUTS
-wire [14-1:0] signal_arrivingFrom [nOfDSP_inputs-1+1:0];
-wire [nOfDSP_inputs-1+1:0] isValid_arrivingFrom;
+wire [14-1:0] signal_arrivingFrom [nOfDSP_arrivingIn-1+1:0];
+wire [nOfDSP_arrivingIn-1+1:0] isValid_arrivingFrom;
 
 // the output of each module that is added to the chosen DAC
 reg [2-1:0] output_direct_selectDAC [nOfDSP_directOutputs-1:0]; 
@@ -174,8 +178,8 @@ wire [ 32-1: 0] module_rdata [MODULES-1:0];
 wire            module_ack   [MODULES-1:0];
 
 //connect scope
+assign scope0_o = signal_goingTo[SCOPE0];
 assign scope1_o = signal_goingTo[SCOPE1];
-assign scope2_o = signal_goingTo[SCOPE2];
 assign asg_a_amp_o = signal_goingTo[ASG_AMPL0];
 assign asg_b_amp_o = signal_goingTo[ASG_AMPL1];
 assign extDigital0 = signal_goingTo[DIG0];
@@ -190,13 +194,13 @@ assign signal_arrivingFrom[IN1] = dat_a_i;
 assign signal_arrivingFrom[IN2] = dat_b_i;
 assign signal_arrivingFrom[OUT1] = dat_a_o;
 assign signal_arrivingFrom[OUT2] = dat_b_o;
-// assign signal_arrivingFrom[PEAK1] = peak_a;
-// assign signal_arrivingFrom[PEAK2] = peak_b;
-// assign signal_arrivingFrom[PEAK3] = peak_c;
-// assign signal_arrivingFrom[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is a positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
-// assign signal_arrivingFrom[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
-// assign signal_arrivingFrom[PEAK_IDX3] = {~peak_c_index[13], peak_c_index[12:0]};
-assign isValid_arrivingFrom = -1;
+assign signal_arrivingFrom[PEAK1] = peak_a;
+assign signal_arrivingFrom[PEAK2] = peak_b;
+assign signal_arrivingFrom[PEAK3] = peak_c;
+assign signal_arrivingFrom[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is a positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
+assign signal_arrivingFrom[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
+assign signal_arrivingFrom[PEAK_IDX3] = {~peak_c_index[13], peak_c_index[12:0]};
+assign isValid_arrivingFrom = {peak_c_valid, peak_b_valid, peak_a_valid, peak_c_valid, peak_b_valid, peak_a_valid, {PEAK1{1'b1}}};// all inputs are always valid, except for the peak signals
 
 wire  signed [   14+LOG_DIRECT_OUTPUT_MODULES -1: 0] sum1; 
 wire  signed [   14+LOG_DIRECT_OUTPUT_MODULES -1: 0] sum2; 
@@ -209,7 +213,7 @@ genvar j;
 
 //select inputs
 generate 
-   for (j = 0; j < nOfDSP_outputs; j = j+1) begin
+   for (j = 0; j < nOfDSP_goingOut; j = j+1) begin
         assign signal_goingTo[j] = (switchSignal[j]==NONE) ? 14'b0 : signal_arrivingFrom[switchSignal[j]];
    end
 endgenerate
@@ -251,11 +255,11 @@ red_pitaya_saturate #(
 always @(posedge clk_i) begin
    if (rstn_i == 1'b0) begin
       //default settings for backwards compatibility with original code
-      for(i=0;i<nOfDSP_outputs;i=i+1)begin
+      for(i=0;i<nOfDSP_goingOut;i=i+1)begin
       	switchSignal [i] <= IN1;
       end
       
-      for(i=0;i<nOfDSP_inputs;i=i+1)begin
+      for(i=0;i<nOfDSP_arrivingIn;i=i+1)begin
       	output_direct_selectDAC [i] <= s_OFF;
       end
       

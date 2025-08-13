@@ -63,7 +63,6 @@ class WaveformAttribute(SelectProperty):
                                 endpoint=False)
                 y = np.cos(x)
             elif waveform == 'arccos':
-                print("using acrcos")
                 x = np.linspace(-1, 3, instance.data_length,
                                 endpoint=False)
                 y=np.zeros_like(x)

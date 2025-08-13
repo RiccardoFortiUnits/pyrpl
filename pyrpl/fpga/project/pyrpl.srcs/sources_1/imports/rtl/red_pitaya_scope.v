@@ -67,8 +67,8 @@
  */
 
 module red_pitaya_scope #(
-	parameter version = "peaks",
-  	parameter RSZ = 14  // RAM size 2^RSZ
+    parameter version = "peaks",
+      parameter RSZ = 14  // RAM size 2^RSZ
 )(
 
    // ADC
@@ -302,8 +302,8 @@ always @(posedge adc_clk_i) begin
       adc_wp      <= {RSZ{1'b0}};
       adc_we      <=  1'b0      ;
       adc_wp_trig <= {RSZ{1'b0}};
-	  timestamp_trigger <= 64'h0;
-	  ctr_value <=         64'h0;
+      timestamp_trigger <= 64'h0;
+      ctr_value <=         64'h0;
       adc_wp_cur  <= {RSZ{1'b0}};
       adc_we_cnt  <= 32'h0      ;
       adc_dly_cnt <= 32'h0      ;
@@ -336,11 +336,11 @@ always @(posedge adc_clk_i) begin
 
       if (adc_rst_do) begin
          adc_wp_trig <= {RSZ{1'b0}};
-		 timestamp_trigger <= ctr_value ;
+         timestamp_trigger <= ctr_value ;
       end else if (adc_trig && !adc_dly_do && pretrig_ok) begin //last condition added to make sure pretrig data is available
          adc_wp_trig <= adc_wp_cur ; // save write pointer at trigger arrival
-		 timestamp_trigger <= ctr_value ;
-	  end
+         timestamp_trigger <= ctr_value ;
+      end
       if (adc_rst_do)
          adc_wp_cur <= {RSZ{1'b0}};
       else if (adc_we && adc_dv)
@@ -392,9 +392,9 @@ always @(posedge adc_clk_i) begin
 end
 
 localparam  chForPeak_realAdc0 = 0,
-			chForPeak_realAdc1 = 1,
-			chForPeak_adc0 = 2,
-			chForPeak_adc1 = 3;
+            chForPeak_realAdc1 = 1,
+            chForPeak_adc0 = 2,
+            chForPeak_adc1 = 3;
 
 reg [1:0] chUsedByPeak_a, chUsedByPeak_b, chUsedByPeak_c;
 reg [RSZ -1:0] peak_a_minIndex, peak_b_minIndex, peak_c_minIndex;
@@ -407,18 +407,18 @@ wire intermediate_peak_c_valid;
 reg [RSZ -1:0] peak_flipIndex;
 
 generate
-	if(version == "peaks")begin
-		always @(posedge adc_clk_i) begin
-			if(~adc_rstn_i) begin
-				signalForPeak_a <= 0;
-				signalForPeak_b <= 0;
-				signalForPeak_c <= 0;
-			end else begin
-				signalForPeak_a <= availablePeakSignals[RSZ*(chUsedByPeak_a+1) -1-:RSZ];
-				signalForPeak_b <= availablePeakSignals[RSZ*(chUsedByPeak_b+1) -1-:RSZ];
-				signalForPeak_c <= availablePeakSignals[RSZ*(chUsedByPeak_c+1) -1-:RSZ];
-			end
-		end
+    if(version == "peaks")begin
+        always @(posedge adc_clk_i) begin
+            if(~adc_rstn_i) begin
+                signalForPeak_a <= 0;
+                signalForPeak_b <= 0;
+                signalForPeak_c <= 0;
+            end else begin
+                signalForPeak_a <= availablePeakSignals[RSZ*(chUsedByPeak_a+1) -1-:RSZ];
+                signalForPeak_b <= availablePeakSignals[RSZ*(chUsedByPeak_b+1) -1-:RSZ];
+                signalForPeak_c <= availablePeakSignals[RSZ*(chUsedByPeak_c+1) -1-:RSZ];
+            end
+        end
 
 
 		peakFinder #(
@@ -931,7 +931,7 @@ if (adc_rstn_i == 1'b0) begin
    set_deb_len   <=  20'd62500  ;
    set_a_axi_en  <=   1'b0      ;
    set_b_axi_en  <=   1'b0      ;
-	
+    
    peak_a_minIndex <= 0;
    peak_a_maxIndex <= 2**(RSZ-1);
    peak_b_minIndex <= 0;
@@ -1082,19 +1082,19 @@ end else begin
     
      20'h00154 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, adc_a_i }         ; end
      20'h00158 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, adc_b_i }         ; end
-	 
-	 20'h0015c : begin sys_ack <= sys_en;          sys_rdata <= ctr_value[32-1:0]     		    ; end
-	 20'h00160 : begin sys_ack <= sys_en;          sys_rdata <= ctr_value[64-1:32]			    ; end
-	 
-	 20'h00164 : begin sys_ack <= sys_en;          sys_rdata <= timestamp_trigger[32-1:0]       ; end
-	 20'h00168 : begin sys_ack <= sys_en;          sys_rdata <= timestamp_trigger[64-1:32]	    ; end
+     
+     20'h0015c : begin sys_ack <= sys_en;          sys_rdata <= ctr_value[32-1:0]     		    ; end
+     20'h00160 : begin sys_ack <= sys_en;          sys_rdata <= ctr_value[64-1:32]			    ; end
+     
+     20'h00164 : begin sys_ack <= sys_en;          sys_rdata <= timestamp_trigger[32-1:0]       ; end
+     20'h00168 : begin sys_ack <= sys_en;          sys_rdata <= timestamp_trigger[64-1:32]	    ; end
      
      20'h0016c : begin sys_ack <= sys_en;          sys_rdata <= {{32-1{1'b0}}, pretrig_ok}       ; end
 
      20'h1???? : begin sys_ack <= adc_rd_dv;       sys_rdata <= {16'h0, 2'h0,adc_a_rd}              ; end
      20'h2???? : begin sys_ack <= adc_rd_dv;       sys_rdata <= {16'h0, 2'h0,adc_b_rd}              ; end
-	 
-	 
+     
+     
 
        default : begin sys_ack <= sys_en;          sys_rdata <=  32'h0                              ; end
    endcase
