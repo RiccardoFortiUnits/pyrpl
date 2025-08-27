@@ -188,6 +188,57 @@ class BaseProperty(BaseAttribute):
 	def set_value(self, obj, val):
 		setattr(obj, '_' + self.name, val)
 
+	# def updateIntoSubInstanceProperty(self, subInstanceName):
+	#     oldGet = self.__get__
+	#     def newGet(x, instance, owner):
+	#         if instance is None:
+	#             return x
+	#         return oldGet(SubInstanceProperty.getNestedAttribute(instance, subInstanceName), owner)
+	#     oldSet = self.__set__
+	#     def newSet(x, instance, value):
+	#         # Ignore the passed instance, use the forced one
+	#         oldSet(SubInstanceProperty.getNestedAttribute(instance, subInstanceName), value)
+			
+	#     self.__get__ = newGet
+	#     self.__set__ = newSet
+	#     return self
+class propertyWrapper(BaseAttribute):
+	def __getattr__(self, name):
+		# Avoid recursion by directly accessing internal attributes
+		if name in ('_prop', '_forcedInstanceName'):
+			return object.__getattribute__(self, name)
+		return getattr(object.__getattribute__(self, '_prop'), name)
+
+	def __setattr__(self, name, value):
+		# Avoid recursion by directly setting internal attributes
+		if name in ('_prop', '_forcedInstanceName'):
+			object.__setattr__(self, name, value)
+		else:
+			setattr(object.__getattribute__(self, '_prop'), name, value)
+	
+class SubInstanceProperty(propertyWrapper):
+	'''wrapper for properties. It forces the property to interact with a sub-instance of the instance passed by the functions __get__, __set__...'''
+	def __init__(self, prop, forcedInstanceName):
+		self._prop = prop
+		self._forcedInstanceName = forcedInstanceName
+
+	def __get__(self, instance, owner):
+		# Ignore the passed instance, use the forced one
+		if instance is None:
+			return self._prop.__get__(instance, owner)
+		return self._prop.__get__(SubInstanceProperty.getNestedAttribute(instance, self._forcedInstanceName), owner)
+
+	def __set__(self, instance, value):
+		# Ignore the passed instance, use the forced one
+		self._prop.__set__(SubInstanceProperty.getNestedAttribute(instance, self._forcedInstanceName), value)
+
+	@staticmethod
+	def getNestedAttribute(obj, attribute):
+		points = str.split(attribute, '.')
+		for p in points:
+			obj = getattr(obj, p)
+		return obj
+
 
 class BaseRegister(BaseProperty):
 	"""Registers implement the necessary read/write logic for storing an attribute on the redpitaya.

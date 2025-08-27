@@ -5,6 +5,7 @@ from .spectrum_analyzer import SpectrumAnalyzer
 from .pyrpl_config import PyrplConfig
 from .curve_viewer import CurveViewer
 from .lockbox import *
+from .scanningCavity import *
 from .loop import *
 from .software_pid import *
 from .module_managers import *

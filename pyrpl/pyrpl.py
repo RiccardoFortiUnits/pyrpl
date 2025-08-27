@@ -185,7 +185,11 @@ default_pyrpl_config = {'name': 'default_pyrpl_instance',
                         # 'CCCCEE',  # blueish
                         # 'EECCCC', # reddish
                         # 'CCEECC', # greenish
-                        'modules': []}
+                        'modules': ['PyrplConfig',
+                                    'ScanningCavity'
+                                    ],
+                        # 'singleModules':["LockBox", ...]
+                        }
 
 help_message = """
 PyRPL version %s command-line help
@@ -308,18 +312,19 @@ class Pyrpl(object):
                                 loggername='pyrpl')
         self.widgets = [] # placeholder for widgets
         # create software modules...
-        self.load_software_modules()
-        for module in self.software_modules:
-            if module.owner is None:
-                module._load_setup_attributes()
         
         self.rps = {}
         for device in list(self.c._keys()):
-            if device != "pyrpl":
+            if device != "pyrpl" and device not in [str.lower(s) for s in default_pyrpl_config["modules"]]:
                 if hasattr(self.c[device], "redpitaya"):
                     self.addRedPitaya(device, reloadGUI = False)
         if len(self.rps) == 0:
             self.addRedPitaya(None, reloadGUI = False)
+            
+        self.load_software_modules()
+        for module in self.software_modules:
+            if module.owner is None:
+                module._load_setup_attributes()
         self.show_gui()
         
     def addRedPitaya(self, name = None, reloadGUI = True, **configs):
@@ -328,18 +333,28 @@ class Pyrpl(object):
             name = "_unnamed_"
         else:
             renameDevice = False
-        self.c._get_or_create(f'{name}.redpitaya')
+        redpitayaBranch = self.c._get_or_create(f'{name}.redpitaya')
         self.c[name].redpitaya._update(configs)
         self.name = self.c.pyrpl.name
         self.rps[name] = RedPitaya(config=self.c[name])
         self.redpitaya = self.rps  # alias
         self.rps[name].parent=self
         # initialize RedPitaya object with the configured or default parameters
+        
+        
+        # soft_mod_names = self.c.pyrpl.singleModules
+        # module_classes = [get_module(cls_name).__name__
+        #                   for cls_name in soft_mod_names]
+        
+        # self.rps[name].load_software_modules(module_classes)
+        
         self.rps[name].load_software_modules()
         if renameDevice:
             newName = self.c[name].redpitaya.hostname.replace(".","_")
             self.c[name]._rename(newName)
             self.rps[newName] = self.rps.pop(name)
+        
+                    
         if reloadGUI:
             self._reloadGUI()
         
@@ -434,3 +449,6 @@ class Pyrpl(object):
         # end redpitatya communication
         self.rp.end_all()
         sleep(0.1)
+    @property
+    def pyrpl(self):
+        return self

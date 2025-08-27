@@ -267,14 +267,6 @@ class Scope(HardwareModule, AcquisitionModule):
     lastInputs = [None, None]
     def __init__(self, parent, name=None, index = 0):
         super(Scope, self).__init__(parent, name=name, index = 0)
-        try:
-            self.isDac1Modified = self.parent.c.scope["DAC1_modified"]
-        except:
-            self.isDac1Modified = False
-        try:
-            self.isDac2Modified = self.parent.c.scope["DAC2_modified"]
-        except:
-            self.isDac2Modified = False
 
     def _from_raw_data_to_numbers(self,data : np.ndarray):
         inputs = [self.input1, self.input2]
@@ -545,6 +537,7 @@ class Scope(HardwareModule, AcquisitionModule):
         minTime3 = minTime3,
         maxTime3 = maxTime3,
     )
+    peakNames = ["peak_refL","peak_refR","peak_ctrl","peak_ctrl2",]
 
     # list comprehension workaround for python 3 compatibility
     # cf. http://stackoverflow.com/questions/13905741

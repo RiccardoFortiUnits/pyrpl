@@ -22,7 +22,7 @@ class PyrplConfig(Module):
     text = TextProperty()
 
     module = SelectProperty(default="pyrpl",
-                            options=lambda inst: ["pyrpl", "redpitaya"] +
+                            options=lambda inst: ["pyrpl"] + #[name for name in inst.pyrpl.rps.keys()] +
                                                  [m.name for m in inst.pyrpl.software_modules] ,
                             doc="this selector allows to choose which module is configured",
                             call_setup=True)
