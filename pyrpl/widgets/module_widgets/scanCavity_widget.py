@@ -6,53 +6,258 @@ from ..attribute_widgets import BaseAttributeWidget
 from .base_module_widget import ReducedModuleWidget, ModuleWidget
 from ...pyrpl_utils import get_base_module_class
 from ... import APP
+import pyqtgraph as pg
+from qtpy import QtCore, QtGui, QtWidgets
+import numpy as np
+from ...errors import NotReadyError
+from .base_module_widget import ModuleWidget
+from .acquisition_module_widget import AcquisitionModuleWidget
 
 
-class ScanCavity_widget(ModuleWidget):
+class ScanCavity_widget(AcquisitionModuleWidget):
     """
-    A widget to represent a single lockbox input
+    A widget to represent a scan cavity lock
     """
-    def init_gui(self):
-        #self.main_layout = QtWidgets.QVBoxLayout(self)
+    def init_gui(self):                
+        """
+        sets up all the gui for the scope.
+        """
+        self.datas = [None, None]
+        self.times = None
+        self.ch_color = 'yellow'#('green', 'red', 'blue')
+        self.ch_transparency = 0x80#(255, 255, 255)  # 0 is transparent, 255 is not  # deactivated transparency for speed reasons
+        #self.module.__dict__['curve_name'] = 'scope'
+        #self.main_layout = QtWidgets.QVBoxLayout()
         self.init_main_layout(orientation="vertical")
         self.init_attribute_layout()
+        aws = self.attribute_widgets
 
-    #     self.win = pg.GraphicsWindow(title="Expected signal")
-    #     self.plot_item = self.win.addPlot(title='Expected ' + self.module.name)
-    #     self.plot_item.showGrid(y=True, x=True, alpha=1.)
-    #     self.curve = self.plot_item.plot(pen='y')
-    #     self.curve_slope = self.plot_item.plot(pen=pg.mkPen('b', width=5))
-    #     self.symbol = self.plot_item.plot(pen='b', symbol='o')
-    #     self.main_layout.addWidget(self.win)
-    #     self.button_calibrate = QtWidgets.QPushButton('Calibrate')
-    #     self.main_layout.addWidget(self.button_calibrate)
-    #     self.button_calibrate.clicked.connect(lambda: self.module.calibrate())
-    #     self.input_calibrated()
+        self.layout_channels = QtWidgets.QVBoxLayout()
+        self.layout_ch1 = QtWidgets.QHBoxLayout()
+        self.layout_math = QtWidgets.QHBoxLayout()
+        self.layout_channels.addLayout(self.layout_ch1)
+        self.layout_channels.addLayout(self.layout_math)
 
-    # def hide_lock(self):
-    #     self.curve_slope.setData([], [])
-    #     self.symbol.setData([], [])
-    #     self.plot_item.enableAutoRange(enable=True)
+        self.attribute_layout.removeWidget(aws['input1'])
 
-    # def show_lock(self, stage):
-    #     setpoint = stage.setpoint
-    #     signal = self.module.expected_signal(setpoint)
-    #     slope = self.module.expected_slope(setpoint)
-    #     dx = self.module.lockbox.is_locked_threshold
-    #     self.plot_item.enableAutoRange(enable=False)
-    #     self.curve_slope.setData([setpoint-dx, setpoint+dx],
-    #                              [signal-slope*dx, signal+slope*dx])
-    #     self.symbol.setData([setpoint], [signal])
-    #     self.module._logger.debug("show_lock with sp %f, signal %f",
-    #                               setpoint,
-    #                               signal)
+        self.layout_ch1.addWidget(aws['input1'])
 
-    # def input_calibrated(self, input=None):
-    #     # if input is None, input associated with this widget is used
-    #     if input is None:
-    #         input = self.module
-    #     y = input.expected_signal(input.plot_range)
-    #     self.curve.setData(input.plot_range, y)
-    #     input._logger.debug('Updated widget for input %s to '
-    #                         'show GUI display of expected signal (min at %f)!',
-    #                         input.name, input.expected_signal(0))
+
+        self.attribute_layout.addLayout(self.layout_channels)
+
+        self.attribute_layout.removeWidget(aws['duration'])
+        self.layout_duration = QtWidgets.QVBoxLayout()
+        self.duration = aws['duration']
+        self.layout_duration.addWidget(self.duration)
+        self.attribute_layout.addLayout(self.layout_duration)
+
+        #self.attribute_layout.removeWidget(aws['curve_name'])
+
+        self.button_layout = QtWidgets.QHBoxLayout()
+
+        aws = self.attribute_widgets
+        self.attribute_layout.removeWidget(aws["trace_average"])
+        self.attribute_layout.removeWidget(aws["curve_name"])
+
+        #self.setLayout(self.main_layout)
+
+
+        self.setWindowTitle("Cavity scan")
+        self.win = pg.GraphicsLayoutWidget(title="Cavity scan")
+        self.plot_item = self.win.addPlot(title="Cavity scan")
+        self.plot_item.showGrid(y=True, alpha=1.)
+        self.viewBox = self.plot_item.getViewBox()
+        self.viewBox.setMouseEnabled(y=False)
+        # Add a draggable horizontal line to the graph
+        
+
+        #self.button_single = QtWidgets.QPushButton("Run single")
+        #self.button_continuous = QtWidgets.QPushButton("Run continuous")
+        #self.button_save = QtWidgets.QPushButton("Save curve")
+
+        # self.curves = [self.plot_item.plot(pen=(QtGui.QColor(color).red(),
+        #                                         QtGui.QColor(color).green(),
+        #                                         QtGui.QColor(color).blue()
+        #                                         ))
+        #                                         #,trans)) \
+        #                for color, trans in zip(self.ch_color,
+        #                                        self.ch_transparency)]
+        self.curves = [self.plot_item.plot(pen=(QtGui.QColor(self.ch_color).red(),
+                                                QtGui.QColor(self.ch_color).green(),
+                                                QtGui.QColor(self.ch_color).blue()
+                                                ))]
+        self.main_layout.addWidget(self.win, stretch=10)
+
+
+        #self.button_layout.addWidget(self.button_single)
+        #self.button_layout.addWidget(self.button_continuous)
+        #self.button_layout.addWidget(self.button_save)
+        #self.button_layout.addWidget(aws['curve_name'])
+        #aws['curve_name'].setMaximumWidth(250)
+        self.main_layout.addLayout(self.button_layout)
+
+        # self.layout_additional= QtWidgets.QHBoxLayout()
+        # additionalScopeParams = [
+        #     "asg0_offset",
+        #     "pid0_setpoint",
+        #     "pid0_min_voltage",
+        #     "pid0_max_voltage",
+        #     "pid0_p",
+        #     "pid0_i",
+        #     "ival"
+        # ]
+        # for param in additionalScopeParams:
+        #     self.attribute_layout.removeWidget(aws[param])
+        #     self.layout_additional.addWidget(aws[param])
+        # self.main_layout.addLayout(self.layout_additional)
+        
+        #self.button_single.clicked.connect(self.run_single_clicked)
+        #self.button_continuous.clicked.connect(self.run_continuous_clicked)
+        #self.button_save.clicked.connect(self.save_clicked)
+
+        #self.update_rolling_mode_visibility()
+        # self.attribute_widgets['duration'].value_changed.connect(
+        #     self.update_rolling_mode_visibility)
+
+        # self.layout_peaks = QtWidgets.QVBoxLayout()
+        # self.layout_peak_refL = peakWidget("peak_refL", self, 0,aws)
+        # self.layout_peak_refR = peakWidget("peak_refR", self, 1,aws)
+        # self.layout_peak_ctrl = peakWidget("peak_ctrl", self, 2,aws)
+        # self.peakList = [self.layout_peak_refL, self.layout_peak_refR, self.layout_peak_ctrl]
+        # self.layout_peaks.addLayout(self.layout_peak_refL)
+        # self.layout_peaks.addLayout(self.layout_peak_refR)
+        # self.layout_peaks.addLayout(self.layout_peak_ctrl)
+                
+        # self.attribute_layout.addLayout(self.layout_peaks)
+        
+        # # Connect signals to print when plot_item changes dimension or axes range
+        # def on_view_changed():
+        #     for peak in self.peakList:
+        #         peak.line.updateSizes()
+
+        # self.plot_item.sigRangeChanged.connect(lambda _, __: on_view_changed())
+        # self.plot_item.getViewBox().sigResized.connect(on_view_changed)
+
+        super(ScanCavity_widget, self).init_gui()
+        # since trigger_mode radiobuttons is not a regular attribute_widget,
+        # it is not synced with the module at creation time.
+        self.update_running_buttons()
+        # self.update_rolling_mode_visibility()
+        # self.rolling_mode = self.module.rolling_mode
+        self.attribute_layout.addStretch(1)
+        
+    def update_attribute_by_name(self, name, new_value_list):
+        """
+        Updates all attributes on the gui when their values have changed.
+        """
+        super(ScanCavity_widget, self).update_attribute_by_name(name, new_value_list)
+        # if name in ['rolling_mode', 'duration']:
+        #     self.rolling_mode = self.module.rolling_mode
+        #     self.update_rolling_mode_visibility()
+        # if name in ['_running_state',]:
+        #     self.update_running_buttons()
+
+    def change_ownership(self):
+        """
+        For some reason the visibility of the rolling mode panel is not updated
+        when the scope becomes free again unless we ask for it explicitly...
+        """
+        super(ScanCavity_widget, self).change_ownership()
+        # self.update_rolling_mode_visibility()
+
+    def display_curve(self, list_of_arrays):
+        """
+        Displays all active channels on the graph.
+        """
+        times, (ch1, ch2) = list_of_arrays
+        disp = [(ch1, self.module.ch1_active), (ch2, self.module.ch2_active)]
+        if self.module.xy_mode:
+            self.curves[0].setData(ch1, ch2)
+            self.curves[0].setVisible(True)
+            self.curves[1].setVisible(False)
+        else:
+            for ch, (data, active) in enumerate(disp):
+                if active:
+                    self.curves[ch].setData(times, data)
+                    self.curves[ch].setVisible(True)
+                else:
+                    self.curves[ch].setVisible(False)
+            if self.module.ch_math_active:
+                # catch numpy warnings instead of printing them
+                # https://stackoverflow.com/questions/15933741/how-do-i-catch-a-numpy-warning-like-its-an-exception-not-just-for-testing
+                backup_np_err = np.geterr()
+                np.seterr(all='ignore')
+                try:
+                    math_data = eval(self.module.math_formula,
+                       dict(ch1=ch1, ch2=ch2, np=np, times=times))
+                except:
+                    pass
+                else:
+                    self.curves[2].setData(times, math_data)
+                np.seterr(**backup_np_err)
+                self.curves[2].setVisible(True)
+            else:
+                self.curves[2].setVisible(False)
+        self.update_current_average() # to update the number of averages
+
+    # def set_rolling_mode(self):
+    #     """
+    #     Set rolling mode on or off based on the module's attribute
+    #     "rolling_mode"
+    #     """
+    #     self.rolling_mode = self.module.rolling_mode
+
+    # def rolling_mode_toggled(self):
+    #     self.module.rolling_mode = self.rolling_mode
+
+    # @property
+    # def rolling_mode(self):
+    #     # return ((self.checkbox_untrigged.isChecked()) and self.rolling_group.isEnabled())
+
+    # @rolling_mode.setter
+    # def rolling_mode(self, val):
+    #     if val:
+    #         self.checkbox_untrigged.setChecked(True)
+    #     else:
+    #         self.checkbox_normal.setChecked(True)
+    #     return val
+
+    # def update_rolling_mode_visibility(self):
+    #     """
+    #     Hide rolling mode checkbox for duration < 100 ms
+    #     """
+    #     # self.rolling_group.setEnabled(self.module._rolling_mode_allowed())
+    #     # self.attribute_widgets['trigger_source'].widget.setEnabled(
+    #     #     not self.rolling_mode)
+    #     # self.attribute_widgets['threshold'].widget.setEnabled(
+    #     #     not self.rolling_mode)
+    #     # self.attribute_widgets['hysteresis'].widget.setEnabled(
+    #     #     not self.rolling_mode)
+    #     # single_enabled = (not self.module._is_rolling_mode_active()) and \
+    #     #                     self.module.running_state!="running_continuous"
+    #     # self.button_single.setEnabled(single_enabled)
+    #     pass
+
+    def update_running_buttons(self):
+        super(ScanCavity_widget, self).update_running_buttons()
+        # self.update_rolling_mode_visibility()
+
+    def autoscale_x(self):
+        """Autoscale pyqtgraph. The current behavior is to autoscale x axis
+        and set y axis to  [-1, +1]"""
+        if self.module.xy_mode:
+            return
+        # if self.module._is_rolling_mode_active():
+        #     mini = -self.module.duration
+        #     maxi = 0
+        # else:
+        #     mini = min(self.module.times)
+        #     maxi = max(self.module.times)
+        mini = min(self.module.times)
+        maxi = max(self.module.times)
+        self.plot_item.setRange(xRange=[mini, maxi])
+        self.plot_item.setRange(yRange=[-1,1])
+        # self.plot_item.autoRange()
+
+    def save_clicked(self):
+        self.module.save_curve()

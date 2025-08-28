@@ -205,13 +205,13 @@ class BaseProperty(BaseAttribute):
 class propertyWrapper(BaseAttribute):
 	def __getattr__(self, name):
 		# Avoid recursion by directly accessing internal attributes
-		if name in ('_prop', '_forcedInstanceName'):
+		if name in ('_prop', '_forcedInstanceName', 'dynamicAccessor'):
 			return object.__getattribute__(self, name)
 		return getattr(object.__getattribute__(self, '_prop'), name)
 
 	def __setattr__(self, name, value):
 		# Avoid recursion by directly setting internal attributes
-		if name in ('_prop', '_forcedInstanceName'):
+		if name in ('_prop', '_forcedInstanceName', 'dynamicAccessor'):
 			object.__setattr__(self, name, value)
 		else:
 			setattr(object.__getattribute__(self, '_prop'), name, value)
@@ -238,6 +238,23 @@ class SubInstanceProperty(propertyWrapper):
 		for p in points:
 			obj = getattr(obj, p)
 		return obj
+	
+class DynamicInstanceProperty(propertyWrapper):
+	'''wrapper for properties. It forces the property to interact with a sub-instance of the instance passed by the functions __get__, __set__...'''
+	def __init__(self, prop, dynamicAccessor = lambda instance : instance):
+		self._prop = prop
+		self.dynamicAccessor = dynamicAccessor
+
+	def __get__(self, instance, owner):
+		# Ignore the passed instance, use the forced one
+		if instance is None:
+			return self._prop.__get__(instance, owner)
+		return self._prop.__get__(self.dynamicAccessor(instance), owner)
+
+	def __set__(self, instance, value):
+		# Ignore the passed instance, use the forced one
+		self._prop.__set__(self.dynamicAccessor(instance), value)
+
 
 
 class BaseRegister(BaseProperty):

@@ -22,6 +22,7 @@ from ..widgets.module_widgets import ScopeWidget
 import asyncio
 
 from ..hardware_modules.scope import Scope, peakIndexRegister
+from ..hardware_modules.asg import Asg0
 from ..widgets.module_widgets.scanCavity_widget import ScanCavity_widget
 
 
@@ -88,35 +89,82 @@ class commonPeakIndexRegister(peakIndexRegister):
 		for o in self.objects:
 			FloatRegister.set_value(self, o, value)
 
-class SamplingTimeProperty(SelectProperty):
-    def get_value(self, obj):
-        return 8e-9 * float(obj.decimation)
 
-    def validate_and_normalize(self, obj, value):
-        # gets next-lower value
-        value = float(value)
-        options = self.options(obj).keys()
-        try:
-            return min([opt for opt in options if opt <= value],
-                   key=lambda x: abs(x - value))
-        except ValueError:
-            obj._logger.info("Selected sampling time is shorter than "
-                             "physically possible with the employed hardware. "
-                             "Picking shortest-possible value %s. ",
-                             min(options))
-            return min(options)
+class asgSelector(SelectProperty):
+	def __init__(self, options, **kwargs):
+		super().__init__(options, **kwargs)
 
-    def set_value(self, instance, value):
-        """sets or returns the time separation between two subsequent
-        points of a scope trace the rounding makes sure that the actual
-        value is shorter or equal to the set value"""
-        instance.decimation = float(value) / 8e-9
+	def set_value(self, obj, value):
+		scope : Scope = obj.mainPitaya.scope
+		scope.trigger_source = value
+		ret = super().set_value(obj, value)
+		obj.updateRamp()
+		return ret
+class inputSelector(SelectProperty):
+	def __init__(self, options, **kwargs):
+		super().__init__(options, **kwargs)
 
+	def set_value(self, obj, value):
+		scope : Scope = obj.mainPitaya.scope
+		scope.input1 = value
+		ret = super().set_value(obj, value)
+		obj.updateScope()
+		return ret
+	
+class rampVoltageEdge(FloatProperty):
+	'''property to set the low and high edge of an asg signal. Use makeLowerAndUpperEdges() to create 2 
+	connected edges, which will not cross each other (for example, trying to set on the lower edge a 
+	value higher than the current edge will not be permitted)'''
+	@staticmethod
+	def makeLowerAndUpperEdges(**kwargs):
+		low = rampVoltageEdge(None, True, **kwargs)
+		high = rampVoltageEdge(low, False, **kwargs)
+		low.otherEdge = high
+		return low, high
+	def __init__(self, otherEdge = None, isLowerEdge = True, min=-np.inf, max=np.inf, increment=0, log_increment=False, **kwargs):
+		super().__init__(min, max, increment, log_increment, **kwargs)
+		self.otherEdge = otherEdge
+		self.isLowerEdge = isLowerEdge
+
+	def validate_and_normalize(self, obj, value):
+		if self.isLowerEdge:
+			value = min(value, self.otherEdge.get_value(obj))
+		else:
+			value = max(value, self.otherEdge.get_value(obj))
+		return super().validate_and_normalize(obj, value)
+	@staticmethod
+	def getLowHigFromAmpOffs(amp, offs):
+		return offs - amp, offs + amp
+	@staticmethod
+	def getAmpOffsFromLowHigh(low, high):
+		return .5 * (high - low), .5 * (high + low)
+	
+	def set_value(self, obj, val):
+		otherValue = self.otherEdge.get_value(obj)
+		lowHigh = (val, otherValue) if self.isLowerEdge else (otherValue, val)
+		amp, offs = rampVoltageEdge.getAmpOffsFromLowHigh(*lowHigh)
+		asg = obj.asg
+		asg.amplitude = amp
+		asg.offset = offs
+		return super().set_value(obj, val)
+	def get_value(self, obj):		
+		asg = obj.asg
+		amp = asg.amplitude
+		offs = asg.offset
+		low, high = rampVoltageEdge.getLowHigFromAmpOffs(amp, offs)
+		return low if self.isLowerEdge else high
 
 class ScanningCavity(AcquisitionModule):
 
-	_setup_attributes = ["scanDuration"]
-	_gui_attributes = ["scanDuration"]
+	_setup_attributes = ["duration"]
+	_gui_attributes = ["duration",
+					"input1",
+					"usedAsg",
+					"lowValue", 
+					"highValue",
+					"trigger_source",
+					"output_direct",
+					]
 	_widget_class = ScanCavity_widget
 
 	def __init__(self, parent, name=None):
@@ -130,7 +178,7 @@ class ScanningCavity(AcquisitionModule):
 		self.mainL = peak(pitaya, 0)
 		self.mainR = peak(pitaya, 1)
 		self.usedPitayas = [pitaya]
-		self.scanDuration
+		self.duration
 	def addPitaya(self, pitaya):
 		if pitaya in self.usedPitayas:
 			raise Exception("pitaya already used")
@@ -153,16 +201,39 @@ class ScanningCavity(AcquisitionModule):
 		peaks = self.allAvailableSecondaryPeaks()
 		return [p for p in peaks if p not in self.usedPeaks]
 	
-	# In Python, you can create a "static" property using the @property decorator on a classmethod.
-	# However, the standard @property only works for instance methods.
-	# For class-level (static) properties, you can use the @classmethod decorator and access via the class,
-	# or use a custom descriptor. Here's an example using a custom classproperty descriptor:
 
-	#defining static properties so that the single objects can override them
-	# scanDuration = SamplingTimeProperty(options = Scope.sampling_times).updateIntoSubInstanceProperty("mainPitaya.scope")
-	scanDuration = SubInstanceProperty(Scope.sampling_time, "mainPitaya.scope")
-	# scanDuration = SubInstanceProperty(IntProperty(), "mainPitaya.scope")
+	duration = DynamicInstanceProperty(Scope.duration, lambda scanCavity : scanCavity.mainPitaya.scope)	
+	input1 = DynamicInstanceProperty(Scope.input1, lambda scanCavity : scanCavity.mainPitaya.scope)
 	
+	_usableTriggers = {key : val for key,val in Scope._trigger_sources.items() if "asg" in key}
+	usedAsg = asgSelector(_usableTriggers)
+	lowValue, highValue = rampVoltageEdge.makeLowerAndUpperEdges(min = -1, max = 1)
+	trigger_source = DynamicInstanceProperty(Asg0.trigger_source, lambda scanCavity : scanCavity.asg)
+	output_direct = DynamicInstanceProperty(Asg0.output_direct, lambda scanCavity : scanCavity.asg)
+
+	def updateScope(self):
+		'''
+		setup the scope to have the correct dimensions for the scan
+		'''
+		scope : Scope = self.mainPitaya.scope
+		scope.ch1_active = True
+		scope.trigger_delay = scope.duration * .5
+		scope.average = False
+	@property
+	def asg(self):
+		return self.mainPitaya.asg0 if self.usedAsg == "asg0" else self.mainPitaya.asg1
+	def updateRamp(self):
+		asg = self.asg
+		asg.waveform = "ramp"
+		asg.frequency = 0.5 / self.duration
+		ScanningCavity.lowValue.value_updated(self)
+		ScanningCavity.highValue.value_updated(self)
+		ScanningCavity.trigger_source.value_updated(self)
+		ScanningCavity.output_direct.value_updated(self)
+
+		# asg.
+
+
 
 	# MIN_DELAY_CONTINUOUS_ROLLING_MS = 20
 	# name = 'ScanningCavity'
