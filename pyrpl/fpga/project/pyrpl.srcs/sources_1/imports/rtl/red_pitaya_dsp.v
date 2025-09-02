@@ -77,8 +77,9 @@ should not be used.
    output     [ 14-1: 0] extDigital1,
 
    // input triggers
-   input                ramp_trigger,
-   input                generic_module_trigger,
+   input                 ramp_trigger,
+   input                 generic_module_trigger,
+   input      [  2-1: 0] asg_triggers,
    // trigger outputs for the scope
    output                trig_o,   // output from trigger dsp module
 
@@ -124,9 +125,10 @@ localparam	PEAK3					= 14;		localparam	PID2_SETPOINT_SIGNAL	= 14;
 localparam	PEAK_IDX1				= 15;											/*;*/
 localparam	PEAK_IDX2				= 16;											/*;*/
 localparam	PEAK_IDX3				= 17;											/*;*/
+localparam	ALLTRIGGERS				= 18;											/*;*/
 /*§§#§§*/
 
-localparam nOfDSP_arrivingIn = 18, 				nOfDSP_goingOut = 15;
+localparam nOfDSP_arrivingIn = 19, 				nOfDSP_goingOut = 15;
 localparam MODULES = 8;
 localparam nOfDSP_directOutputs = 10;//directOutputs are the outputs tha can be outputed to the DACs
 
@@ -184,6 +186,8 @@ assign asg_a_amp_o = signal_goingTo[ASG_AMPL0];
 assign asg_b_amp_o = signal_goingTo[ASG_AMPL1];
 assign extDigital0 = signal_goingTo[DIG0];
 assign extDigital1 = signal_goingTo[DIG1];
+wire asg0_trigger = asg_triggers[0];
+wire asg1_trigger = asg_triggers[1];
 
 //connect asg output
 assign signal_arrivingFrom[ASG0] = asg1_i;
@@ -200,6 +204,8 @@ assign signal_arrivingFrom[PEAK3] = peak_c;
 assign signal_arrivingFrom[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is a positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
 assign signal_arrivingFrom[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
 assign signal_arrivingFrom[PEAK_IDX3] = {~peak_c_index[13], peak_c_index[12:0]};
+//ALLTRIGGERS contains some useful triggers, so that they can be sent to the hk module. It's not the cleanest solution, but for sure it's compact
+assign signal_arrivingFrom[ALLTRIGGERS] = {asg1_trigger, asg0_trigger, ramp_trigger, generic_module_trigger};
 assign isValid_arrivingFrom = {peak_c_valid, peak_b_valid, peak_a_valid, peak_c_valid, peak_b_valid, peak_a_valid, {PEAK1{1'b1}}};// all inputs are always valid, except for the peak signals
 
 wire  signed [   14+LOG_DIRECT_OUTPUT_MODULES -1: 0] sum1; 

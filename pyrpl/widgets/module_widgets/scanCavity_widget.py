@@ -13,6 +13,209 @@ from ...errors import NotReadyError
 from .base_module_widget import ModuleWidget
 from .acquisition_module_widget import AcquisitionModuleWidget
 
+class PeakLine(QtWidgets.QGraphicsLineItem):
+    def __init__(self, parent, peakWidget, color = QtCore.Qt.red):
+        super().__init__(0.0, 0, 0.001, 0, parent = parent)
+        self.peak = peakWidget
+        self.setFlags(
+            QtWidgets.QGraphicsItem.ItemIsSelectable |
+            QtWidgets.QGraphicsItem.ItemIsMovable
+        )
+        parent.addItem(self)
+        self.color = color
+        self.centerLine = QtWidgets.QGraphicsLineItem(0.0, 0, 0.001, 0, parent=parent)
+        parent.addItem(self.centerLine)
+        self.leftEdgeLine = QtWidgets.QGraphicsLineItem(0, 0.1, 0, -0.1, parent=parent)
+        parent.addItem(self.leftEdgeLine)
+        self.rightEdgeLine = QtWidgets.QGraphicsLineItem(0.001, 0.1, 0.001, -0.1, parent=parent)
+        parent.addItem(self.rightEdgeLine)
+        self.parent = parent
+        self.updateSizes()
+        self.updateFromPeakRanges()
+
+    def updateSizes(self):
+        pen = QtGui.QPen(QtGui.QColor(0, 0, 0, 0), self.barHeight)
+        pen.setCapStyle(QtCore.Qt.FlatCap)
+        self.setPen(pen)
+
+        pen = QtGui.QPen(self.color, self.strokeWidth)
+        pen.setCapStyle(QtCore.Qt.FlatCap)
+        self.centerLine.setPen(pen)
+
+        barPen = QtGui.QPen(self.color, self.barWidths)
+        barPen.setCapStyle(QtCore.Qt.FlatCap)
+        self.leftEdgeLine.setPen(barPen)
+        self.rightEdgeLine.setPen(barPen)
+
+        # centerPen = QtGui.QPen(self.color, self.centerWidth)
+        # centerPen.setCapStyle(QtCore.Qt.FlatCap)
+        # self.peakLine.setPen(pen)
+
+        self.updateBarPositions()
+
+    def updateBarPositions(self):
+        self.centerLine.setLine(self.line().x1(), self.line().y1(), self.line().x2(), self.line().y2())
+        self.leftEdgeLine.setLine(self.line().x1() + self.barWidths/2, self.line().y1() + self.barHeight/2, self.line().x1() + self.barWidths/2, self.line().y1() - self.barHeight/2)
+        self.rightEdgeLine.setLine(self.line().x2() - self.barWidths/2, self.line().y2() + self.barHeight/2, self.line().x2() - self.barWidths/2, self.line().y2() - self.barHeight/2)
+        # self.peakLine.setLine(self.peakLine().x2() - self.barWidths/2, self.line().y2() + self.barHeight/2, self.line().x2() - self.barWidths/2, self.line().y2() - self.barHeight/2)
+            
+
+    def updatePeakRanges(self):
+        self.peak.minTime.attribute_value = self.line().x1()
+        self.peak.maxTime.attribute_value = self.line().x2()
+        self.peak.minValue.attribute_value = self.line().y1()
+    def updateFromPeakRanges(self):
+        y = self.peak.minValue.attribute_value
+        x1 = self.peak.minTime.attribute_value
+        x2 = self.peak.maxTime.attribute_value
+        if x1 == x2:
+            x2 += 1e-9
+        self.setLine(x1, y, x2, y)
+    def updateLeftValue(self, newLeft):
+        right = self.line().x2()
+        if newLeft < right:
+            self.setLine(newLeft, self.line().y1(), right, self.line().y1())
+            self.updateBarPositions()
+        
+    def updateRightValue(self, newRight):
+        left = self.line().x1()
+        if left < newRight:
+            self.setLine(left, self.line().y1(), newRight, self.line().y1())
+            self.updateBarPositions()
+    def updateHeight(self, newHeigth):
+        self.setLine(self.line().x1(), newHeigth, self.line().x2(), newHeigth)
+        self.updateBarPositions()
+
+    @property
+    def strokeWidth(self):
+        left, bottom, right, top = self.parent.viewRect().getCoords()
+        return (top - bottom) * 0.05
+    @property
+    def barWidths(self):
+        left, bottom, right, top = self.parent.viewRect().getCoords()
+        return (right - left) * 0.01
+    @property
+    def barHeight(self):
+        return self.strokeWidth * 5		
+    # @property
+    # def centerWidth(self):
+    # 	return self.barWidths * 0.2
+
+    def mousePressEvent(self, event):
+        # Determine if the click is near one of the line's endpoints
+        line = self.line()
+        edge_threshold = 10  # pixels
+        self._drag_edge = None
+
+        # Map scene position to line coordinates
+        p1 = QtCore.QPointF(line.x1(), line.y1())
+        p2 = QtCore.QPointF(line.x2(), line.y2())
+
+        # Use mapFromScene to get local coordinates
+        click = event.pos()
+        if (np.abs(QtCore.QLineF(click, p1).dx()) < self.barWidths):
+            self._drag_edge = 'left'
+        elif (np.abs(QtCore.QLineF(click, p2).dx()) < self.barWidths):
+            self._drag_edge = 'right'
+        else:
+            self._drag_edge = None
+        print(self._drag_edge)
+        self._distanceBetweenClickAndTop = self.line().x1() - event.pos().x(), self.line().y1() - event.pos().y()
+        self._width = self.line().x2() - self.line().x1()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        line = self.line()
+        # super().mouseMoveEvent(event)
+        if hasattr(self, '_drag_edge') and self._drag_edge:
+            if self._drag_edge == 'left' and event.pos().x() < line.x2():
+                self.setLine(event.pos().x(),line.y1(), line.x2(), line.y2())
+            elif self._drag_edge == 'right' and event.pos().x() > line.x1():
+                self.setLine(line.x1(), line.y1(), event.pos().x(),line.y2())
+        else:
+            topCorner = event.pos().x() + self._distanceBetweenClickAndTop[0], event.pos().y() + self._distanceBetweenClickAndTop[1]
+            self.setLine(topCorner[0], topCorner[1], topCorner[0] + self._width, topCorner[1])
+        self.updateBarPositions()
+        self.updatePeakRanges()
+
+    def mouseReleaseEvent(self, event):
+        self._drag_edge = None
+        super().mouseReleaseEvent(event)
+
+
+
+class peakWidget(QtWidgets.QHBoxLayout):
+    colors = [
+        QtGui.QColor(255, 0, 0),      # red
+        QtGui.QColor(0, 255, 0),      # green
+        QtGui.QColor(0, 0, 255),      # blue
+        QtGui.QColor(255, 165, 0),    # orange
+        QtGui.QColor(255, 0, 255),    # magenta
+        QtGui.QColor(0, 255, 255),    # cyan
+        QtGui.QColor(255, 255, 0),    # yellow
+        QtGui.QColor(139, 0, 0),      # dark red
+        QtGui.QColor(0, 100, 0),      # dark green
+        QtGui.QColor(0, 0, 139),       # dark blue
+    ]
+    def __init__(self, name, scope, peakIndex, aws):
+        super().__init__()
+        self.minTime = aws[f"minTime{peakIndex+1}"]
+        self.maxTime = aws[f"maxTime{peakIndex+1}"]
+        self.minValue = aws[f"{name}_minValue"]
+        self.input = aws[f"{name}_input"]
+        for el in [self.minTime, self.maxTime, self.minValue, self.input]:
+            scope.attribute_layout.removeWidget(el)
+            self.addWidget(el)
+        # self.canUpdateFromLine = False
+        self.line = PeakLine(scope.plot_item, self, peakIndex, peakWidget.colors[peakIndex])
+        self.minTime.value_changed.connect(lambda : self.line.updateLeftValue(self.minTime.attribute_value))
+        self.maxTime.value_changed.connect(lambda : self.line.updateRightValue(self.maxTime.attribute_value))
+        self.minValue.value_changed.connect(lambda : self.line.updateHeight(self.minValue.attribute_value))
+
+class peak_widget(ModuleWidget):
+    """
+    Widget for a single peak.
+    """
+    def init_gui(self):
+        self.init_main_layout(orientation="vertical")
+        #self.main_layout = QtWidgets.QVBoxLayout()
+        #self.setLayout(self.main_layout)
+        self.init_attribute_layout()
+        aws = self.attribute_widgets
+        self.minTime = aws["left"]
+        self.maxTime = aws["right"]
+        self.minValue = aws["height"]
+        self.minTime.value_changed.connect(lambda : self.line.updateLeftValue(self.minTime.attribute_value))
+        self.maxTime.value_changed.connect(lambda : self.line.updateRightValue(self.maxTime.attribute_value))
+        self.minValue.value_changed.connect(lambda : self.line.updateHeight(self.minValue.attribute_value))
+# 	 
+# 		for prop in ['p', 'i']: #, 'd']:
+# 			self.attribute_widgets[prop].widget.set_log_increment()
+
+
+# 		self.setpoint_widget = self.attribute_widgets["setpoint"]
+# 		self.inputSignal_widget = self.attribute_widgets["input"]
+# 		self.setpoint_signal_widget = self.attribute_widgets["setpoint_signal"]
+# 		self.setpoint_source_widget = self.attribute_widgets["setpoint_source"]
+        # can't avoid timer to update ival
+        # self.timer_ival = QtCore.QTimer()
+        # self.timer_ival.setInterval(1000)
+        # self.timer_ival.timeout.connect(self.update_ival)
+        # self.timer_ival.start()
+
+    def __init__(self, name, module, parent=None):
+        super().__init__(name, module, parent)
+        self.graph = None
+    def setGraphForPeakLine(self, graph, color):
+        self.graph = graph
+        self.line = PeakLine(graph, self, color)
+        self.line.updateFromPeakRanges()
+      
+    def setpointToCurrentValue(self):
+        #get the last acquisition from the scope and put its average as the new setpoint
+        acquisition = self.module.parent.scope.getLastAcquisition(self.inputSignal_widget.attribute_value)
+        self.setpoint_widget.attribute_value = np.mean(acquisition)
+
 
 class ScanCavity_widget(AcquisitionModuleWidget):
     """
@@ -68,7 +271,11 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.plot_item.showGrid(y=True, alpha=1.)
         self.viewBox = self.plot_item.getViewBox()
         self.viewBox.setMouseEnabled(y=False)
-        # Add a draggable horizontal line to the graph
+        
+        ml : peak_widget = self.mainL._create_widget()
+        self.main_layout.addWidget(ml)
+        ml.setGraphForPeakLine(self.plot_item, QtGui.QColor(255, 0, 0))
+
         
 
         #self.button_single = QtWidgets.QPushButton("Run single")
@@ -146,6 +353,13 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         # self.rolling_mode = self.module.rolling_mode
         self.attribute_layout.addStretch(1)
         
+    @property
+    def mainL(self):
+        return self.module.mainL
+    @property
+    def mainR(self):
+        return self.module.mainR
+
     def update_attribute_by_name(self, name, new_value_list):
         """
         Updates all attributes on the gui when their values have changed.

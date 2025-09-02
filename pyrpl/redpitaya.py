@@ -523,7 +523,12 @@ class RedPitaya(object):
             return list(self.modules.values())
         else:
             return []
-    def load_software_modules(self):
+    @property
+    def name(self):
+        try:
+            return self._name
+        except:
+            return str(self)
         """
         load all software modules defined as root element of the config file.
         """

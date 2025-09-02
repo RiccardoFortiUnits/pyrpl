@@ -549,8 +549,8 @@ red_pitaya_dsp #(.version(version)) i_dsp (
   .asg2_i          (  asg_b                  ),
   .asg_a_amp_o     (  external_a_amp         ),
   .asg_b_amp_o     (  external_b_amp         ),
-  .scope1_o        (  to_scope_a             ),
-  .scope2_o        (  to_scope_b             ),
+  .scope0_o        (  to_scope_a             ),
+  .scope1_o        (  to_scope_b             ),
   .asg1phase_i     (  asg1phase_o            ),
 
   .pwm0            (  pwm_signals[0]         ),
@@ -560,6 +560,7 @@ red_pitaya_dsp #(.version(version)) i_dsp (
 
   .ramp_trigger    (  ramp_trigger           ),
   .generic_module_trigger(generic_module_trigger),
+  .asg_triggers    (  trig_asg_out           ),
 
   .trig_o          (  dsp_trigger            ),
 

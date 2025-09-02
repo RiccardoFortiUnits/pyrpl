@@ -353,6 +353,8 @@ class Pyrpl(object):
             newName = self.c[name].redpitaya.hostname.replace(".","_")
             self.c[name]._rename(newName)
             self.rps[newName] = self.rps.pop(name)
+            name = newName
+        self.rps[name]._name = name
         
                     
         if reloadGUI:

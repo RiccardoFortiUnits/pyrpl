@@ -41,6 +41,7 @@ import numpy as np
 import numbers
 import ast
 from typing import Type, List, Any, TypeVar
+import weakref
 
 logger = logging.getLogger(name=__name__)
 
@@ -254,6 +255,24 @@ class DynamicInstanceProperty(propertyWrapper):
 	def __set__(self, instance, value):
 		# Ignore the passed instance, use the forced one
 		self._prop.__set__(self.dynamicAccessor(instance), value)
+
+class MultipleDynamicInstanceProperty(propertyWrapper):
+	'''wrapper for properties that are meant to be set at the same time on multiple instances.'''
+	def __init__(self, prop, dynamicAccessor = lambda instance : [instance]):
+		self._prop = prop
+		self.dynamicAccessor = dynamicAccessor
+
+	def __get__(self, instance, owner):
+		'''all instances should have the same value, let's return the value of the first instance'''
+		if instance is None:
+			return self._prop.__get__(instance, owner)
+		return self._prop.__get__(self.dynamicAccessor(instance)[0], owner)
+
+	def __set__(self, instance, value):
+		# Ignore the passed instance, use the forced one
+		instances = self.dynamicAccessor(instance)
+		for inst in instances:
+			self._prop.__set__(inst, value)
 
 
 
@@ -1750,14 +1769,27 @@ class digitalPinProperty(StringProperty):
 		Convert argument to string
 		"""
 		if isinstance(value, str):
-			row = 1 if 'p' in value else 0
-			try:
-				idx = int(value.replace('p','').replace('n',''))
-			except:
-				idx = 0
-			return row * 8 + idx
+			return digitalPinProperty.pinStringToIndex()
 		return int(value)
 	
+	@staticmethod
+	def pinStringToIndex(value):
+		value = str.lower(value)
+		row = 1 if 'p' in value else 0
+		try:
+			idx = int(value.replace('p','').replace('n',''))
+		except:
+			idx = 0
+		return row * 8 + idx
+	@staticmethod
+	def pinIndexToString(value):
+		val = int(value)
+		return ('N' if val < 8 else 'P') + str(val & 0x7)
+	
+	@staticmethod
+	def normalizedPinString(value):
+		idx = digitalPinProperty.pinStringToIndex(value)
+		return digitalPinProperty.pinIndexToString(idx)
 
 class digitalPinRegister(BaseRegister, digitalPinProperty):
 	"""
@@ -1768,8 +1800,8 @@ class digitalPinRegister(BaseRegister, digitalPinProperty):
 		digitalPinProperty.__init__(self, **kwargs)
 		
 	def to_python(self, obj, value):
-		val = int(value)
-		return str(val & 0x7)+ ('n' if val < 8 else 'p')
+		return digitalPinProperty.pinIndexToString(value)
+
 
 	def from_python(self, obj, value):
 		return self.validate_and_normalize(obj, value)
