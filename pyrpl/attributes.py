@@ -206,13 +206,13 @@ class BaseProperty(BaseAttribute):
 class propertyWrapper(BaseAttribute):
 	def __getattr__(self, name):
 		# Avoid recursion by directly accessing internal attributes
-		if name in ('_prop', '_forcedInstanceName', 'dynamicAccessor'):
+		if name in ('_prop', '_forcedInstanceName', 'dynamicAccessor', 'extraFunctionToDoAfterSettingValue', 'value_updated'):
 			return object.__getattribute__(self, name)
 		return getattr(object.__getattribute__(self, '_prop'), name)
 
 	def __setattr__(self, name, value):
 		# Avoid recursion by directly setting internal attributes
-		if name in ('_prop', '_forcedInstanceName', 'dynamicAccessor'):
+		if name in ('_prop', '_forcedInstanceName', 'dynamicAccessor', 'extraFunctionToDoAfterSettingValue', 'value_updated'):
 			object.__setattr__(self, name, value)
 		else:
 			setattr(object.__getattribute__(self, '_prop'), name, value)
@@ -242,30 +242,37 @@ class SubInstanceProperty(propertyWrapper):
 	
 class DynamicInstanceProperty(propertyWrapper):
 	'''wrapper for properties. It forces the property to interact with a sub-instance of the instance passed by the functions __get__, __set__...'''
-	def __init__(self, prop, dynamicAccessor = lambda instance : instance):
+	def __init__(self, prop, dynamicAccessor = lambda instance : instance, extraFunctionToDoAfterSettingValue = None):# extraFunctionToDoAfterSettingValue(self, instance, value)
 		self._prop = prop
 		self.dynamicAccessor = dynamicAccessor
+		self.extraFunctionToDoAfterSettingValue = extraFunctionToDoAfterSettingValue
 
 	def __get__(self, instance, owner):
 		# Ignore the passed instance, use the forced one
 		if instance is None:
-			return self._prop.__get__(instance, owner)
+			return self
 		return self._prop.__get__(self.dynamicAccessor(instance), owner)
 
 	def __set__(self, instance, value):
 		# Ignore the passed instance, use the forced one
 		self._prop.__set__(self.dynamicAccessor(instance), value)
+		if self.extraFunctionToDoAfterSettingValue is not None:
+			self.extraFunctionToDoAfterSettingValue(self, instance, value)
+	
+	def value_updated(self, module, value = None, appendix = []):
+		return self._prop.value_updated(self.dynamicAccessor(module), value, appendix)
 
 class MultipleDynamicInstanceProperty(propertyWrapper):
 	'''wrapper for properties that are meant to be set at the same time on multiple instances.'''
-	def __init__(self, prop, dynamicAccessor = lambda instance : [instance]):
+	def __init__(self, prop, dynamicAccessor = lambda instance : [instance], extraFunctionToDoAfterSettingValue = None):# extraFunctionToDoAfterSettingValue(self, instance, value)
 		self._prop = prop
 		self.dynamicAccessor = dynamicAccessor
+		self.extraFunctionToDoAfterSettingValue = extraFunctionToDoAfterSettingValue
 
 	def __get__(self, instance, owner):
 		'''all instances should have the same value, let's return the value of the first instance'''
 		if instance is None:
-			return self._prop.__get__(instance, owner)
+			return self
 		return self._prop.__get__(self.dynamicAccessor(instance)[0], owner)
 
 	def __set__(self, instance, value):
@@ -273,6 +280,11 @@ class MultipleDynamicInstanceProperty(propertyWrapper):
 		instances = self.dynamicAccessor(instance)
 		for inst in instances:
 			self._prop.__set__(inst, value)
+		if self.extraFunctionToDoAfterSettingValue is not None:
+			self.extraFunctionToDoAfterSettingValue(self, instance, value)
+	
+	def value_updated(self, module, value = None, appendix = []):
+		return self._prop.value_updated(self.dynamicAccessor(module), value, appendix)
 
 
 
@@ -317,10 +329,10 @@ class BaseRegister(BaseProperty):
 		# self.parent = obj  # store obj in memory
 		val = obj._read(self.address, not self.isAddressStatic)
 		if self.bitmask is None:
-			# print(f"address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
+			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
 			return self.to_python(obj, val)
 		else:
-			# print(f"address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
+			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
 			retVal = val & self.bitmask
 			if self.startBit is not None: 
 				# try:
@@ -336,7 +348,7 @@ class BaseRegister(BaseProperty):
 		"""
 		if self.bitmask is None:
 			obj._write(self.address, self.from_python(obj, val), not self.isAddressStatic)
-			# print(f"address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(self.from_python(obj, val))}")
+			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(self.from_python(obj, val))}")
 		else:
 			act = obj._read(self.address, not self.isAddressStatic)
 			new = act & (~self.bitmask)
@@ -345,7 +357,7 @@ class BaseRegister(BaseProperty):
 				addValue <<= self.startBit
 			new |= (addValue & self.bitmask)
 			obj._write(self.address, new, not self.isAddressStatic)
-			# print(f"address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(new)}")
+			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(new)}")
 				
 
 	def __set__(self, obj, value):
@@ -1769,7 +1781,7 @@ class digitalPinProperty(StringProperty):
 		Convert argument to string
 		"""
 		if isinstance(value, str):
-			return digitalPinProperty.pinStringToIndex()
+			return digitalPinProperty.pinStringToIndex(value)
 		return int(value)
 	
 	@staticmethod

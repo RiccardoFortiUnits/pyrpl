@@ -101,7 +101,10 @@ should not be used.
    input                 peak_b_valid,
    input      [ 14 -1:0] peak_c,
    input      [ 14 -1:0] peak_c_index,
-   input                 peak_c_valid
+   input                 peak_c_valid,
+   input                 inPeakRange_a,
+   input                 inPeakRange_b,
+   input                 inPeakRange_c
 );
 
 
@@ -205,7 +208,7 @@ assign signal_arrivingFrom[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};
 assign signal_arrivingFrom[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
 assign signal_arrivingFrom[PEAK_IDX3] = {~peak_c_index[13], peak_c_index[12:0]};
 //ALLTRIGGERS contains some useful triggers, so that they can be sent to the hk module. It's not the cleanest solution, but for sure it's compact
-assign signal_arrivingFrom[ALLTRIGGERS] = {asg1_trigger, asg0_trigger, ramp_trigger, generic_module_trigger};
+assign signal_arrivingFrom[ALLTRIGGERS] = {inPeakRange_a, inPeakRange_b, inPeakRange_c, asg1_trigger, asg0_trigger, ramp_trigger, generic_module_trigger};
 assign isValid_arrivingFrom = {peak_c_valid, peak_b_valid, peak_a_valid, peak_c_valid, peak_b_valid, peak_a_valid, {PEAK1{1'b1}}};// all inputs are always valid, except for the peak signals
 
 wire  signed [   14+LOG_DIRECT_OUTPUT_MODULES -1: 0] sum1; 

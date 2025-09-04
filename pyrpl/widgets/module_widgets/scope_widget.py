@@ -292,7 +292,6 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.plot_item.showGrid(y=True, alpha=1.)
         self.viewBox = self.plot_item.getViewBox()
         self.viewBox.setMouseEnabled(y=False)
-        # Add a draggable horizontal line to the graph
         
 
         #self.button_single = QtWidgets.QPushButton("Run single")

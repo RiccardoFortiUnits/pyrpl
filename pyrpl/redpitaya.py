@@ -529,6 +529,8 @@ class RedPitaya(object):
             return self._name
         except:
             return str(self)
+        
+    def load_software_modules(self):
         """
         load all software modules defined as root element of the config file.
         """

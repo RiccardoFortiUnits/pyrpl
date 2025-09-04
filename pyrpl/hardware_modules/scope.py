@@ -403,7 +403,8 @@ class Scope(HardwareModule, AcquisitionModule):
     hysteresis = FloatRegister(0x20, bits=14, norm=2 ** 13,
                                     doc="hysteresis for trigger [volts]")
     
-    external_trigger_pin = digitalPinRegister(- addr_base + HK.addr_base + 0x28, startBit=0)
+    external_trigger_pin = DynamicInstanceProperty(HK.scopeExternalTrigger, lambda scope : scope.redpitaya.hk)
+    # external_trigger_pin = digitalPinRegister(- addr_base + HK.addr_base + 0x28, startBit=0)
 
     @property
     def threshold_ch1(self):

@@ -58,6 +58,9 @@ class HK(HardwareModule):
 	led = IntRegister(0x30, doc="LED control with bits 1:8", min=0, max=2**8)
 	# another option: access led as array of bools
 	# led = [BoolRegister(0x30,bit=i,doc="LED "+str(i)) for i in range(8)]
+	scopeExternalTrigger = digitalPinRegister(0x28, startBit=0x0, doc="pin that triggers the scope module")
+	asgExternalTrigger = digitalPinRegister(0x28, startBit=0x4, doc="pin that triggers the asg modules")
+	rampExternalTrigger = digitalPinRegister(0x28, startBit=0x8, doc="pin that triggers the ramp modules")
 	genericModuleTrigger = digitalPinRegister(0x28, startBit=0xC, doc="pin that can disable dsp modules, if their 'useGenericTrigger' value is checked")
 
 	def set_expansion_direction(self, index, val):

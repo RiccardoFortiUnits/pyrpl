@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime
 import shutil
 
-newFpgaName = "peakFinder" + datetime.now().strftime(" %d_%m_%Y %H_%M")+".bit.bin"
+newFpgaName = "scanCavity" + datetime.now().strftime(" %d_%m_%Y %H_%M")+".bit.bin"
 
 backupSaveFolder = "d:/lastline/new_backupFpgaBinaries"
 

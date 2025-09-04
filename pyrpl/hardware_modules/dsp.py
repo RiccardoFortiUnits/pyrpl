@@ -35,9 +35,27 @@ def parse_verilog_indexes(verilog_path):
 				name, idx = m.groups()
 				output_dict[str.lower(name)] = int(idx)
 	return input_dict, output_dict
+import re
+
+def parse_verilog_triggers(verilog_path):
+    with open(verilog_path, 'r') as f:
+        content = f.read()
+
+    # Match the line with the assign statement
+    match = re.search(r'assign\s+signal_arrivingFrom\[ALLTRIGGERS\]\s*=\s*\{([^}]+)\};', content)
+    if not match:
+        raise ValueError("Could not find the assign statement for signal_arrivingFrom[ALLTRIGGERS].")
+
+    # Extract the elements inside the braces
+    elements_str = match.group(1)
+    elements = [el.strip() for el in elements_str.split(',') if el.strip()]
+    elements.reverse()
+    return elements
+
 
 currentFolder = os.path.dirname(os.path.realpath(__file__))
-DSP_INPUTS_unordered, DSP_ONLY_OUTPUTS_unordered = parse_verilog_indexes(f"{currentFolder}/../fpga/project/pyrpl.srcs/sources_1/imports/rtl/red_pitaya_dsp.v")
+dsp_v_file = f"{currentFolder}/../fpga/project/pyrpl.srcs/sources_1/imports/rtl/red_pitaya_dsp.v"
+DSP_INPUTS_unordered, DSP_ONLY_OUTPUTS_unordered = parse_verilog_indexes(dsp_v_file)
 inputOrders = [
 	"in1", "in2", "out1", "out2", 
 	"peak1", "peak2", "peak3", "peak_idx1", "peak_idx2", "peak_idx3", 
@@ -66,6 +84,10 @@ def orderDictionary(dict, keysInOrder, defaultValue):
 DSP_INPUTS = orderDictionary(DSP_INPUTS_unordered, inputOrders, 0)
 DSP_INPUTS['off'] = 2**math.ceil(math.log2(max(DSP_INPUTS.values()))) - 1
 DSP_ONLY_OUTPUTS = orderDictionary(DSP_ONLY_OUTPUTS_unordered, outputOrders, 0)
+
+#dictionary connecting the bits of signal alltriggers to the corresponding triggers
+DSP_TRIGGERS = {triggerName : i for i, triggerName in enumerate(parse_verilog_triggers(dsp_v_file))}
+
 # order here determines the order in the GUI etc.
 # DSP_INPUTS = OrderedDict([
 # 	('in1', 13), #same as asg

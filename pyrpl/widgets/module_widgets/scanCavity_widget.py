@@ -29,7 +29,10 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
         parent.addItem(self.leftEdgeLine)
         self.rightEdgeLine = QtWidgets.QGraphicsLineItem(0.001, 0.1, 0.001, -0.1, parent=parent)
         parent.addItem(self.rightEdgeLine)
+        self.targetLine = QtWidgets.QGraphicsLineItem(0.0, 0, 0.0005, 0, parent=parent)
+        parent.addItem(self.targetLine)
         self.parent = parent
+        self.isSetpointActive = False
         self.updateSizes()
         self.updateFromPeakRanges()
 
@@ -47,9 +50,9 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
         self.leftEdgeLine.setPen(barPen)
         self.rightEdgeLine.setPen(barPen)
 
-        # centerPen = QtGui.QPen(self.color, self.centerWidth)
-        # centerPen.setCapStyle(QtCore.Qt.FlatCap)
-        # self.peakLine.setPen(pen)
+        centerPen = QtGui.QPen(self.color, self.targetLineWidths)
+        centerPen.setCapStyle(QtCore.Qt.FlatCap)
+        self.targetLine.setPen(centerPen)
 
         self.updateBarPositions()
 
@@ -57,13 +60,14 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
         self.centerLine.setLine(self.line().x1(), self.line().y1(), self.line().x2(), self.line().y2())
         self.leftEdgeLine.setLine(self.line().x1() + self.barWidths/2, self.line().y1() + self.barHeight/2, self.line().x1() + self.barWidths/2, self.line().y1() - self.barHeight/2)
         self.rightEdgeLine.setLine(self.line().x2() - self.barWidths/2, self.line().y2() + self.barHeight/2, self.line().x2() - self.barWidths/2, self.line().y2() - self.barHeight/2)
-        # self.peakLine.setLine(self.peakLine().x2() - self.barWidths/2, self.line().y2() + self.barHeight/2, self.line().x2() - self.barWidths/2, self.line().y2() - self.barHeight/2)
+        self.targetLine.setLine((self.line().x1() + self.line().x2()) / 2, self.line().y1() + self.barHeight/2, (self.line().x1() + self.line().x2()) / 2, self.line().y2() - self.barHeight/2)
             
 
     def updatePeakRanges(self):
         self.peak.minTime.attribute_value = self.line().x1()
         self.peak.maxTime.attribute_value = self.line().x2()
         self.peak.minValue.attribute_value = self.line().y1()
+        self.updateSetpoint()
     def updateFromPeakRanges(self):
         y = self.peak.minValue.attribute_value
         x1 = self.peak.minTime.attribute_value
@@ -74,17 +78,22 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
     def updateLeftValue(self, newLeft):
         right = self.line().x2()
         if newLeft < right:
+            self.updateSetpoint()
             self.setLine(newLeft, self.line().y1(), right, self.line().y1())
             self.updateBarPositions()
         
     def updateRightValue(self, newRight):
         left = self.line().x1()
         if left < newRight:
+            self.updateSetpoint()
             self.setLine(left, self.line().y1(), newRight, self.line().y1())
             self.updateBarPositions()
     def updateHeight(self, newHeigth):
         self.setLine(self.line().x1(), newHeigth, self.line().x2(), newHeigth)
         self.updateBarPositions()
+    def updateSetpoint(self):
+        self.peak.setpoint.attribute_value = (self.line().x1() + self.line().x2()) / 2
+
 
     @property
     def strokeWidth(self):
@@ -94,6 +103,9 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
     def barWidths(self):
         left, bottom, right, top = self.parent.viewRect().getCoords()
         return (right - left) * 0.01
+    @property
+    def targetLineWidths(self):
+        return self.barWidths * 0.5
     @property
     def barHeight(self):
         return self.strokeWidth * 5		
@@ -144,38 +156,16 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
 
 
 
-class peakWidget(QtWidgets.QHBoxLayout):
-    colors = [
-        QtGui.QColor(255, 0, 0),      # red
-        QtGui.QColor(0, 255, 0),      # green
-        QtGui.QColor(0, 0, 255),      # blue
-        QtGui.QColor(255, 165, 0),    # orange
-        QtGui.QColor(255, 0, 255),    # magenta
-        QtGui.QColor(0, 255, 255),    # cyan
-        QtGui.QColor(255, 255, 0),    # yellow
-        QtGui.QColor(139, 0, 0),      # dark red
-        QtGui.QColor(0, 100, 0),      # dark green
-        QtGui.QColor(0, 0, 139),       # dark blue
-    ]
-    def __init__(self, name, scope, peakIndex, aws):
-        super().__init__()
-        self.minTime = aws[f"minTime{peakIndex+1}"]
-        self.maxTime = aws[f"maxTime{peakIndex+1}"]
-        self.minValue = aws[f"{name}_minValue"]
-        self.input = aws[f"{name}_input"]
-        for el in [self.minTime, self.maxTime, self.minValue, self.input]:
-            scope.attribute_layout.removeWidget(el)
-            self.addWidget(el)
-        # self.canUpdateFromLine = False
-        self.line = PeakLine(scope.plot_item, self, peakIndex, peakWidget.colors[peakIndex])
-        self.minTime.value_changed.connect(lambda : self.line.updateLeftValue(self.minTime.attribute_value))
-        self.maxTime.value_changed.connect(lambda : self.line.updateRightValue(self.maxTime.attribute_value))
-        self.minValue.value_changed.connect(lambda : self.line.updateHeight(self.minValue.attribute_value))
-
 class peak_widget(ModuleWidget):
     """
     Widget for a single peak.
     """
+    def _togglePID(self):
+        activated = self.module.togglePID()
+        self.line.isSetpointActive = activated
+        self.line.updateFromPeakRanges()
+        self.button_activatePID.setText("unlock peak" if activated else "lock peak")
+
     def init_gui(self):
         self.init_main_layout(orientation="vertical")
         #self.main_layout = QtWidgets.QVBoxLayout()
@@ -185,23 +175,15 @@ class peak_widget(ModuleWidget):
         self.minTime = aws["left"]
         self.maxTime = aws["right"]
         self.minValue = aws["height"]
+        self.setpoint = aws["timeSetpoint"]
+        # self.attribute_layout.removeWidget(self.setpoint)
         self.minTime.value_changed.connect(lambda : self.line.updateLeftValue(self.minTime.attribute_value))
         self.maxTime.value_changed.connect(lambda : self.line.updateRightValue(self.maxTime.attribute_value))
         self.minValue.value_changed.connect(lambda : self.line.updateHeight(self.minValue.attribute_value))
-# 	 
-# 		for prop in ['p', 'i']: #, 'd']:
-# 			self.attribute_widgets[prop].widget.set_log_increment()
-
-
-# 		self.setpoint_widget = self.attribute_widgets["setpoint"]
-# 		self.inputSignal_widget = self.attribute_widgets["input"]
-# 		self.setpoint_signal_widget = self.attribute_widgets["setpoint_signal"]
-# 		self.setpoint_source_widget = self.attribute_widgets["setpoint_source"]
-        # can't avoid timer to update ival
-        # self.timer_ival = QtCore.QTimer()
-        # self.timer_ival.setInterval(1000)
-        # self.timer_ival.timeout.connect(self.update_ival)
-        # self.timer_ival.start()
+        
+        self.button_activatePID = QtWidgets.QPushButton("lock peak")
+        self.button_activatePID.clicked.connect(self._togglePID)
+        self.main_layout.addWidget(self.button_activatePID)
 
     def __init__(self, name, module, parent=None):
         super().__init__(name, module, parent)
@@ -216,11 +198,25 @@ class peak_widget(ModuleWidget):
         acquisition = self.module.parent.scope.getLastAcquisition(self.inputSignal_widget.attribute_value)
         self.setpoint_widget.attribute_value = np.mean(acquisition)
 
+class secondaryPitaya_widget(ModuleWidget):
+    pass
 
 class ScanCavity_widget(AcquisitionModuleWidget):
     """
     A widget to represent a scan cavity lock
     """
+    colors = [
+        QtGui.QColor(255, 0, 0),      # red
+        QtGui.QColor(0, 255, 0),      # green
+        QtGui.QColor(0, 0, 255),      # blue
+        QtGui.QColor(255, 165, 0),    # orange
+        QtGui.QColor(255, 0, 255),    # magenta
+        QtGui.QColor(0, 255, 255),    # cyan
+        QtGui.QColor(255, 255, 0),    # yellow
+        QtGui.QColor(139, 0, 0),      # dark red
+        QtGui.QColor(0, 100, 0),      # dark green
+        QtGui.QColor(0, 0, 139),       # dark blue
+    ]
     def init_gui(self):                
         """
         sets up all the gui for the scope.
@@ -272,11 +268,43 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.viewBox = self.plot_item.getViewBox()
         self.viewBox.setMouseEnabled(y=False)
         
+        def add_new_tab(tab, content, tabTitle):
+            new_tab = QtWidgets.QWidget()
+            new_tab_layout = QtWidgets.QHBoxLayout()
+            new_tab_layout.addWidget(content)
+            new_tab.setLayout(new_tab_layout)
+            tab.addTab(content, tabTitle)
+
+        self.peakTabs = QtWidgets.QTabWidget()
+        self.main_layout.addWidget(self.peakTabs)
+
         ml : peak_widget = self.mainL._create_widget()
-        self.main_layout.addWidget(ml)
+        add_new_tab(self.peakTabs, ml, "main Left")
         ml.setGraphForPeakLine(self.plot_item, QtGui.QColor(255, 0, 0))
+        mr : peak_widget = self.mainR._create_widget()
+        add_new_tab(self.peakTabs, mr, "main Right")
+        mr.setGraphForPeakLine(self.plot_item, QtGui.QColor(0, 255, 0))
+        self.peakList = [ml, mr]
+        for i, peak in enumerate(self.module.secondaryPeaks):
+            widget : peak_widget = peak._create_widget()
+            add_new_tab(self.peakTabs, widget, peak.name)
+            widget.setGraphForPeakLine(self.plot_item, ScanCavity_widget.colors[i+2])
+            self.peakList.append(widget)
+                
+        self.secondaryPitayasTabs = QtWidgets.QTabWidget()
+        self.main_layout.addWidget(self.secondaryPitayasTabs)
+        for secondaryPitaya in self.module.secondaryPitayas:
+            widget : peak_widget = secondaryPitaya._create_widget()
+            add_new_tab(self.secondaryPitayasTabs, widget, peak.name)
+        self.module.duration = .01
 
         
+        def on_view_changed():
+            for peak in self.peakList:
+                peak.line.updateSizes()
+
+        self.plot_item.sigRangeChanged.connect(lambda _, __: on_view_changed())
+        self.plot_item.getViewBox().sigResized.connect(on_view_changed)
 
         #self.button_single = QtWidgets.QPushButton("Run single")
         #self.button_continuous = QtWidgets.QPushButton("Run continuous")

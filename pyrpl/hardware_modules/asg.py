@@ -22,7 +22,7 @@ Let's set up the ASG to output a sawtooth signal of amplitude 0.8 V
 import numpy as np
 from collections import OrderedDict
 from ..attributes import BoolRegister, FloatRegister, SelectRegister, SelectProperty, SelectRegister, \
-                             IntRegister, LongRegister, PhaseRegister, FrequencyRegister, FloatProperty, digitalPinRegister
+                             IntRegister, LongRegister, PhaseRegister, FrequencyRegister, FloatProperty, digitalPinRegister, DynamicInstanceProperty
 from ..modules import HardwareModule, SignalModule
 from ..widgets.module_widgets import AsgWidget
 from . import all_output_directs, dsp_addr_base, all_inputs
@@ -275,8 +275,8 @@ def make_asg(channel=0):
                                         'cycles. This is used for the generation of '
                                         'white noise. If false, asg behaves '
                                         'normally. ')
-
-        external_trigger_pin = digitalPinRegister(- addr_base + HK.addr_base + 0x28, startBit=4)
+        external_trigger_pin = DynamicInstanceProperty(HK.asgExternalTrigger, lambda asg : asg.redpitaya.hk)
+        # external_trigger_pin = digitalPinRegister(- addr_base + HK.addr_base + 0x28, startBit=4)
 
         repetitions = IntRegister(0x18, doc = 'number of repetitions of the curve. If 0, the curve is repeated indefinetly')
 
