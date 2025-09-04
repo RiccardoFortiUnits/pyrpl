@@ -116,7 +116,7 @@ class peak(Module):
 		self.scanningCavity : ScanningCavity = scanningCavity
 		self.index = index
 		self.pid = redpitaya.pids.all_modules[index - 1 if index >= 2 else 0]
- 	
+	 
 	left = peakValue(lambda peak: f"minTime{peak.index+1}", min = 0)
 	right = peakValue(lambda peak: f"maxTime{peak.index+1}")
 	height = peakValue(lambda peak: f"{peak.redpitaya.scope.peakNames[peak.index]}_minValue")
@@ -427,4 +427,64 @@ class ScanningCavity(AcquisitionModule):
 		ScanningCavity.highValue.value_updated(self)
 		ScanningCavity.trigger_source.value_updated(self)
 		ScanningCavity.output_direct.value_updated(self)
+		
+
+	'''overwrite of asynchronous functions. They are almost identical to their original versions (defined inside AcquisitionModule), but the actual acquisition is done by the scope module'''
+	async def _continuous_async(self):
+		"""
+		Coroutine to launch a continuous acquisition.
+		"""
+		s : Scope = self.mainPitaya.scope
+		self._running_state = 'running_continuous'
+		s._prepare_averaging()  # initializes the table self.data_avg,
+		await self._do_average_continuous_async()
+
+	async def _do_average_continuous_async(self):
+		"""
+		Accumulate averages based on the attributes self.current_avg and
+		self.trace_average. This coroutine doesn't take care of
+		initializing the data such that the module can go indifferently from
+		['paused_single', 'paused_continuous'] into ['running_single',
+		'running_continuous'].
+		"""
+		s : Scope = self.mainPitaya.scope
+		while (self.running_state != 'stopped'):
+			if self.running_state == 'paused_continuous':
+				await s._resume_event.wait()
+			s.current_avg = min(s.current_avg + 1, s.trace_average)
+			s.data_avg = (s.data_avg * (s.current_avg - 1) + \
+							 await s._trace_async(
+								 s.MIN_DELAY_CONTINUOUS_MS * 0.001)) / \
+							s.current_avg
+			self._emit_signal_by_name('display_curve', [s.data_x,
+														s.data_avg])
+
+	async def _single_async(self):
+		"""
+		Coroutine to launch the acquisition of a trace_average traces.
+		"""
+		s : Scope = self.mainPitaya.scope
+		self._running_state = 'running_single'
+		s._prepare_averaging()  # initializes the table self.data_avg,
+		return await self._do_average_single_async()
 	
+	async def _do_average_single_async(self):
+		"""
+		Accumulate averages based on the attributes self.current_avg and
+		self.trace_average. This coroutine doesn't take care of
+		initializing the data such that the module can go indifferently from
+		['paused_single', 'paused_continuous'] into ['running_single',
+		'running_continuous'].
+		"""
+		s : Scope = self.mainPitaya.scope
+		while s.current_avg < s.trace_average:
+			s.current_avg+=1
+			if s.running_state=='paused_single':
+				await s._resume_event.wait()
+			s.data_avg = (s.data_avg * (s.current_avg-1) + \
+							 await s._trace_async(0)) / s.current_avg
+			self._emit_signal_by_name('display_curve', [s.data_x,
+														s.data_avg])
+		self._running_state = 'stopped'
+		s._free_up_resources()
+		return s.data_avg

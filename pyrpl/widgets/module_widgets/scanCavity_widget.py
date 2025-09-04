@@ -323,63 +323,38 @@ class ScanCavity_widget(AcquisitionModuleWidget):
                                                 ))]
         self.main_layout.addWidget(self.win, stretch=10)
 
-
-        #self.button_layout.addWidget(self.button_single)
-        #self.button_layout.addWidget(self.button_continuous)
-        #self.button_layout.addWidget(self.button_save)
-        #self.button_layout.addWidget(aws['curve_name'])
-        #aws['curve_name'].setMaximumWidth(250)
         self.main_layout.addLayout(self.button_layout)
 
-        # self.layout_additional= QtWidgets.QHBoxLayout()
-        # additionalScopeParams = [
-        #     "asg0_offset",
-        #     "pid0_setpoint",
-        #     "pid0_min_voltage",
-        #     "pid0_max_voltage",
-        #     "pid0_p",
-        #     "pid0_i",
-        #     "ival"
-        # ]
-        # for param in additionalScopeParams:
-        #     self.attribute_layout.removeWidget(aws[param])
-        #     self.layout_additional.addWidget(aws[param])
-        # self.main_layout.addLayout(self.layout_additional)
         
-        #self.button_single.clicked.connect(self.run_single_clicked)
-        #self.button_continuous.clicked.connect(self.run_continuous_clicked)
-        #self.button_save.clicked.connect(self.save_clicked)
-
+        self.rolling_group = QtWidgets.QGroupBox("Trigger mode")
+        self.checkbox_normal = QtWidgets.QRadioButton("Normal")
+        self.checkbox_untrigged = QtWidgets.QRadioButton("Untrigged (rolling)")
+        self.checkbox_normal.setChecked(True)
+        self.lay_radio = QtWidgets.QVBoxLayout()
+        self.lay_radio.addWidget(self.checkbox_normal)
+        self.lay_radio.addWidget(self.checkbox_untrigged)
+        self.rolling_group.setLayout(self.lay_radio)
+        self.attribute_layout.insertWidget(
+            list(self.attribute_widgets.keys()).index("trigger_source"),
+            self.rolling_group)
+        self.checkbox_normal.clicked.connect(self.rolling_mode_toggled)
+        self.checkbox_untrigged.clicked.connect(self.rolling_mode_toggled)
         #self.update_rolling_mode_visibility()
-        # self.attribute_widgets['duration'].value_changed.connect(
-        #     self.update_rolling_mode_visibility)
+        self.attribute_widgets['duration'].value_changed.connect(
+            self.update_rolling_mode_visibility)
 
-        # self.layout_peaks = QtWidgets.QVBoxLayout()
-        # self.layout_peak_refL = peakWidget("peak_refL", self, 0,aws)
-        # self.layout_peak_refR = peakWidget("peak_refR", self, 1,aws)
-        # self.layout_peak_ctrl = peakWidget("peak_ctrl", self, 2,aws)
-        # self.peakList = [self.layout_peak_refL, self.layout_peak_refR, self.layout_peak_ctrl]
-        # self.layout_peaks.addLayout(self.layout_peak_refL)
-        # self.layout_peaks.addLayout(self.layout_peak_refR)
-        # self.layout_peaks.addLayout(self.layout_peak_ctrl)
-                
-        # self.attribute_layout.addLayout(self.layout_peaks)
-        
-        # # Connect signals to print when plot_item changes dimension or axes range
-        # def on_view_changed():
-        #     for peak in self.peakList:
-        #         peak.line.updateSizes()
 
-        # self.plot_item.sigRangeChanged.connect(lambda _, __: on_view_changed())
-        # self.plot_item.getViewBox().sigResized.connect(on_view_changed)
+        self.plot_item.sigRangeChanged.connect(lambda _, __: on_view_changed())
+        self.plot_item.getViewBox().sigResized.connect(on_view_changed)
 
         super(ScanCavity_widget, self).init_gui()
         # since trigger_mode radiobuttons is not a regular attribute_widget,
         # it is not synced with the module at creation time.
         self.update_running_buttons()
-        # self.update_rolling_mode_visibility()
-        # self.rolling_mode = self.module.rolling_mode
+        self.update_rolling_mode_visibility()
+        self.rolling_mode = self.module.rolling_mode
         self.attribute_layout.addStretch(1)
+        # self.button_continuous.click()
         
     @property
     def mainL(self):
@@ -393,11 +368,24 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         Updates all attributes on the gui when their values have changed.
         """
         super(ScanCavity_widget, self).update_attribute_by_name(name, new_value_list)
-        # if name in ['rolling_mode', 'duration']:
-        #     self.rolling_mode = self.module.rolling_mode
-        #     self.update_rolling_mode_visibility()
-        # if name in ['_running_state',]:
-        #     self.update_running_buttons()
+        if name in ['rolling_mode', 'duration']:
+            self.rolling_mode = self.module.rolling_mode
+            self.update_rolling_mode_visibility()
+        if name in ['_running_state',]:
+            self.update_running_buttons()
+
+    def display_channel_obsolete(self, ch):
+        """
+        Displays channel ch (1 or 2) on the graph
+        :param ch:
+        """
+        try:
+                self.datas[ch-1] = self.module.trace(ch)
+                self.times = self.module.times
+                self.curves[ch-1].setData(self.times,
+                                          self.datas[ch-1])
+        except NotReadyError:
+            pass
 
     def change_ownership(self):
         """
@@ -405,98 +393,69 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         when the scope becomes free again unless we ask for it explicitly...
         """
         super(ScanCavity_widget, self).change_ownership()
-        # self.update_rolling_mode_visibility()
+        self.update_rolling_mode_visibility()
 
     def display_curve(self, list_of_arrays):
         """
         Displays all active channels on the graph.
         """
         times, (ch1, ch2) = list_of_arrays
-        disp = [(ch1, self.module.ch1_active), (ch2, self.module.ch2_active)]
-        if self.module.xy_mode:
-            self.curves[0].setData(ch1, ch2)
-            self.curves[0].setVisible(True)
-            self.curves[1].setVisible(False)
-        else:
-            for ch, (data, active) in enumerate(disp):
-                if active:
-                    self.curves[ch].setData(times, data)
-                    self.curves[ch].setVisible(True)
-                else:
-                    self.curves[ch].setVisible(False)
-            if self.module.ch_math_active:
-                # catch numpy warnings instead of printing them
-                # https://stackoverflow.com/questions/15933741/how-do-i-catch-a-numpy-warning-like-its-an-exception-not-just-for-testing
-                backup_np_err = np.geterr()
-                np.seterr(all='ignore')
-                try:
-                    math_data = eval(self.module.math_formula,
-                       dict(ch1=ch1, ch2=ch2, np=np, times=times))
-                except:
-                    pass
-                else:
-                    self.curves[2].setData(times, math_data)
-                np.seterr(**backup_np_err)
-                self.curves[2].setVisible(True)
-            else:
-                self.curves[2].setVisible(False)
+        self.curves[0].setData(times, ch1)
+        self.curves[0].setVisible(True)
         self.update_current_average() # to update the number of averages
 
-    # def set_rolling_mode(self):
-    #     """
-    #     Set rolling mode on or off based on the module's attribute
-    #     "rolling_mode"
-    #     """
-    #     self.rolling_mode = self.module.rolling_mode
+    def set_rolling_mode(self):
+        """
+        Set rolling mode on or off based on the module's attribute
+        "rolling_mode"
+        """
+        self.rolling_mode = self.module.rolling_mode
 
-    # def rolling_mode_toggled(self):
-    #     self.module.rolling_mode = self.rolling_mode
+    def rolling_mode_toggled(self):
+        self.module.rolling_mode = self.rolling_mode
 
-    # @property
-    # def rolling_mode(self):
-    #     # return ((self.checkbox_untrigged.isChecked()) and self.rolling_group.isEnabled())
+    @property
+    def rolling_mode(self):
+        return ((self.checkbox_untrigged.isChecked()) and self.rolling_group.isEnabled())
 
-    # @rolling_mode.setter
-    # def rolling_mode(self, val):
-    #     if val:
-    #         self.checkbox_untrigged.setChecked(True)
-    #     else:
-    #         self.checkbox_normal.setChecked(True)
-    #     return val
+    @rolling_mode.setter
+    def rolling_mode(self, val):
+        if val:
+            self.checkbox_untrigged.setChecked(True)
+        else:
+            self.checkbox_normal.setChecked(True)
+        return val
 
-    # def update_rolling_mode_visibility(self):
-    #     """
-    #     Hide rolling mode checkbox for duration < 100 ms
-    #     """
-    #     # self.rolling_group.setEnabled(self.module._rolling_mode_allowed())
-    #     # self.attribute_widgets['trigger_source'].widget.setEnabled(
-    #     #     not self.rolling_mode)
-    #     # self.attribute_widgets['threshold'].widget.setEnabled(
-    #     #     not self.rolling_mode)
-    #     # self.attribute_widgets['hysteresis'].widget.setEnabled(
-    #     #     not self.rolling_mode)
-    #     # single_enabled = (not self.module._is_rolling_mode_active()) and \
-    #     #                     self.module.running_state!="running_continuous"
-    #     # self.button_single.setEnabled(single_enabled)
-    #     pass
+    def update_rolling_mode_visibility(self):
+        """
+        Hide rolling mode checkbox for duration < 100 ms
+        """
+        self.rolling_group.setEnabled(self.module._rolling_mode_allowed())
+        self.attribute_widgets['trigger_source'].widget.setEnabled(
+            not self.rolling_mode)
+        self.attribute_widgets['threshold'].widget.setEnabled(
+            not self.rolling_mode)
+        self.attribute_widgets['hysteresis'].widget.setEnabled(
+            not self.rolling_mode)
+        single_enabled = (not self.module._is_rolling_mode_active()) and \
+                            self.module.running_state!="running_continuous"
+        self.button_single.setEnabled(single_enabled)
 
     def update_running_buttons(self):
         super(ScanCavity_widget, self).update_running_buttons()
-        # self.update_rolling_mode_visibility()
+        self.update_rolling_mode_visibility()
 
     def autoscale_x(self):
         """Autoscale pyqtgraph. The current behavior is to autoscale x axis
         and set y axis to  [-1, +1]"""
         if self.module.xy_mode:
             return
-        # if self.module._is_rolling_mode_active():
-        #     mini = -self.module.duration
-        #     maxi = 0
-        # else:
-        #     mini = min(self.module.times)
-        #     maxi = max(self.module.times)
-        mini = min(self.module.times)
-        maxi = max(self.module.times)
+        if self.module._is_rolling_mode_active():
+            mini = -self.module.duration
+            maxi = 0
+        else:
+            mini = min(self.module.times)
+            maxi = max(self.module.times)
         self.plot_item.setRange(xRange=[mini, maxi])
         self.plot_item.setRange(yRange=[-1,1])
         # self.plot_item.autoRange()
