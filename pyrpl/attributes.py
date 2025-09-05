@@ -1795,6 +1795,8 @@ class digitalPinProperty(StringProperty):
 		return row * 8 + idx
 	@staticmethod
 	def pinIndexToString(value):
+		if isinstance(value, str):
+			return digitalPinProperty.normalizedPinString(value)
 		val = int(value)
 		return ('N' if val < 8 else 'P') + str(val & 0x7)
 	

@@ -439,6 +439,7 @@ wire dsp_trigger;
 wire [14 -1:0] peak_a, peak_b, peak_c;
 wire peak_a_valid, peak_b_valid, peak_c_valid;
 wire [14 -1:0] peak_a_index, peak_b_index, peak_c_index;
+wire inPeakRange_a, inPeakRange_b, inPeakRange_c;
 
 red_pitaya_scope #(.version(version)) i_scope (
   // ADC
@@ -489,7 +490,10 @@ red_pitaya_scope #(.version(version)) i_scope (
 
  .peak_c         (peak_c),
  .peak_c_index   (peak_c_index),
- .peak_c_valid   (peak_c_valid)
+ .peak_c_valid   (peak_c_valid),
+ .inPeakRange_a  (inPeakRange_a),
+ .inPeakRange_b  (inPeakRange_b),
+ .inPeakRange_c  (inPeakRange_c)
 );
 
 //---------------------------------------------------------------------------------
@@ -584,7 +588,11 @@ red_pitaya_dsp #(.version(version)) i_dsp (
 
    .peak_c         (peak_c),
    .peak_c_index   (peak_c_index),
-   .peak_c_valid   (peak_c_valid)
+   .peak_c_valid   (peak_c_valid),
+
+   .inPeakRange_a  (inPeakRange_a),
+   .inPeakRange_b  (inPeakRange_b),
+   .inPeakRange_c  (inPeakRange_c)
 );
 
 // the ams module has been obsoleted by PWM control via DSP module (outputs)

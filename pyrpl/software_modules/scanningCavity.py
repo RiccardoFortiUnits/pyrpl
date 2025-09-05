@@ -92,103 +92,6 @@ class peakSetpoint(FloatProperty):
 		return L, R
 
 
-class peak(Module):
-	
-	_gui_attributes = [
-					"min_voltage",
-					"max_voltage",
-					"timeSetpoint","left",
-					"right",
-					"height",
-					"p",
-					"i",
-					"output_direct",]
-	_widget_class = peak_widget
-
-	# @staticmethod
-	# def createPeak(redpitaya, index, parent):
-	# 	p = peak(parent)
-	# 	p.redpitaya = redpitaya
-	# 	p.index = index
-	# 	return p
-	def __init__(self, redpitaya, index, scanningCavity : ScanningCavity, name=None):
-		super().__init__(redpitaya, name)
-		self.scanningCavity : ScanningCavity = scanningCavity
-		self.index = index
-		self.pid = redpitaya.pids.all_modules[index - 1 if index >= 2 else 0]
-	 
-	left = peakValue(lambda peak: f"minTime{peak.index+1}", min = 0)
-	right = peakValue(lambda peak: f"maxTime{peak.index+1}")
-	height = peakValue(lambda peak: f"{peak.redpitaya.scope.peakNames[peak.index]}_minValue")
-	input = peakValue(lambda peak: f"{peak.redpitaya.scope.peakNames[peak.index]}_input")
-	
-	'''setpoint is the actual value of the PID setpoint (value between -1 and 1, 
-	where -1 represents the lower timing for the peak, either
-		0 for the main peaks
-		mainL for the secondary peaks
-	and 1 represents either
-		mainScope.duration for the main peaks
-		mainR for the secondary peaks
-
-	timeSetpoint is the time corresponding to the PID setpoint
-	)'''
-	setpoint = DynamicInstanceProperty(Pid.setpoint, lambda peak : peak.pid)
-	timeSetpoint = peakSetpoint(min = 0)
-	p = DynamicInstanceProperty(Pid.p, lambda peak : peak.pid)
-	i = DynamicInstanceProperty(Pid.i, lambda peak : peak.pid)
-	paused = DynamicInstanceProperty(Pid.paused, lambda peak : peak.pid)
-	min_voltage = DynamicInstanceProperty(Pid.min_voltage, lambda peak : peak.pid)
-	max_voltage = DynamicInstanceProperty(Pid.max_voltage, lambda peak : peak.pid)
-	output_direct = DynamicInstanceProperty(Pid.output_direct, lambda peak : peak.pid)
-	
-	def setupPid(self):
-		self.pid.ival=0
-		self.pid.setpoint_source="from memory"
-		self.pid.pause_gains="pi"
-		self.pid.input = f"peak_idx{self.index+1}"
-	
-	def togglePID(self):
-		'''also returns if the PID was activated or not'''
-		if self.paused:
-			self.activatePID()
-			return True
-		self.deactivatePID()
-		return False
-
-	def activatePID(self):
-		self.setupPid()
-		self.paused = 0
-
-	def deactivatePID(self):
-		self.paused = 1
-		self.setupPid()
-
-	@staticmethod
-	def allUnusedSecondaryPeaks(scanCavity):
-		peaks = scanCavity.allAvailableSecondaryPeaks()
-		return [p for p in peaks if p not in scanCavity.usedPeaks]
-		
-	pitaya_n_index = SelectProperty(allUnusedSecondaryPeaks)
-
-	@property
-	def peakType(self):
-		if self.redpitaya == self.parent.mainPitaya and self.index < 2:
-			return ["main_L", "main_R"][self.index]
-		return "secondary"
-	def __eq__(self, other):
-		if not isinstance(other, peak):
-			return NotImplemented
-		return self.redpitaya == other.redpitaya and self.index == other.index
-
-	def __hash__(self):
-		return hash((self.redpitaya, self.index))
-	
-	def setLeft(self, newTiming):
-		setattr(self.redpitaya.scope, f"minTime{self.index+1}", newTiming)
-	def setRight(self, newTiming):
-		setattr(self.redpitaya.scope, f"maxTime{self.index+1}", newTiming)
-	def setHeight(self, newTiming):
-		setattr(self.redpitaya.scope, f"{self.redpitaya.scope.peakNames[self.index]}_minValue", newTiming)
 
 
 class commonPeakIndexRegister(peakIndexRegister):
@@ -223,9 +126,6 @@ class asgSelector(SelectProperty):
 	
 class mainTriggerSelector(digitalPinProperty):
 	'''this property sets the digital pin of the main pitaya that will trigger the other pitaya's scopes'''
-	def __init__(self, **kwargs):
-		super().__init__(**kwargs)
-
 	def set_value(self, obj : ScanningCavity, val):
 		val = digitalPinProperty.pinIndexToString(val)
 		hk : HK = obj.mainPitaya.hk
@@ -238,7 +138,6 @@ class mainTriggerSelector(digitalPinProperty):
 
 class scopeTriggerSelector(digitalPinProperty):
 	'''this property sets the digital pin that trigger the scope acquisition. Can also be used for the main pitaya, if the ramp trigger is external'''
-
 	def set_value(self, obj : secondaryPitaya, val):
 		val = digitalPinProperty.pinIndexToString(val)
 		hk : HK = obj.rp.hk
@@ -248,7 +147,29 @@ class scopeTriggerSelector(digitalPinProperty):
 		scope.external_trigger_pin = val
 		return super().set_value(obj, val)
 
+class peakEnablerSelector(digitalPinProperty):
+	'''this property sets the digital pin that will enable the AOM responsible for shutting down the laser when it is not its turn'''
+	def set_value(self, obj : peak, val):
+		oldEnabled = obj.enabled
+		val = digitalPinProperty.pinIndexToString(val)
+		hk : HK = obj.redpitaya.hk
+		setattr(hk, f"expansion_{val}_output", 1)
+		# setattr(hk, f"pinState_{val}", "dsp" if oldEnabled else "memory")  #already done by obj.enabled
+		# setattr(hk, f"expansion_{val}", 0)
+		setattr(hk, f"external_{val}_dspBitSelector", DSP_TRIGGERS[f"inPeakRange_{chr(ord('a')+obj.index)}"])
+		ret = super().set_value(obj, val)
+		obj.enabled = oldEnabled
+		return ret
 
+class enablePeakProperty(BoolProperty):
+	def set_value(self, obj : peak, val):
+		index = digitalPinProperty.pinIndexToString(obj.enablingBit)
+		hk = obj.redpitaya.hk
+		setattr(hk, f"pinState_{index}", "dsp" if val else "memory")
+		setattr(hk, f"expansion_{index}", 0)
+		obj.paused = not (obj.locking & val)
+		return super().set_value(obj, val)
+	
 class mainInputSelector(BaseProperty):
 
 	def set_value(self, obj, value):
@@ -302,6 +223,115 @@ class rampVoltageEdge(FloatProperty):
 		offs = asg.offset
 		low, high = rampVoltageEdge.getLowHigFromAmpOffs(amp, offs)
 		return low if self.isLowerEdge else high
+
+
+class peak(Module):
+	
+	_gui_attributes = [
+					"min_voltage",
+					"max_voltage",
+					"timeSetpoint","left",
+					"right",
+					"height",
+					"p",
+					"i",
+					"output_direct",
+					"enablingBit",
+					"enabled",]
+	_widget_class = peak_widget
+
+	# @staticmethod
+	# def createPeak(redpitaya, index, parent):
+	# 	p = peak(parent)
+	# 	p.redpitaya = redpitaya
+	# 	p.index = index
+	# 	return p
+	def __init__(self, redpitaya, index, scanningCavity : ScanningCavity, name=None):
+		super().__init__(redpitaya, name)
+		self.scanningCavity : ScanningCavity = scanningCavity
+		self.index = index
+		self.pid = redpitaya.pids.all_modules[index - 1 if index >= 2 else 0]
+	 
+	left = peakValue(lambda peak: f"minTime{peak.index+1}", min = 0)
+	right = peakValue(lambda peak: f"maxTime{peak.index+1}")
+	height = peakValue(lambda peak: f"{peak.redpitaya.scope.peakNames[peak.index]}_minValue")
+	input = peakValue(lambda peak: f"{peak.redpitaya.scope.peakNames[peak.index]}_input")
+	enablingBit = peakEnablerSelector()
+	enabled = enablePeakProperty()
+	'''setpoint is the actual value of the PID setpoint (value between -1 and 1, 
+	where -1 represents the lower timing for the peak, either
+		0 for the main peaks
+		mainL for the secondary peaks
+	and 1 represents either
+		mainScope.duration for the main peaks
+		mainR for the secondary peaks
+
+	timeSetpoint is the time corresponding to the PID setpoint
+	)'''
+	setpoint = DynamicInstanceProperty(Pid.setpoint, lambda peak : peak.pid)
+	timeSetpoint = peakSetpoint(min = 0)
+	p = DynamicInstanceProperty(Pid.p, lambda peak : peak.pid)
+	i = DynamicInstanceProperty(Pid.i, lambda peak : peak.pid)
+	paused = DynamicInstanceProperty(Pid.paused, lambda peak : peak.pid)
+	min_voltage = DynamicInstanceProperty(Pid.min_voltage, lambda peak : peak.pid)
+	max_voltage = DynamicInstanceProperty(Pid.max_voltage, lambda peak : peak.pid)
+	output_direct = DynamicInstanceProperty(Pid.output_direct, lambda peak : peak.pid)
+
+	locking = BoolProperty()
+	
+	def setupPid(self):
+		self.pid.ival=0
+		self.pid.setpoint_source="from memory"
+		self.pid.pause_gains="pi"
+		self.pid.input = f"peak_idx{self.index+1}"
+	
+	def togglePID(self):
+		'''also returns if the PID was activated or not'''
+		if self.locking:
+			self._deactivatePID()
+		else:
+			self._activatePID()
+		return self.locking
+
+	def _activatePID(self):
+		if self.enabled:
+			self.setupPid()
+			self.locking = True
+		else:
+			self.locking = False
+		self.paused = not (self.locking & self.enabled)
+
+	def _deactivatePID(self):
+		self.setupPid()
+		self.locking = False
+		self.paused = not (self.locking & self.enabled)
+
+	@staticmethod
+	def allUnusedSecondaryPeaks(scanCavity):
+		peaks = scanCavity.allAvailableSecondaryPeaks()
+		return [p for p in peaks if p not in scanCavity.usedPeaks]
+		
+	pitaya_n_index = SelectProperty(allUnusedSecondaryPeaks)
+
+	@property
+	def peakType(self):
+		if self.redpitaya == self.parent.mainPitaya and self.index < 2:
+			return ["main_L", "main_R"][self.index]
+		return "secondary"
+	def __eq__(self, other):
+		if not isinstance(other, peak):
+			return NotImplemented
+		return self.redpitaya == other.redpitaya and self.index == other.index
+
+	def __hash__(self):
+		return hash((self.redpitaya, self.index))
+	
+	def setLeft(self, newTiming):
+		setattr(self.redpitaya.scope, f"minTime{self.index+1}", newTiming)
+	def setRight(self, newTiming):
+		setattr(self.redpitaya.scope, f"maxTime{self.index+1}", newTiming)
+	def setHeight(self, newTiming):
+		setattr(self.redpitaya.scope, f"{self.redpitaya.scope.peakNames[self.index]}_minValue", newTiming)
 
 class secondaryPitaya(Module):
 	_gui_attributes = [
@@ -427,7 +457,12 @@ class ScanningCavity(AcquisitionModule):
 		ScanningCavity.highValue.value_updated(self)
 		ScanningCavity.trigger_source.value_updated(self)
 		ScanningCavity.output_direct.value_updated(self)
-		
+	
+	def _rolling_mode_allowed(self):
+		return False
+
+	def _is_rolling_mode_active(self):
+		return False
 
 	'''overwrite of asynchronous functions. They are almost identical to their original versions (defined inside AcquisitionModule), but the actual acquisition is done by the scope module'''
 	async def _continuous_async(self):

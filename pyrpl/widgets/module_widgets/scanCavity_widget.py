@@ -164,7 +164,13 @@ class peak_widget(ModuleWidget):
         activated = self.module.togglePID()
         self.line.isSetpointActive = activated
         self.line.updateFromPeakRanges()
+        if hasattr(self, "line"):
+            self.line.isSetpointActive = activated
+            self.line.updateFromPeakRanges()
         self.button_activatePID.setText("unlock peak" if activated else "lock peak")
+    def _enableLocking(self):
+        self.button_activatePID.setEnabled(self.enabled.attribute_value)
+        
 
     def init_gui(self):
         self.init_main_layout(orientation="vertical")
@@ -184,6 +190,9 @@ class peak_widget(ModuleWidget):
         self.button_activatePID = QtWidgets.QPushButton("lock peak")
         self.button_activatePID.clicked.connect(self._togglePID)
         self.main_layout.addWidget(self.button_activatePID)
+        self.enabled = aws["enabled"]
+        self.enabled.value_changed.connect(self._enableLocking)
+        self._enableLocking()        
 
     def __init__(self, name, module, parent=None):
         super().__init__(name, module, parent)
@@ -197,6 +206,30 @@ class peak_widget(ModuleWidget):
         #get the last acquisition from the scope and put its average as the new setpoint
         acquisition = self.module.parent.scope.getLastAcquisition(self.inputSignal_widget.attribute_value)
         self.setpoint_widget.attribute_value = np.mean(acquisition)
+    @staticmethod
+    def getGroupsOfNonOverlapping(peakList):
+        ranges = [(p.minTime, p.maxTime) for p in peakList]
+        def areIntersecting(range0, range1):
+            return (range0[0] < range1[1]) ^ (range0[1] <= range1[0])
+        intersections = np.zeros((len(ranges), len(ranges)), dtype=bool)
+        for i in range(len(ranges)):
+            for j in range(len(ranges)):
+                intersections[i,j] = areIntersecting(ranges[i], ranges[j])
+        stillFree = np.arange(len(ranges))
+        allGroups = []
+        while len(stillFree) > 0:
+            run = [stillFree[0]]
+            addedIndexes = [0]
+            for i in range(1, len(stillFree)):
+                testedLine = np.repeat(stillFree[i],len(run))
+                if not np.any(intersections[testedLine, run]):
+                    addedIndexes.append(i)
+                    run.append(stillFree[i])
+            stillFree = np.delete(stillFree, addedIndexes)
+            allGroups.append(run)
+        return allGroups
+
+
 
 class secondaryPitaya_widget(ModuleWidget):
     pass
@@ -354,7 +387,6 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.update_rolling_mode_visibility()
         self.rolling_mode = self.module.rolling_mode
         self.attribute_layout.addStretch(1)
-        # self.button_continuous.click()
         
     @property
     def mainL(self):
