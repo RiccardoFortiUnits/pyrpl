@@ -258,10 +258,10 @@ class Scope(HardwareModule, AcquisitionModule):
                        "maxTime3",
                        "peak_refL_input",
                        "peak_refR_input",
-                       "peak_ctrl_input",
+                       "peak_ctrl0_input",
                        "peak_refL_minValue",
                        "peak_refR_minValue",
-                       "peak_ctrl_minValue",
+                       "peak_ctrl0_minValue",
                        ]
     
     lastInputs = [None, None]
@@ -514,21 +514,30 @@ class Scope(HardwareModule, AcquisitionModule):
     maxTime2 = peakIndexRegister(0xA0, default = 0x2000, doc = "time after the trigger at which the peak on channel 2 is no longer checked")
     minTime3 = peakIndexRegister(0xBC, default = 0x0, doc = "time after the trigger from which the peak on channel 3 is checked (the peak is searched only between minTime3 and maxTime3)")
     maxTime3 = peakIndexRegister(0xC0, default = 0x2000, doc = "time after the trigger at which the peak on channel 3 is no longer checked")
+    minTime4 = peakIndexRegister(0xD0, default = 0x0, doc = "time after the trigger from which the peak on channel 4 is checked (the peak is searched only between minTime4 and maxTime4)")
+    maxTime4 = peakIndexRegister(0xD4, default = 0x2000, doc = "time after the trigger at which the peak on channel 4 is no longer checked")
 
     peakInputsList = {"adc1" : 0, "adc2" : 1, "ch1" : 2, "ch2" : 3}
     peak_refL_input =  SelectRegister(0xB0, startBit=0, doc="input used for the first peak search",
                                               options=peakInputsList)
     peak_refR_input =  SelectRegister(0xB0, startBit=2, doc="input used for the first peak search",
                                               options=peakInputsList)
-    peak_ctrl_input =  SelectRegister(0xB0, startBit=4, doc="input used for the first peak search",
+    peak_ctrl0_input =  SelectRegister(0xB0, startBit=4, doc="input used for the first peak search",
+                                              options=peakInputsList)
+    peak_ctrl1_input =  SelectRegister(0xB0, startBit=6, doc="input used for the first peak search",
                                               options=peakInputsList)
 
     peak_refL_minValue = FloatRegister(0xB4, startBit= 0, bits=14, norm=2 ** 13,
                                 doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
     peak_refR_minValue = FloatRegister(0xB4, startBit= 14, bits=14, norm=2 ** 13,
                                 doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
-    peak_ctrl_minValue = FloatRegister(0xCC, startBit= 0, bits=14, norm=2 ** 13,
+    peak_ctrl0_minValue = FloatRegister(0xCC, startBit= 0, bits=14, norm=2 ** 13,
                                 doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
+    peak_ctrl1_minValue = FloatRegister(0xE0, startBit= 0, bits=14, norm=2 ** 13,
+                                doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
+
+    peak_ctrl0_normalizeIndex = BoolRegister(0xB8, starbit = 0, doc="if set, the index value of this peak will be normalized to respect to the indexes of the peaks refL and refR")
+    peak_ctrl1_normalizeIndex = BoolRegister(0xB8, starbit = 1, doc="if set, the index value of this peak will be normalized to respect to the indexes of the peaks refL and refR")
 
     peakRangeRegisters = dict(
         minTime1 = minTime1,
@@ -537,8 +546,10 @@ class Scope(HardwareModule, AcquisitionModule):
         maxTime2 = maxTime2,
         minTime3 = minTime3,
         maxTime3 = maxTime3,
+        minTime4 = minTime4,
+        maxTime4 = maxTime4,
     )
-    peakNames = ["peak_refL","peak_refR","peak_ctrl","peak_ctrl2",]
+    peakNames = ["peak_refL","peak_refR","peak_ctrl0","peak_ctrl1",]
 
     # list comprehension workaround for python 3 compatibility
     # cf. http://stackoverflow.com/questions/13905741

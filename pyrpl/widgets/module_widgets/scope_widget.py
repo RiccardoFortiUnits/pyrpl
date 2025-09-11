@@ -354,11 +354,11 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.layout_peaks = QtWidgets.QVBoxLayout()
         self.layout_peak_refL = peakWidget("peak_refL", self, 0,aws)
         self.layout_peak_refR = peakWidget("peak_refR", self, 1,aws)
-        self.layout_peak_ctrl = peakWidget("peak_ctrl", self, 2,aws)
-        self.peakList = [self.layout_peak_refL, self.layout_peak_refR, self.layout_peak_ctrl]
+        self.layout_peak_ctrl0 = peakWidget("peak_ctrl0", self, 2,aws)
+        self.peakList = [self.layout_peak_refL, self.layout_peak_refR, self.layout_peak_ctrl0]
         self.layout_peaks.addLayout(self.layout_peak_refL)
         self.layout_peaks.addLayout(self.layout_peak_refR)
-        self.layout_peaks.addLayout(self.layout_peak_ctrl)
+        self.layout_peaks.addLayout(self.layout_peak_ctrl0)
                 
         self.attribute_layout.addLayout(self.layout_peaks)
         

@@ -436,10 +436,17 @@ wire    [14-1: 0] to_scope_a;
 wire    [14-1: 0] to_scope_b;
 wire dsp_trigger;
 
-wire [14 -1:0] peak_a, peak_b, peak_c;
-wire peak_a_valid, peak_b_valid, peak_c_valid;
-wire [14 -1:0] peak_a_index, peak_b_index, peak_c_index;
-wire inPeakRange_a, inPeakRange_b, inPeakRange_c;
+parameter nOfNormalizable_peaks = 2;
+wire [14 -1:0] peak_a, peak_b;
+wire peak_a_valid, peak_b_valid;
+wire [14 -1:0] peak_a_index, peak_b_index;
+wire inPeakRange_a, inPeakRange_b;
+
+wire [nOfNormalizable_peaks * 14 -1:0]	peaks_extra;
+wire [nOfNormalizable_peaks -1:0]		peaks_extra_valid;
+wire [nOfNormalizable_peaks * 14 -1:0]	peaks_extra_index;
+wire [nOfNormalizable_peaks -1:0]		inPeakRange_extra;
+
 
 red_pitaya_scope #(.version(version)) i_scope (
   // ADC
@@ -480,20 +487,21 @@ red_pitaya_scope #(.version(version)) i_scope (
 
  .real_adc_a_i     (adc_a),
  .real_adc_b_i     (adc_b),
- .peak_a         (peak_a),
- .peak_a_index   (peak_a_index),
- .peak_a_valid   (peak_a_valid),
+ 
+ .peak_L         (peak_a),
+ .peak_L_index   (peak_a_index),
+ .peak_L_valid   (peak_a_valid),
+ .peak_L_inRange	  (inPeakRange_a),
 
- .peak_b         (peak_b),
- .peak_b_index   (peak_b_index),
- .peak_b_valid   (peak_b_valid),
+ .peak_R         (peak_b),
+ .peak_R_index   (peak_b_index),
+ .peak_R_valid   (peak_b_valid),
+ .peak_R_inRange	  (inPeakRange_b),
 
- .peak_c         (peak_c),
- .peak_c_index   (peak_c_index),
- .peak_c_valid   (peak_c_valid),
- .inPeakRange_a  (inPeakRange_a),
- .inPeakRange_b  (inPeakRange_b),
- .inPeakRange_c  (inPeakRange_c)
+ .peaks_extra         (peaks_extra),
+ .peaks_extra_index   (peaks_extra_index),
+ .peaks_extra_valid   (peaks_extra_valid), 
+ .peaks_extra_inRange  (inPeakRange_extra)
 );
 
 //---------------------------------------------------------------------------------
@@ -540,7 +548,10 @@ assign sys_rdata[6*32+31 -:32] = sys_rdata[4*32+31 -:32];
 assign sys_rdata[7*32+31 -:32] = sys_rdata[4*32+31 -:32];
 assign sys_err[5] = sys_err[4]; assign sys_err[6] = sys_err[4]; assign sys_err[7] = sys_err[4];
 assign sys_ack[5] = sys_ack[4]; assign sys_ack[6] = sys_ack[4]; assign sys_ack[7] = sys_ack[4];
-red_pitaya_dsp #(.version(version)) i_dsp (
+red_pitaya_dsp #(
+	.version(version),
+	.nOfPeaks(2 + nOfNormalizable_peaks)
+) i_dsp (
    // signals
   .clk_i           (  adc_clk                    ),  // clock
   .rstn_i          (  adc_rstn                   ),  // reset - active low
@@ -578,21 +589,10 @@ red_pitaya_dsp #(.version(version)) i_dsp (
   .sys_err         (  sys_err[4]                 ),  // error indicator
   .sys_ack         (  sys_ack[4]                 ),   // acknowledge signal
 
-   .peak_a         (peak_a),
-   .peak_a_index   (peak_a_index),
-   .peak_a_valid   (peak_a_valid),
-
-   .peak_b         (peak_b),
-   .peak_b_index   (peak_b_index),
-   .peak_b_valid   (peak_b_valid),
-
-   .peak_c         (peak_c),
-   .peak_c_index   (peak_c_index),
-   .peak_c_valid   (peak_c_valid),
-
-   .inPeakRange_a  (inPeakRange_a),
-   .inPeakRange_b  (inPeakRange_b),
-   .inPeakRange_c  (inPeakRange_c)
+   .peaks         ({peaks_extra, peak_b, peak_a}),
+   .peaks_index   ({peaks_extra_index, peak_b_index, peak_a_index}),
+   .peaks_valid   ({peaks_extra_valid, peak_b_valid, peak_a_valid}),
+   .inPeakRange  ({inPeakRange_extra, inPeakRange_b, inPeakRange_a})
 );
 
 // the ams module has been obsoleted by PWM control via DSP module (outputs)

@@ -50,17 +50,27 @@ class SignalLauncherScanningCavity(SignalLauncher):
 	# p_gain_ok = QtCore.Signal(list)
 	# i_gain_rounded = QtCore.Signal(list)
 	# i_gain_ok = QtCore.Signal(list)
-nOfSecondaryPeaks = 1
+nOfSecondaryPeaks = 2
 
 class peakValue(FloatProperty):
 	def __init__(self, propertyAccessor = lambda peak: f"minTime{peak.index+1}", **kwargs):
 		super().__init__( **kwargs)
 		self.propertyAccessor = propertyAccessor
-	def set_value(self, obj, val):
+	def set_value(self, obj : peak, val):
 		setattr(obj.redpitaya.scope, self.propertyAccessor(obj), val)
 		return super().set_value(obj, val)
-	def get_value(self, obj):
+	def get_value(self, obj : peak):
 		return getattr(obj.redpitaya.scope, self.propertyAccessor(obj))
+class peakInput(SelectProperty):
+	def inputName(self, obj):
+		return f"{obj.redpitaya.scope.peakNames[obj.index]}_input"
+	def set_value(self, obj : peak, val):
+		setattr(obj.redpitaya.scope, self.inputName(obj), val)
+		return super().set_value(obj, val)
+	def get_value(self, obj : peak):
+		return getattr(obj.redpitaya.scope, self.inputName(obj))
+	def options(self, instance=None):
+		return getattr(Scope, self.inputName(instance)).options(instance.redpitaya.scope)
 
 class peakSetpoint(FloatProperty):
 	def get_value(self, obj):
@@ -156,7 +166,7 @@ class peakEnablerSelector(digitalPinProperty):
 		setattr(hk, f"expansion_{val}_output", 1)
 		# setattr(hk, f"pinState_{val}", "dsp" if oldEnabled else "memory")  #already done by obj.enabled
 		# setattr(hk, f"expansion_{val}", 0)
-		setattr(hk, f"external_{val}_dspBitSelector", DSP_TRIGGERS[f"inPeakRange_{chr(ord('a')+obj.index)}"])
+		setattr(hk, f"external_{val}_dspBitSelector", DSP_TRIGGERS[f"inPeakRange_{obj.index + 1}"])
 		ret = super().set_value(obj, val)
 		obj.enabled = oldEnabled
 		return ret
@@ -224,7 +234,19 @@ class rampVoltageEdge(FloatProperty):
 		low, high = rampVoltageEdge.getLowHigFromAmpOffs(amp, offs)
 		return low if self.isLowerEdge else high
 
-
+class normalizeIndexProperty(BoolProperty):
+	def set_value(self, obj : peak, val):
+		if obj.index < 2:
+			return False
+			raise Exception("cannot set a main peak as normalized")
+		super().set_value(obj, val)
+		return setattr(obj.redpitaya.scope, f"{obj.redpitaya.scope.peakNames[obj.index]}_normalizeIndex", val)
+	
+	def get_value(self, obj : peak):
+		if obj.index < 2:
+			return 0
+		return getattr(obj.redpitaya.scope, f"{obj.redpitaya.scope.peakNames[obj.index]}_normalizeIndex"
+				 )
 class peak(Module):
 	
 	_gui_attributes = [
@@ -235,9 +257,12 @@ class peak(Module):
 					"height",
 					"p",
 					"i",
+					"input",
 					"output_direct",
 					"enablingBit",
-					"enabled",]
+					"enabled",
+					"normalizeIndex",#can be removed by manually by peak_widget, it stays only for the normalizable peaks
+					]
 	_widget_class = peak_widget
 
 	# @staticmethod
@@ -251,13 +276,17 @@ class peak(Module):
 		self.scanningCavity : ScanningCavity = scanningCavity
 		self.index = index
 		self.pid = redpitaya.pids.all_modules[index - 1 if index >= 2 else 0]
+		self.input
+
 	 
 	left = peakValue(lambda peak: f"minTime{peak.index+1}", min = 0)
 	right = peakValue(lambda peak: f"maxTime{peak.index+1}")
 	height = peakValue(lambda peak: f"{peak.redpitaya.scope.peakNames[peak.index]}_minValue")
-	input = peakValue(lambda peak: f"{peak.redpitaya.scope.peakNames[peak.index]}_input")
+	input = peakInput()
 	enablingBit = peakEnablerSelector()
 	enabled = enablePeakProperty()
+	normalizeIndex = normalizeIndexProperty()
+
 	'''setpoint is the actual value of the PID setpoint (value between -1 and 1, 
 	where -1 represents the lower timing for the peak, either
 		0 for the main peaks
@@ -315,7 +344,7 @@ class peak(Module):
 
 	@property
 	def peakType(self):
-		if self.redpitaya == self.parent.mainPitaya and self.index < 2:
+		if self.index < 2:
 			return ["main_L", "main_R"][self.index]
 		return "secondary"
 	def __eq__(self, other):
@@ -332,6 +361,30 @@ class peak(Module):
 		setattr(self.redpitaya.scope, f"maxTime{self.index+1}", newTiming)
 	def setHeight(self, newTiming):
 		setattr(self.redpitaya.scope, f"{self.redpitaya.scope.peakNames[self.index]}_minValue", newTiming)
+
+	
+	@staticmethod
+	def getGroupsOfNonOverlapping(peakList):
+		ranges = [(p.minTime, p.maxTime) for p in peakList]
+		def areIntersecting(range0, range1):
+			return (range0[0] < range1[1]) ^ (range0[1] <= range1[0])
+		intersections = np.zeros((len(ranges), len(ranges)), dtype=bool)
+		for i in range(len(ranges)):
+			for j in range(len(ranges)):
+				intersections[i,j] = areIntersecting(ranges[i], ranges[j])
+		stillFree = np.arange(len(ranges))
+		allGroups = []
+		while len(stillFree) > 0:
+			run = [stillFree[0]]
+			addedIndexes = [0]
+			for i in range(1, len(stillFree)):
+				testedLine = np.repeat(stillFree[i],len(run))
+				if not np.any(intersections[testedLine, run]):
+					addedIndexes.append(i)
+					run.append(stillFree[i])
+			stillFree = np.delete(stillFree, addedIndexes)
+			allGroups.append(run)
+		return allGroups
 
 class secondaryPitaya(Module):
 	_gui_attributes = [

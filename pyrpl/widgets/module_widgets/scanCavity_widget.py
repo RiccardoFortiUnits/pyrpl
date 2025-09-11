@@ -182,6 +182,9 @@ class peak_widget(ModuleWidget):
         self.maxTime = aws["right"]
         self.minValue = aws["height"]
         self.setpoint = aws["timeSetpoint"]
+        # if(self.module.peakType != "secondary"):
+        #     self.attribute_layout.removeWidget(aws["normalizeIndex"])
+
         # self.attribute_layout.removeWidget(self.setpoint)
         self.minTime.value_changed.connect(lambda : self.line.updateLeftValue(self.minTime.attribute_value))
         self.maxTime.value_changed.connect(lambda : self.line.updateRightValue(self.maxTime.attribute_value))
@@ -206,28 +209,6 @@ class peak_widget(ModuleWidget):
         #get the last acquisition from the scope and put its average as the new setpoint
         acquisition = self.module.parent.scope.getLastAcquisition(self.inputSignal_widget.attribute_value)
         self.setpoint_widget.attribute_value = np.mean(acquisition)
-    @staticmethod
-    def getGroupsOfNonOverlapping(peakList):
-        ranges = [(p.minTime, p.maxTime) for p in peakList]
-        def areIntersecting(range0, range1):
-            return (range0[0] < range1[1]) ^ (range0[1] <= range1[0])
-        intersections = np.zeros((len(ranges), len(ranges)), dtype=bool)
-        for i in range(len(ranges)):
-            for j in range(len(ranges)):
-                intersections[i,j] = areIntersecting(ranges[i], ranges[j])
-        stillFree = np.arange(len(ranges))
-        allGroups = []
-        while len(stillFree) > 0:
-            run = [stillFree[0]]
-            addedIndexes = [0]
-            for i in range(1, len(stillFree)):
-                testedLine = np.repeat(stillFree[i],len(run))
-                if not np.any(intersections[testedLine, run]):
-                    addedIndexes.append(i)
-                    run.append(stillFree[i])
-            stillFree = np.delete(stillFree, addedIndexes)
-            allGroups.append(run)
-        return allGroups
 
 
 

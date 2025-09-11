@@ -68,6 +68,7 @@
 
 module red_pitaya_scope #(
     parameter version = "peaks",
+    parameter nOfNormalizable_peaks = 2,
       parameter RSZ = 14  // RAM size 2^RSZ
 )(
 
@@ -118,18 +119,18 @@ module red_pitaya_scope #(
 
    input      [RSZ -1:0] real_adc_a_i, // for the peak detection, let's always use the actual ADC signals (otherwise we run out of signals to trigger/show)
    input      [RSZ -1:0] real_adc_b_i,
-   output     [RSZ -1:0] peak_a,
-   output     [RSZ -1:0]  peak_a_index,
-   output peak_a_valid,
-   output     [RSZ -1:0] peak_b,
-   output     [RSZ -1:0]  peak_b_index,
-   output peak_b_valid,
-   output     [RSZ -1:0] peak_c,
-   output     [RSZ -1:0]  peak_c_index,
-   output peak_c_valid,
-   output inPeakRange_a,
-   output inPeakRange_b,
-   output inPeakRange_c
+   output     [RSZ -1:0] peak_L,
+   output     [RSZ -1:0]  peak_L_index,
+   output peak_L_valid,
+   output     [RSZ -1:0] peak_R,
+   output     [RSZ -1:0]  peak_R_index,
+   output peak_R_valid,
+   output     [nOfNormalizable_peaks * RSZ -1:0] peaks_extra,
+   output     [nOfNormalizable_peaks * RSZ -1:0]  peaks_extra_index,
+   output [nOfNormalizable_peaks -1:0] peaks_extra_valid,
+   output peak_L_inRange,
+   output peak_R_inRange,
+   output [nOfNormalizable_peaks -1:0] peaks_extra_inRange
 );
 
 reg             adc_arm_do   ;
@@ -144,16 +145,6 @@ wire [ 14-1: 0] adc_a_filt_in  ;
 wire [ 14-1: 0] adc_a_filt_out ;
 wire [ 14-1: 0] adc_b_filt_in  ;
 wire [ 14-1: 0] adc_b_filt_out ;
-/*
-reg  [ 18-1: 0] set_a_filt_aa  ;
-reg  [ 25-1: 0] set_a_filt_bb  ;
-reg  [ 25-1: 0] set_a_filt_kk  ;
-reg  [ 25-1: 0] set_a_filt_pp  ;
-reg  [ 18-1: 0] set_b_filt_aa  ;
-reg  [ 25-1: 0] set_b_filt_bb  ;
-reg  [ 25-1: 0] set_b_filt_kk  ;
-reg  [ 25-1: 0] set_b_filt_pp  ;
-*/
 
 
 // bypass the filtering for the scope in order to spare the DSP slices for other stuff, 
@@ -163,34 +154,7 @@ assign adc_b_filt_in = adc_b_i ;
 assign adc_a_filt_out = adc_a_filt_in;
 assign adc_b_filt_out = adc_b_filt_in;
 
-/*
-red_pitaya_dfilt1 i_dfilt1_cha (
-   // ADC
-  .adc_clk_i   ( adc_clk_i       ),  // ADC clock
-  .adc_rstn_i  ( adc_rstn_i      ),  // ADC reset - active low
-  .adc_dat_i   ( adc_a_filt_in   ),  // ADC data
-  .adc_dat_o   ( adc_a_filt_out  ),  // ADC data
-   // configuration
-  .cfg_aa_i    ( set_a_filt_aa   ),  // config AA coefficient
-  .cfg_bb_i    ( set_a_filt_bb   ),  // config BB coefficient
-  .cfg_kk_i    ( set_a_filt_kk   ),  // config KK coefficient
-  .cfg_pp_i    ( set_a_filt_pp   )   // config PP coefficient
-);
-
-red_pitaya_dfilt1 i_dfilt1_chb (
-   // ADC
-  .adc_clk_i   ( adc_clk_i       ),  // ADC clock
-  .adc_rstn_i  ( adc_rstn_i      ),  // ADC reset - active low
-  .adc_dat_i   ( adc_b_filt_in   ),  // ADC data
-  .adc_dat_o   ( adc_b_filt_out  ),  // ADC data
-   // configuration
-  .cfg_aa_i    ( set_b_filt_aa   ),  // config AA coefficient
-  .cfg_bb_i    ( set_b_filt_bb   ),  // config BB coefficient
-  .cfg_kk_i    ( set_b_filt_kk   ),  // config KK coefficient
-  .cfg_pp_i    ( set_b_filt_pp   )   // config PP coefficient
-);
-*/
-//---------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------
 //  Decimate input data
 
 reg  [ 14-1: 0] adc_a_dat     ;
@@ -249,16 +213,6 @@ end else begin
       17'h8000  : begin adc_a_dat <= adc_a_sum[15+15: 15];      adc_b_dat <= adc_b_sum[15+15: 15];    real_adc_a_dat <= real_adc_a_sum[15+15: 15];      real_adc_b_dat <= real_adc_b_sum[15+15: 15];  end
       17'h10000 : begin adc_a_dat <= adc_a_sum[15+16: 16];      adc_b_dat <= adc_b_sum[15+16: 16];    real_adc_a_dat <= real_adc_a_sum[15+16: 16];      real_adc_b_dat <= real_adc_b_sum[15+16: 16];  end
       default   : begin adc_a_dat <= adc_a_sum[15+0 :  0];      adc_b_dat <= adc_b_sum[15+0 :  0];    real_adc_a_dat <= real_adc_a_sum[15+0 :  0];      real_adc_b_dat <= real_adc_b_sum[15+0 :  0];  end
-/*
-      17'h0     : begin adc_a_dat <= adc_a_filt_out;            adc_b_dat <= adc_b_filt_out;        end
-      17'h1     : begin adc_a_dat <= adc_a_sum[15+0 :  0];      adc_b_dat <= adc_b_sum[15+0 :  0];  end
-      17'h8     : begin adc_a_dat <= adc_a_sum[15+3 :  3];      adc_b_dat <= adc_b_sum[15+3 :  3];  end
-      17'h40    : begin adc_a_dat <= adc_a_sum[15+6 :  6];      adc_b_dat <= adc_b_sum[15+6 :  6];  end
-      17'h400   : begin adc_a_dat <= adc_a_sum[15+10: 10];      adc_b_dat <= adc_b_sum[15+10: 10];  end
-      17'h2000  : begin adc_a_dat <= adc_a_sum[15+13: 13];      adc_b_dat <= adc_b_sum[15+13: 13];  end
-      17'h10000 : begin adc_a_dat <= adc_a_sum[15+16: 16];      adc_b_dat <= adc_b_sum[15+16: 16];  end
-      default   : begin adc_a_dat <= adc_a_sum[15+0 :  0];      adc_b_dat <= adc_b_sum[15+0 :  0];  end
-*/
    endcase
 end
 
@@ -293,7 +247,7 @@ reg               triggered    ;
 reg   [ 64 - 1:0] timestamp_trigger;
 reg   [ 64 - 1:0] ctr_value        ;
 reg   [ 14 - 1:0] pretrig_data_min; // make sure this amount of data has been acquired before trig
-reg 			  pretrig_ok;
+reg           pretrig_ok;
 
 
 // Write
@@ -391,72 +345,94 @@ always @(posedge adc_clk_i) begin
    adc_b_rd    <= adc_b_buf[adc_b_raddr] ;
 end
 
-localparam  chForPeak_realAdc0 = 0,
-            chForPeak_realAdc1 = 1,
-            chForPeak_adc0 = 2,
-            chForPeak_adc1 = 3;
+localparam  chFor_peak_realAdc0 = 	2'h0,
+            chFor_peak_realAdc1 = 	2'h1,
+            chFor_peak_adc0 = 		2'h2,
+            chFor_peak_adc1 = 		2'h3;
 
-reg [1:0] chUsedByPeak_a, chUsedByPeak_b, chUsedByPeak_c;
-reg [RSZ -1:0] peak_a_minIndex, peak_b_minIndex, peak_c_minIndex;
-reg [RSZ -1:0] peak_a_maxIndex, peak_b_maxIndex, peak_c_maxIndex;
-reg [RSZ -1:0] peak_a_minValue, peak_b_minValue, peak_c_minValue;
-reg [RSZ -1:0] signalForPeak_a, signalForPeak_b, signalForPeak_c;
-wire [RSZ*4 -1:0] availablePeakSignals = {adc_b_dat, adc_a_dat, real_adc_b_dat, real_adc_a_dat};
-wire [RSZ -1:0]  intermediate_peak_c_index;
-wire intermediate_peak_c_valid;
-reg [RSZ -1:0] peak_flipIndex;
+reg		[1:0]								chUsedBy_peak_L, chUsedBy_peak_R;
+reg		[nOfNormalizable_peaks * 2 -1:0]	chUsedBy_peaks_extra;
 
+reg		[RSZ -1:0]							peak_L_minIndex, peak_R_minIndex;
+reg		[RSZ -1:0]							peak_L_maxIndex, peak_R_maxIndex;
+reg		[RSZ -1:0]							peak_L_minValue, peak_R_minValue;
+reg		[nOfNormalizable_peaks * RSZ -1:0]	peaks_extra_minIndex;
+reg		[nOfNormalizable_peaks * RSZ -1:0]	peaks_extra_maxIndex;
+reg		[nOfNormalizable_peaks * RSZ -1:0]	peaks_extra_minValue;
+
+reg		[RSZ -1:0]							signalFor_peak_L, signalFor_peak_R;
+reg		[nOfNormalizable_peaks * RSZ -1:0]	signalFor_peaks_extra;
+wire	[RSZ*4 -1:0]						available_peakSignals = {adc_b_dat, adc_a_dat, real_adc_b_dat, real_adc_a_dat};
+
+reg		[nOfNormalizable_peaks -1:0] 		normalize_peaks_extra;
+wire	[nOfNormalizable_peaks * RSZ -1:0] 	peaks_extra_index_nonNormalized;
+wire	[nOfNormalizable_peaks * RSZ -1:0] 	peaks_extra_index_normalized;
+wire	[nOfNormalizable_peaks -1:0] 		peaks_extra_nonNormalizedValid;
+// reg [RSZ -1:0] peak_flipIndex;
+
+integer i;
 generate
-    if(version == "peaks")begin
-        always @(posedge adc_clk_i) begin
-            if(~adc_rstn_i) begin
-                signalForPeak_a <= 0;
-                signalForPeak_b <= 0;
-                signalForPeak_c <= 0;
-            end else begin
-                signalForPeak_a <= availablePeakSignals[RSZ*(chUsedByPeak_a+1) -1-:RSZ];
-                signalForPeak_b <= availablePeakSignals[RSZ*(chUsedByPeak_b+1) -1-:RSZ];
-                signalForPeak_c <= availablePeakSignals[RSZ*(chUsedByPeak_c+1) -1-:RSZ];
-            end
-        end
-
+	if(version == "peaks")begin
+		always @(posedge adc_clk_i) begin
+			if(~adc_rstn_i) begin
+				signalFor_peak_L <= 0;
+				signalFor_peak_R <= 0;
+				signalFor_peaks_extra <= 0;
+			end else begin
+				signalFor_peak_L <= available_peakSignals[RSZ*(chUsedBy_peak_L+1) -1-:RSZ];
+				signalFor_peak_R <= available_peakSignals[RSZ*(chUsedBy_peak_R+1) -1-:RSZ];
+				for(i=0;i<nOfNormalizable_peaks;i=i+1)begin
+					signalFor_peaks_extra[(i+1) * RSZ -1-:RSZ] <= available_peakSignals[(chUsedBy_peaks_extra[(i+1) * 2 -1-:2] + 1) * RSZ -1-:RSZ];
+				end
+			end
+		end
 
 		peakFinder #(
-		.dataSize          (RSZ),
-		.indexSize         (RSZ),
-		.areSignalsSigned  (1)
-		)peakFinders[0:2](
-		.clk              (adc_clk_i),
-		.reset            (!adc_rstn_i),
+			.dataSize          (RSZ),
+			.indexSize         (RSZ),
+			.areSignalsSigned  (1)
+		)peakFinders[nOfNormalizable_peaks + 2 - 1:0](
+			.clk              (adc_clk_i),
+			.reset            (!adc_rstn_i),
 
-		.trigger          (peak_trig),
-		.in               ({signalForPeak_a, signalForPeak_b, signalForPeak_c}),
-		.in_valid         (adc_dv),
+			.trigger          (peak_trig),
+			.in_valid         (adc_dv),
+			.in               ({signalFor_peaks_extra, signalFor_peak_R, signalFor_peak_L}),
 
-		.indexRange_min   ({peak_a_minIndex, peak_b_minIndex, peak_c_minIndex}),
-		.indexRange_max   ({peak_a_maxIndex, peak_b_maxIndex, peak_c_maxIndex}),
+			.indexRange_min   ({peaks_extra_minIndex, peak_R_minIndex, peak_L_minIndex}),
+			.indexRange_max   ({peaks_extra_maxIndex, peak_R_maxIndex, peak_L_maxIndex}),
 
-		.minValue         ({peak_a_minValue, peak_b_minValue, peak_c_minValue}),
-		// .flipIndex        (peak_flipIndex),
+			.minValue         ({peaks_extra_minValue, peak_R_minValue, peak_L_minValue}),
 
-		.max              ({peak_a, peak_b, peak_c}),
-		.maxIndex         ({peak_a_index, peak_b_index, intermediate_peak_c_index}),
-		.max_valid        ({peak_a_valid, peak_b_valid, intermediate_peak_c_valid}),
-		.inIndexRange     ({inPeakRange_a, inPeakRange_b, inPeakRange_c})
+			.max              ({peaks_extra, peak_R, peak_L}),
+			.maxIndex         ({peaks_extra_index_nonNormalized, peak_R_index, peak_L_index}),
+			.max_valid        ({peaks_extra_nonNormalizedValid, peak_R_valid, peak_L_valid}),
+			.inIndexRange     ({peaks_extra_inRange, peak_R_inRange, peak_L_inRange})
+
+			// .flipIndex        (peak_flipIndex),
 		);
-	
+
 		normalizedRatio#(
 			.inputSize     (RSZ),
 			.ratioSize     (RSZ),//ratio is unsigned, with 0 whole bits (only fractional bits)
 			.isInputSigned (1)
-		) nr (
+		) nr[nOfNormalizable_peaks -1:0] (
 			.clk        (adc_clk_i),
 			.reset      (!adc_rstn_i),
-			.min        (peak_a_index),
-			.max        (peak_b_index),
-			.middle     (intermediate_peak_c_index),
-			.ratio      (peak_c_index)
+			.min        (peak_L_index),
+			.max        (peak_R_index),
+			.middle     (peaks_extra_index_nonNormalized),
+			.ratio      (peaks_extra_index_normalized)
 		);
+		genvar j;
+		for(j=0;j<nOfNormalizable_peaks;j=j+1)begin
+			assign peaks_extra_index[(j+1) * RSZ -1-:RSZ] = normalize_peaks_extra[j] ? 
+																peaks_extra_index_normalized[(j+1) * RSZ -1-:RSZ] : 
+																peaks_extra_index_nonNormalized[(j+1) * RSZ -1-:RSZ];
+			assign peaks_extra_valid[j] = normalize_peaks_extra[j] ? 
+											peaks_extra_nonNormalizedValid[j] & peak_R_valid & peak_L_valid : 
+											peaks_extra_nonNormalizedValid[j];
+		end
 	end
 endgenerate
 //////////////// AXI IS DISABLED SINCE WE ARE NOT USING IT /////////////////////
@@ -492,82 +468,7 @@ always @(posedge axi0_clk_o) begin
       axi_a_dly_cnt <= 32'h0 ;
       axi_a_dly_do  <=  1'b0 ;
    end
-   /*
-   else begin
-      if (adc_arm_do && set_a_axi_en)
-         axi_a_we <= 1'b1 ;
-      else if (((axi_a_dly_do || adc_trig) && (axi_a_dly_cnt == 32'h0)) || adc_rst_do) //delayed reached or reset
-         axi_a_we <= 1'b0 ;
-
-      if (adc_trig && axi_a_we)
-         axi_a_dly_do  <= 1'b1 ;
-      else if ((axi_a_dly_do && (axi_a_dly_cnt == 32'b0)) || axi_a_clr || adc_arm_do) //delayed reached or reset
-         axi_a_dly_do  <= 1'b0 ;
-
-      if (axi_a_dly_do && axi_a_we && adc_dv)
-         axi_a_dly_cnt <= axi_a_dly_cnt - 1;
-      else if (!axi_a_dly_do)
-         axi_a_dly_cnt <= set_a_axi_dly ;
-
-      if (axi_a_clr)
-         axi_a_dat_sel <= 2'h0 ;
-      else if (axi_a_we && adc_dv)
-         axi_a_dat_sel <= axi_a_dat_sel + 2'h1 ;
-
-      axi_a_dat_dv <= axi_a_we && (axi_a_dat_sel == 2'b11) && adc_dv ;
-   end
-
-   if (axi_a_we && adc_dv) begin
-      if (axi_a_dat_sel == 2'b00) axi_a_dat[ 16-1:  0] <= $signed(adc_a_dat);
-      if (axi_a_dat_sel == 2'b01) axi_a_dat[ 32-1: 16] <= $signed(adc_a_dat);
-      if (axi_a_dat_sel == 2'b10) axi_a_dat[ 48-1: 32] <= $signed(adc_a_dat);
-      if (axi_a_dat_sel == 2'b11) axi_a_dat[ 64-1: 48] <= $signed(adc_a_dat);
-   end
-
-   if (axi_a_clr)
-      set_a_axi_trig <= {RSZ{1'b0}};
-   else if (adc_trig && !axi_a_dly_do && axi_a_we)
-      set_a_axi_trig <= {axi_a_cur_addr[32-1:3],axi_a_dat_sel,1'b0} ; // save write pointer at trigger arrival
-
-   if (axi_a_clr)
-      set_a_axi_cur <= set_a_axi_start ;
-   else if (axi0_wvalid_o)
-      set_a_axi_cur <= axi_a_cur_addr ;
-*/
 end
-/*
-axi_wr_fifo #(
-  .DW  (  64    ), // data width (8,16,...,1024)
-  .AW  (  32    ), // address width
-  .FW  (   8    )  // address width of FIFO pointers
-) i_wr0 (
-   // global signals
-  .axi_clk_i          (  axi0_clk_o        ), // global clock
-  .axi_rstn_i         (  axi0_rstn_o       ), // global reset
-
-   // Connection to AXI master
-  .axi_waddr_o        (  axi0_waddr_o      ), // write address
-  .axi_wdata_o        (  axi0_wdata_o      ), // write data
-  .axi_wsel_o         (  axi0_wsel_o       ), // write byte select
-  .axi_wvalid_o       (  axi0_wvalid_o     ), // write data valid
-  .axi_wlen_o         (  axi0_wlen_o       ), // write burst length
-  .axi_wfixed_o       (  axi0_wfixed_o     ), // write burst type (fixed / incremental)
-  .axi_werr_i         (  axi0_werr_i       ), // write error
-  .axi_wrdy_i         (  axi0_wrdy_i       ), // write ready
-
-   // data and configuration
-  .wr_data_i          (  axi_a_dat         ), // write data
-  .wr_val_i           (  axi_a_dat_dv      ), // write data valid
-  .ctrl_start_addr_i  (  set_a_axi_start   ), // range start address
-  .ctrl_stop_addr_i   (  set_a_axi_stop    ), // range stop address
-  .ctrl_trig_size_i   (  4'hF              ), // trigger level
-  .ctrl_wrap_i        (  1'b1              ), // start from begining when reached stop
-  .ctrl_clr_i         (  axi_a_clr         ), // clear / flush
-  .stat_overflow_o    (                    ), // overflow indicator
-  .stat_cur_addr_o    (  axi_a_cur_addr    ), // current write address
-  .stat_write_data_o  (                    )  // write data indicator
-);
-*/
 assign axi0_clk_o  = adc_clk_i ;
 assign axi0_rstn_o = adc_rstn_i;
 
@@ -602,81 +503,7 @@ always @(posedge axi1_clk_o) begin
       axi_b_dly_cnt <= 32'h0 ;
       axi_b_dly_do  <=  1'b0 ;
    end
-/*   else begin
-      if (adc_arm_do && set_b_axi_en)
-         axi_b_we <= 1'b1 ;
-      else if (((axi_b_dly_do || adc_trig) && (axi_b_dly_cnt == 32'h0)) || adc_rst_do) //delayed reached or reset
-         axi_b_we <= 1'b0 ;
-
-      if (adc_trig && axi_b_we)
-         axi_b_dly_do  <= 1'b1 ;
-      else if ((axi_b_dly_do && (axi_b_dly_cnt == 32'b0)) || axi_b_clr || adc_arm_do) //delayed reached or reset
-         axi_b_dly_do  <= 1'b0 ;
-
-      if (axi_b_dly_do && axi_b_we && adc_dv)
-         axi_b_dly_cnt <= axi_b_dly_cnt - 1;
-      else if (!axi_b_dly_do)
-         axi_b_dly_cnt <= set_b_axi_dly ;
-
-      if (axi_b_clr)
-         axi_b_dat_sel <= 2'h0 ;
-      else if (axi_b_we && adc_dv)
-         axi_b_dat_sel <= axi_b_dat_sel + 2'h1 ;
-
-      axi_b_dat_dv <= axi_b_we && (axi_b_dat_sel == 2'b11) && adc_dv ;
-   end
-
-   if (axi_b_we && adc_dv) begin
-      if (axi_b_dat_sel == 2'b00) axi_b_dat[ 16-1:  0] <= $signed(adc_b_dat);
-      if (axi_b_dat_sel == 2'b01) axi_b_dat[ 32-1: 16] <= $signed(adc_b_dat);
-      if (axi_b_dat_sel == 2'b10) axi_b_dat[ 48-1: 32] <= $signed(adc_b_dat);
-      if (axi_b_dat_sel == 2'b11) axi_b_dat[ 64-1: 48] <= $signed(adc_b_dat);
-   end
-
-   if (axi_b_clr)
-      set_b_axi_trig <= {RSZ{1'b0}};
-   else if (adc_trig && !axi_b_dly_do && axi_b_we)
-      set_b_axi_trig <= {axi_b_cur_addr[32-1:3],axi_b_dat_sel,1'b0} ; // save write pointer at trigger arrival
-
-   if (axi_b_clr)
-      set_b_axi_cur <= set_b_axi_start ;
-   else if (axi1_wvalid_o)
-      set_b_axi_cur <= axi_b_cur_addr ;
-    */
 end
-/*
-axi_wr_fifo #(
-  .DW  (  64    ), // data width (8,16,...,1024)
-  .AW  (  32    ), // address width
-  .FW  (   8    )  // address width of FIFO pointers
-) i_wr1 (
-   // global signals
-  .axi_clk_i          (  axi1_clk_o        ), // global clock
-  .axi_rstn_i         (  axi1_rstn_o       ), // global reset
-
-   // Connection to AXI master
-  .axi_waddr_o        (  axi1_waddr_o      ), // write address
-  .axi_wdata_o        (  axi1_wdata_o      ), // write data
-  .axi_wsel_o         (  axi1_wsel_o       ), // write byte select
-  .axi_wvalid_o       (  axi1_wvalid_o     ), // write data valid
-  .axi_wlen_o         (  axi1_wlen_o       ), // write burst length
-  .axi_wfixed_o       (  axi1_wfixed_o     ), // write burst type (fixed / incremental)
-  .axi_werr_i         (  axi1_werr_i       ), // write error
-  .axi_wrdy_i         (  axi1_wrdy_i       ), // write ready
-
-   // data and configuration
-  .wr_data_i          (  axi_b_dat         ), // write data
-  .wr_val_i           (  axi_b_dat_dv      ), // write data valid
-  .ctrl_start_addr_i  (  set_b_axi_start   ), // range start address
-  .ctrl_stop_addr_i   (  set_b_axi_stop    ), // range stop address
-  .ctrl_trig_size_i   (  4'hF              ), // trigger level
-  .ctrl_wrap_i        (  1'b1              ), // start from begining when reached stop
-  .ctrl_clr_i         (  axi_b_clr         ), // clear / flush
-  .stat_overflow_o    (                    ), // overflow indicator
-  .stat_cur_addr_o    (  axi_b_cur_addr    ), // current write address
-  .stat_write_data_o  (                    )  // write data indicator
-);
-*/
 assign axi1_clk_o  = adc_clk_i ;
 assign axi1_rstn_o = adc_rstn_i;
 
@@ -909,7 +736,7 @@ assign asg_trig_n = (asg_trig_dn == 2'b01) ;
 
 //---------------------------------------------------------------------------------
 //  System bus connection
-
+integer y;
 always @(posedge adc_clk_i)
 if (adc_rstn_i == 1'b0) begin
    adc_we_keep   <=   1'b0      ;
@@ -920,184 +747,129 @@ if (adc_rstn_i == 1'b0) begin
    set_a_hyst    <=  14'd20     ;
    //set_b_hyst    <=  14'd20     ;
    set_avg_en    <=   1'b0      ;
-/*   set_a_filt_aa <=  18'h0      ;
-   set_a_filt_bb <=  25'h0      ;
-   set_a_filt_kk <=  25'hFFFFFF ;
-   set_a_filt_pp <=  25'h0      ;
-   set_b_filt_aa <=  18'h0      ;
-   set_b_filt_bb <=  25'h0      ;
-   set_b_filt_kk <=  25'hFFFFFF ;
-   set_b_filt_pp <=  25'h0      ;*/
    set_deb_len   <=  20'd62500  ;
    set_a_axi_en  <=   1'b0      ;
    set_b_axi_en  <=   1'b0      ;
     
-   peak_a_minIndex <= 0;
-   peak_a_maxIndex <= 2**(RSZ-1);
-   peak_b_minIndex <= 0;
-   peak_b_maxIndex <= 2**(RSZ-1);
-   peak_c_minIndex <= 0;
-   peak_c_maxIndex <= 2**(RSZ-1);
-   peak_flipIndex <= 0;
+   peak_L_minIndex <= 0;
+   peak_L_maxIndex <= 2**(RSZ-1);
+   peak_R_minIndex <= 0;
+   peak_R_maxIndex <= 2**(RSZ-1);
+   peaks_extra_minIndex <= 0;
+   peaks_extra_maxIndex <= 2**(RSZ-1);
+   // peak_flipIndex <= 0;
 
-   chUsedByPeak_a <= chForPeak_realAdc0;
-   chUsedByPeak_b <= chForPeak_realAdc1;
-   chUsedByPeak_c <= chForPeak_realAdc0;
-   peak_a_minValue <= 0;
-   peak_b_minValue <= 0;
-   peak_c_minValue <= 0;
+   chUsedBy_peak_L <= chFor_peak_realAdc0;
+   chUsedBy_peak_R <= chFor_peak_realAdc1;
+   chUsedBy_peaks_extra <= {nOfNormalizable_peaks{chFor_peak_realAdc0}};
+   peak_L_minValue <= 0;
+   peak_R_minValue <= 0;
+   peaks_extra_minValue <= 0;
+   normalize_peaks_extra <= 0;
 
 
 end else begin
-   if (sys_wen) begin
-      if (sys_addr[19:0]==20'h00)   adc_we_keep   <= sys_wdata[     3] ;
+	if (sys_wen) begin
+		if (sys_addr[19:0]==20'h00)   adc_we_keep   <= sys_wdata[     3] ;
 
-      if (sys_addr[19:0]==20'h08)   set_a_tresh   <= sys_wdata[14-1:0] ;
-      //if (sys_addr[19:0]==20'h0C)   set_b_tresh   <= sys_wdata[14-1:0] ;
-      if (sys_addr[19:0]==20'h10)   set_dly       <= sys_wdata[32-1:0] ;
-      if (sys_addr[19:0]==20'h14)   set_dec       <= sys_wdata[17-1:0] ;
-      if (sys_addr[19:0]==20'h20)   set_a_hyst    <= sys_wdata[14-1:0] ;
-      //if (sys_addr[19:0]==20'h24)   set_b_hyst    <= sys_wdata[14-1:0] ;
-      if (sys_addr[19:0]==20'h28)   set_avg_en    <= sys_wdata[     0] ;
+		if (sys_addr[19:0]==20'h08)   set_a_tresh   <= sys_wdata[14-1:0] ;
+		//if (sys_addr[19:0]==20'h0C)   set_b_tresh   <= sys_wdata[14-1:0] ;
+		if (sys_addr[19:0]==20'h10)   set_dly       <= sys_wdata[32-1:0] ;
+		if (sys_addr[19:0]==20'h14)   set_dec       <= sys_wdata[17-1:0] ;
+		if (sys_addr[19:0]==20'h20)   set_a_hyst    <= sys_wdata[14-1:0] ;
+		//if (sys_addr[19:0]==20'h24)   set_b_hyst    <= sys_wdata[14-1:0] ;
+		if (sys_addr[19:0]==20'h28)   set_avg_en    <= sys_wdata[     0] ;
 
-      /*
-      if (sys_addr[19:0]==20'h30)   set_a_filt_aa <= sys_wdata[18-1:0] ;
-      if (sys_addr[19:0]==20'h34)   set_a_filt_bb <= sys_wdata[25-1:0] ;
-      if (sys_addr[19:0]==20'h38)   set_a_filt_kk <= sys_wdata[25-1:0] ;
-      if (sys_addr[19:0]==20'h3C)   set_a_filt_pp <= sys_wdata[25-1:0] ;
-      if (sys_addr[19:0]==20'h40)   set_b_filt_aa <= sys_wdata[18-1:0] ;
-      if (sys_addr[19:0]==20'h44)   set_b_filt_bb <= sys_wdata[25-1:0] ;
-      if (sys_addr[19:0]==20'h48)   set_b_filt_kk <= sys_wdata[25-1:0] ;
-      if (sys_addr[19:0]==20'h4C)   set_b_filt_pp <= sys_wdata[25-1:0] ;
-      */
-      /*
-      if (sys_addr[19:0]==20'h50)   set_a_axi_start <= sys_wdata[32-1:0] ;
-      if (sys_addr[19:0]==20'h54)   set_a_axi_stop  <= sys_wdata[32-1:0] ;
-      if (sys_addr[19:0]==20'h58)   set_a_axi_dly   <= sys_wdata[32-1:0] ;
-      if (sys_addr[19:0]==20'h5C)   set_a_axi_en    <= sys_wdata[     0] ;
+		if (sys_addr[19:0]==20'h90)   set_deb_len <= sys_wdata[20-1:0] ;
 
-      if (sys_addr[19:0]==20'h70)   set_b_axi_start <= sys_wdata[32-1:0] ;
-      if (sys_addr[19:0]==20'h74)   set_b_axi_stop  <= sys_wdata[32-1:0] ;
-      if (sys_addr[19:0]==20'h78)   set_b_axi_dly   <= sys_wdata[32-1:0] ;
-      if (sys_addr[19:0]==20'h7C)   set_b_axi_en    <= sys_wdata[     0] ;
-      */
-      if (sys_addr[19:0]==20'h90)   set_deb_len <= sys_wdata[20-1:0] ;
-
-      if (sys_addr[19:0]==20'h094)   peak_a_minIndex <= sys_wdata ;
-      if (sys_addr[19:0]==20'h098)   peak_a_maxIndex <= sys_wdata ;
-      if (sys_addr[19:0]==20'h09C)   peak_b_minIndex <= sys_wdata ;
-      if (sys_addr[19:0]==20'h0A0)   peak_b_maxIndex <= sys_wdata ;
-      if (sys_addr[19:0]==20'h0B0)   {chUsedByPeak_c, chUsedByPeak_b, chUsedByPeak_a} <= sys_wdata ;
-      if (sys_addr[19:0]==20'h0B4)   {peak_b_minValue, peak_a_minValue} <= sys_wdata ;
-      if (sys_addr[19:0]==20'h0B8)   peak_flipIndex <= sys_wdata ;
-
-      if (sys_addr[19:0]==20'h0BC)   peak_c_minIndex <= sys_wdata ;
-      if (sys_addr[19:0]==20'h0C0)   peak_c_maxIndex <= sys_wdata ;
-      if (sys_addr[19:0]==20'h0CC)   {peak_c_minValue} <= sys_wdata ;
-      
-   end
+		if (sys_addr[19:0]==20'h094)   peak_L_minIndex <= sys_wdata ;
+		if (sys_addr[19:0]==20'h098)   peak_L_maxIndex <= sys_wdata ;
+		if (sys_addr[19:0]==20'h09C)   peak_R_minIndex <= sys_wdata ;
+		if (sys_addr[19:0]==20'h0A0)   peak_R_maxIndex <= sys_wdata ;
+		if (sys_addr[19:0]==20'h0B0)   {chUsedBy_peaks_extra, chUsedBy_peak_R, chUsedBy_peak_L} <= sys_wdata ;
+		if (sys_addr[19:0]==20'h0B4)   {peak_R_minValue, peak_L_minValue} <= sys_wdata ;
+		// if (sys_addr[19:0]==20'h0B8)   peak_flipIndex <= sys_wdata ;
+		if (sys_addr[19:0]==20'h0B8)   normalize_peaks_extra <= sys_wdata ;
+		
+		for(y=0;y<nOfNormalizable_peaks;y=y+1) begin
+			if (sys_addr[19:0]==20'h0BC + y * 20)   peaks_extra_minIndex[(y+1) * RSZ -1-:RSZ] <= sys_wdata ;
+			if (sys_addr[19:0]==20'h0C0 + y * 20)   peaks_extra_maxIndex[(y+1) * RSZ -1-:RSZ] <= sys_wdata ;
+			//addresses 0xC4 and 0xC8 are for reading peaks_extra and peaks_extra_index
+			if (sys_addr[19:0]==20'h0CC + y * 20)   peaks_extra_minValue[(y+1) * RSZ -1-:RSZ] <= sys_wdata ;
+		end
+	end
 end
 
-assign peak_c_valid = intermediate_peak_c_valid & peak_b_valid & peak_a_valid;
 
 
 wire sys_en;
 assign sys_en = sys_wen | sys_ren;
-
+integer k;
 always @(posedge adc_clk_i)
 if (adc_rstn_i == 1'b0) begin
-   sys_err <= 1'b0 ;
-   sys_ack <= 1'b0 ;
+	sys_err <= 1'b0 ;
+	sys_ack <= 1'b0 ;
 end else begin
-   sys_err <= 1'b0 ;
-   casez (sys_addr[19:0])
-     20'h00000 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 4{1'b0}}, adc_we_keep               // do not disarm on 
-                                                                              , adc_dly_do                // trigger status
-                                                                              , 1'b0                      // reset
-                                                                              , adc_we}             ; end // arm
+	sys_err <= 1'b0 ;
 
-     20'h00004 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 8{1'b0}},continuous_trig_src, set_trig_src}       ; end 
+	sys_ack <= sys_en;          sys_rdata <=  32'h0                              ;
 
-     20'h00008 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, set_a_tresh}        ; end
-     //20'h0000C : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, set_b_tresh}        ; end
-     20'h00010 : begin sys_ack <= sys_en;          sys_rdata <= {               set_dly}            ; end
-     20'h00014 : begin sys_ack <= sys_en;          sys_rdata <= {{32-17{1'b0}}, set_dec}            ; end
+	if(sys_addr[19:0]==20'h00000) begin sys_ack <= sys_en;          sys_rdata <= {{32- 4{1'b0}}, adc_we_keep               // do not disarm on 
+																		, adc_dly_do                // trigger status
+																		, 1'b0                      // reset
+																		, adc_we}             ; end // arm
 
-     20'h00018 : begin sys_ack <= sys_en;          sys_rdata <= {{32-RSZ{1'b0}}, adc_wp_cur}        ; end
-     20'h0001C : begin sys_ack <= sys_en;          sys_rdata <= {{32-RSZ{1'b0}}, adc_wp_trig}       ; end
+	if(sys_addr[19:0]==20'h00004) begin sys_ack <= sys_en;          sys_rdata <= {{32- 8{1'b0}},continuous_trig_src, set_trig_src}       ; end 
 
-     20'h00020 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, set_a_hyst}         ; end
-     //20'h00024 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, set_b_hyst}         ; end
+	if(sys_addr[19:0]==20'h00008) begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, set_a_tresh}	; end
+	if(sys_addr[19:0]==20'h00010) begin sys_ack <= sys_en;          sys_rdata <= {set_dly}						; end
+	if(sys_addr[19:0]==20'h00014) begin sys_ack <= sys_en;          sys_rdata <= {{32-17{1'b0}}, set_dec}		; end
 
-     20'h00028 : begin sys_ack <= sys_en;          sys_rdata <= {{32- 1{1'b0}}, set_avg_en}         ; end
+	if(sys_addr[19:0]==20'h00018) begin sys_ack <= sys_en;          sys_rdata <= {{32-RSZ{1'b0}}, adc_wp_cur}	; end
+	if(sys_addr[19:0]==20'h0001C) begin sys_ack <= sys_en;          sys_rdata <= {{32-RSZ{1'b0}}, adc_wp_trig}	; end
 
-     20'h0002C : begin sys_ack <= sys_en;          sys_rdata <=                 adc_we_cnt          ; end
+	if(sys_addr[19:0]==20'h00020) begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, set_a_hyst}	; end
+	if(sys_addr[19:0]==20'h00028) begin sys_ack <= sys_en;          sys_rdata <= {{32- 1{1'b0}}, set_avg_en}	; end
+	if(sys_addr[19:0]==20'h0002C) begin sys_ack <= sys_en;          sys_rdata <=adc_we_cnt						; end
 
-     /*
-     20'h00030 : begin sys_ack <= sys_en;          sys_rdata <= {{32-18{1'b0}}, set_a_filt_aa}      ; end
-     20'h00034 : begin sys_ack <= sys_en;          sys_rdata <= {{32-25{1'b0}}, set_a_filt_bb}      ; end
-     20'h00038 : begin sys_ack <= sys_en;          sys_rdata <= {{32-25{1'b0}}, set_a_filt_kk}      ; end
-     20'h0003C : begin sys_ack <= sys_en;          sys_rdata <= {{32-25{1'b0}}, set_a_filt_pp}      ; end
-     20'h00040 : begin sys_ack <= sys_en;          sys_rdata <= {{32-18{1'b0}}, set_b_filt_aa}      ; end
-     20'h00044 : begin sys_ack <= sys_en;          sys_rdata <= {{32-25{1'b0}}, set_b_filt_bb}      ; end
-     20'h00048 : begin sys_ack <= sys_en;          sys_rdata <= {{32-25{1'b0}}, set_b_filt_kk}      ; end
-     20'h0004C : begin sys_ack <= sys_en;          sys_rdata <= {{32-25{1'b0}}, set_b_filt_pp}      ; end
-     */
-     /*
-     20'h00050 : begin sys_ack <= sys_en;          sys_rdata <=                 set_a_axi_start     ; end
-     20'h00054 : begin sys_ack <= sys_en;          sys_rdata <=                 set_a_axi_stop      ; end
-     20'h00058 : begin sys_ack <= sys_en;          sys_rdata <=                 set_a_axi_dly       ; end
-     20'h0005C : begin sys_ack <= sys_en;          sys_rdata <= {{32- 1{1'b0}}, set_a_axi_en}       ; end
-     20'h00060 : begin sys_ack <= sys_en;          sys_rdata <=                 set_a_axi_trig      ; end
-     20'h00064 : begin sys_ack <= sys_en;          sys_rdata <=                 set_a_axi_cur       ; end
+	if(sys_addr[19:0]==20'h00090) begin sys_ack <= sys_en;          sys_rdata <= {{32-20{1'b0}}, set_deb_len}	; end
 
-     20'h00070 : begin sys_ack <= sys_en;          sys_rdata <=                 set_b_axi_start     ; end
-     20'h00074 : begin sys_ack <= sys_en;          sys_rdata <=                 set_b_axi_stop      ; end
-     20'h00078 : begin sys_ack <= sys_en;          sys_rdata <=                 set_b_axi_dly       ; end
-     20'h0007C : begin sys_ack <= sys_en;          sys_rdata <= {{32- 1{1'b0}}, set_b_axi_en}       ; end
-     20'h00080 : begin sys_ack <= sys_en;          sys_rdata <=                 set_b_axi_trig      ; end
-     20'h00084 : begin sys_ack <= sys_en;          sys_rdata <=                 set_b_axi_cur       ; end
-     */
+	if(sys_addr[19:0]==20'h00094) begin sys_ack <= sys_en;          sys_rdata <= peak_L_minIndex				; end
+	if(sys_addr[19:0]==20'h00098) begin sys_ack <= sys_en;          sys_rdata <= peak_L_maxIndex				; end
+	if(sys_addr[19:0]==20'h0009C) begin sys_ack <= sys_en;          sys_rdata <= peak_R_minIndex				; end
+	if(sys_addr[19:0]==20'h000A0) begin sys_ack <= sys_en;          sys_rdata <= peak_R_maxIndex				; end
 
-     20'h00090 : begin sys_ack <= sys_en;          sys_rdata <= {{32-20{1'b0}}, set_deb_len}        ; end
-     
-     20'h00094 : begin sys_ack <= sys_en;          sys_rdata <= peak_a_minIndex        ; end
-     20'h00098 : begin sys_ack <= sys_en;          sys_rdata <= peak_a_maxIndex        ; end
-     20'h0009C : begin sys_ack <= sys_en;          sys_rdata <= peak_b_minIndex        ; end
-     20'h000A0 : begin sys_ack <= sys_en;          sys_rdata <= peak_b_maxIndex        ; end
+	if(sys_addr[19:0]==20'h000A4) begin sys_ack <= sys_en;          sys_rdata <= {peak_R_valid, peak_R, {(15-RSZ){1'b0}}, peak_L_valid, peak_L}        ; end
+	if(sys_addr[19:0]==20'h000A8) begin sys_ack <= sys_en;          sys_rdata <= peak_L_index        ; end
+	if(sys_addr[19:0]==20'h000AC) begin sys_ack <= sys_en;          sys_rdata <= peak_R_index        ; end
+	if(sys_addr[19:0]==20'h000B0) begin sys_ack <= sys_en;          sys_rdata <= {chUsedBy_peaks_extra, chUsedBy_peak_R, chUsedBy_peak_L}        ; end
+	if(sys_addr[19:0]==20'h000B4) begin sys_ack <= sys_en;          sys_rdata <= {peak_R_minValue, peak_L_minValue}        ; end
+	//   if(sys_addr[19:0]==20'h000B8) begin sys_ack <= sys_en;          sys_rdata <= peak_flipIndex        ; end
+	if(sys_addr[19:0]==20'h000B8) begin sys_ack <= sys_en;          sys_rdata <= normalize_peaks_extra        ; end
 
-     20'h000A4 : begin sys_ack <= sys_en;          sys_rdata <= {peak_b_valid, peak_b, {(15-RSZ){1'b0}}, peak_a_valid, peak_a}        ; end
-     20'h000A8 : begin sys_ack <= sys_en;          sys_rdata <= peak_a_index        ; end
-     20'h000AC : begin sys_ack <= sys_en;          sys_rdata <= peak_b_index        ; end
-     20'h000B0 : begin sys_ack <= sys_en;          sys_rdata <= {chUsedByPeak_c, chUsedByPeak_b, chUsedByPeak_a}        ; end
-     20'h000B4 : begin sys_ack <= sys_en;          sys_rdata <= {peak_b_minValue, peak_a_minValue}        ; end
-     20'h000B8 : begin sys_ack <= sys_en;          sys_rdata <= peak_flipIndex        ; end
-     // peak c
-     20'h000BC : begin sys_ack <= sys_en;          sys_rdata <= peak_c_minIndex        ; end
-     20'h000C0 : begin sys_ack <= sys_en;          sys_rdata <= peak_c_maxIndex        ; end
-     20'h000C4 : begin sys_ack <= sys_en;          sys_rdata <= {intermediate_peak_c_valid, peak_c_valid, peak_c}        ; end
-     20'h000C8 : begin sys_ack <= sys_en;          sys_rdata <= {intermediate_peak_c_index, {(16-RSZ){1'b0}}, peak_c_index}        ; end
-     20'h000CC : begin sys_ack <= sys_en;          sys_rdata <= peak_c_minValue        ; end
+	
+	for(k=0;k<nOfNormalizable_peaks;k=k+1) begin
+		if(sys_addr[19:0]==20'h000BC + k * 20) begin sys_ack <= sys_en;          sys_rdata <= peaks_extra_minIndex[(k+1) * RSZ -1-:RSZ]        ; end
+		if(sys_addr[19:0]==20'h000C0 + k * 20) begin sys_ack <= sys_en;          sys_rdata <= peaks_extra_maxIndex[(k+1) * RSZ -1-:RSZ]        ; end
+		if(sys_addr[19:0]==20'h000C4 + k * 20) begin sys_ack <= sys_en;          sys_rdata <= {peaks_extra_nonNormalizedValid[k], peaks_extra_valid[k], peaks_extra[(k+1) * RSZ -1-:RSZ]}        ; end
+		if(sys_addr[19:0]==20'h000C8 + k * 20) begin sys_ack <= sys_en;          sys_rdata <= {peaks_extra_index_nonNormalized[(k+1) * RSZ -1-:RSZ], {(16-RSZ){1'b0}}, peaks_extra_index[(k+1) * RSZ -1-:RSZ]}        ; end
+		if(sys_addr[19:0]==20'h000CC + k * 20) begin sys_ack <= sys_en;          sys_rdata <= peaks_extra_minValue[(k+1) * RSZ -1-:RSZ]        ; end
+	end
 
-    
-     20'h00154 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, adc_a_i }         ; end
-     20'h00158 : begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, adc_b_i }         ; end
-     
-     20'h0015c : begin sys_ack <= sys_en;          sys_rdata <= ctr_value[32-1:0]     		    ; end
-     20'h00160 : begin sys_ack <= sys_en;          sys_rdata <= ctr_value[64-1:32]			    ; end
-     
-     20'h00164 : begin sys_ack <= sys_en;          sys_rdata <= timestamp_trigger[32-1:0]       ; end
-     20'h00168 : begin sys_ack <= sys_en;          sys_rdata <= timestamp_trigger[64-1:32]	    ; end
-     
-     20'h0016c : begin sys_ack <= sys_en;          sys_rdata <= {{32-1{1'b0}}, pretrig_ok}       ; end
+	if(sys_addr[19:0]==20'h00154) begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, adc_a_i }         ; end
+	if(sys_addr[19:0]==20'h00158) begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, adc_b_i }         ; end
 
-     20'h1???? : begin sys_ack <= adc_rd_dv;       sys_rdata <= {16'h0, 2'h0,adc_a_rd}              ; end
-     20'h2???? : begin sys_ack <= adc_rd_dv;       sys_rdata <= {16'h0, 2'h0,adc_b_rd}              ; end
-     
-     
+	if(sys_addr[19:0]==20'h0015c) begin sys_ack <= sys_en;          sys_rdata <= ctr_value[32-1:0]             ; end
+	if(sys_addr[19:0]==20'h00160) begin sys_ack <= sys_en;          sys_rdata <= ctr_value[64-1:32]            ; end
 
-       default : begin sys_ack <= sys_en;          sys_rdata <=  32'h0                              ; end
-   endcase
+	if(sys_addr[19:0]==20'h00164) begin sys_ack <= sys_en;          sys_rdata <= timestamp_trigger[32-1:0]       ; end
+	if(sys_addr[19:0]==20'h00168) begin sys_ack <= sys_en;          sys_rdata <= timestamp_trigger[64-1:32]       ; end
+
+	if(sys_addr[19:0]==20'h0016c) begin sys_ack <= sys_en;          sys_rdata <= {{32-1{1'b0}}, pretrig_ok}       ; end
+
+	//if(sys_addr[19:16]==20'h1????)
+	if(sys_addr[19:16]==4'h1) begin sys_ack <= adc_rd_dv;       sys_rdata <= {16'h0, 2'h0,adc_a_rd}              ; end
+	if(sys_addr[19:16]==4'h2) begin sys_ack <= adc_rd_dv;       sys_rdata <= {16'h0, 2'h0,adc_b_rd}              ; end
 end
 
 endmodule

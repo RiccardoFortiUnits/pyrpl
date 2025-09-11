@@ -52,7 +52,8 @@ should not be used.
 
 
 (* use_dsp = "yes" *) module red_pitaya_dsp#(
-	parameter version = "peaks"
+	parameter version = "peaks",
+	parameter nOfPeaks = 3
 	)(
    // signals
    input                 clk_i           ,  //!< processing clock
@@ -93,20 +94,14 @@ should not be used.
    output reg            sys_err         ,  //!< bus error indicator
    output reg            sys_ack         ,   //!< bus acknowledge signal
 
-   input      [ 14 -1:0] peak_a,
-   input      [ 14 -1:0] peak_a_index,
-   input                 peak_a_valid,
-   input      [ 14 -1:0] peak_b,
-   input      [ 14 -1:0] peak_b_index,
-   input                 peak_b_valid,
-   input      [ 14 -1:0] peak_c,
-   input      [ 14 -1:0] peak_c_index,
-   input                 peak_c_valid,
-   input                 inPeakRange_a,
-   input                 inPeakRange_b,
-   input                 inPeakRange_c
+   input [nOfPeaks * 14 -1:0]	peaks,
+   input [nOfPeaks * 14 -1:0]	peaks_index,
+   input [nOfPeaks  -1:0]		peaks_valid,
+   input [nOfPeaks  -1:0]		inPeakRange
 );
 
+integer i, y;
+genvar j;
 
 /*			arrivingFrom						goingTo						*/
 /*§§#§§*/
@@ -125,13 +120,15 @@ localparam	OUT2					= 11;		localparam	ASG_AMPL1				= 11;
 localparam	PEAK1					= 12;		localparam	PID0_SETPOINT_SIGNAL	= 12;
 localparam	PEAK2					= 13;		localparam	PID1_SETPOINT_SIGNAL	= 13;
 localparam	PEAK3					= 14;		localparam	PID2_SETPOINT_SIGNAL	= 14;
-localparam	PEAK_IDX1				= 15;											/*;*/
-localparam	PEAK_IDX2				= 16;											/*;*/
-localparam	PEAK_IDX3				= 17;											/*;*/
-localparam	ALLTRIGGERS				= 18;											/*;*/
+localparam	PEAK4					= 15;											/*;*///let's allocate the space for all the possible peaks, even if they are not implemented
+localparam	PEAK_IDX1				= 16;											/*;*/
+localparam	PEAK_IDX2				= 17;											/*;*/
+localparam	PEAK_IDX3				= 18;											/*;*/
+localparam	PEAK_IDX4				= 19;											/*;*/
+localparam	ALLTRIGGERS				= 20;											/*;*/
 /*§§#§§*/
 
-localparam nOfDSP_arrivingIn = 19, 				nOfDSP_goingOut = 15;
+localparam nOfDSP_arrivingIn = 21, 				nOfDSP_goingOut = 15;
 localparam MODULES = 8;
 localparam nOfDSP_directOutputs = 10;//directOutputs are the outputs tha can be outputed to the DACs
 
@@ -201,15 +198,19 @@ assign signal_arrivingFrom[IN1] = dat_a_i;
 assign signal_arrivingFrom[IN2] = dat_b_i;
 assign signal_arrivingFrom[OUT1] = dat_a_o;
 assign signal_arrivingFrom[OUT2] = dat_b_o;
-assign signal_arrivingFrom[PEAK1] = peak_a;
-assign signal_arrivingFrom[PEAK2] = peak_b;
-assign signal_arrivingFrom[PEAK3] = peak_c;
-assign signal_arrivingFrom[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is a positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
-assign signal_arrivingFrom[PEAK_IDX2] = {~peak_b_index[13], peak_b_index[12:0]};
-assign signal_arrivingFrom[PEAK_IDX3] = {~peak_c_index[13], peak_c_index[12:0]};
+generate
+	//old assignment:
+// assign signal_arrivingFrom[PEAK1] = peak_a;z
+// assign signal_arrivingFrom[PEAK_IDX1] = {~peak_a_index[13], peak_a_index[12:0]};//the index is a positive 14bit value, let's shift it to a signed value (0 becomes the lowest negative value: 0x2000 = -8192, 0x3FFF becomes 0x1FF = +8191)
+	for(j=0;j<nOfPeaks;j=j+1)begin
+		assign signal_arrivingFrom[PEAK1 + j] = peaks[(j+1) * 14 -1-:14];
+		assign signal_arrivingFrom[PEAK_IDX1 + j] = {~peaks_index[(j+1) * 14 -1], peaks_index[(j+1) * 14 - 1 -1-:13]};
+	end
+endgenerate
 //ALLTRIGGERS contains some useful triggers, so that they can be sent to the hk module. It's not the cleanest solution, but for sure it's compact
-assign signal_arrivingFrom[ALLTRIGGERS] = {inPeakRange_a, inPeakRange_b, inPeakRange_c, asg1_trigger, asg0_trigger, ramp_trigger, generic_module_trigger};
-assign isValid_arrivingFrom = {peak_c_valid, peak_b_valid, peak_a_valid, peak_c_valid, peak_b_valid, peak_a_valid, {PEAK1{1'b1}}};// all inputs are always valid, except for the peak signals
+wire inPeakRange_1 = inPeakRange[0], inPeakRange_2 = inPeakRange[1], inPeakRange_3 = inPeakRange[2], inPeakRange_4 = inPeakRange[3];
+assign signal_arrivingFrom[ALLTRIGGERS] = {inPeakRange_4, inPeakRange_3, inPeakRange_2, inPeakRange_1, asg1_trigger, asg0_trigger, ramp_trigger, generic_module_trigger};
+assign isValid_arrivingFrom = {peaks_valid, peaks_valid, {PEAK1{1'b1}}};// all inputs are always valid, except for the peak signals
 
 wire  signed [   14+LOG_DIRECT_OUTPUT_MODULES -1: 0] sum1; 
 wire  signed [   14+LOG_DIRECT_OUTPUT_MODULES -1: 0] sum2; 
@@ -217,8 +218,6 @@ wire  signed [   14+LOG_DIRECT_OUTPUT_MODULES -1: 0] sum2;
 wire dac_a_saturated; //high when dac_a is saturated
 wire dac_b_saturated; //high when dac_b is saturated
 
-integer i, y;
-genvar j;
 
 //select inputs
 generate 
