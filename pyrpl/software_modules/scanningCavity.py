@@ -29,30 +29,10 @@ from ..hardware_modules.dsp import DSP_TRIGGERS
 from ..widgets.module_widgets.scanCavity_widget import ScanCavity_widget, peak_widget, secondaryPitaya_widget
 
 
-class SignalLauncherScanningCavity(SignalLauncher):
-	"""
-	A SignalLauncher for the scanning cavity
-	"""
-	# output_created = QtCore.Signal(list)
-	# output_deleted = QtCore.Signal(list)
-	# output_renamed = QtCore.Signal()
-	# stage_created = QtCore.Signal(list)
-	# stage_deleted = QtCore.Signal(list)
-	# stage_renamed = QtCore.Signal()
-	# delete_widget = QtCore.Signal()
-	# state_changed = QtCore.Signal(list)
-	# add_input = QtCore.Signal(list)
-	# input_calibrated = QtCore.Signal(list)
-	# remove_input = QtCore.Signal(list)
-	# update_transfer_function = QtCore.Signal(list)
-	# update_lockstatus = QtCore.Signal(list)
-	# p_gain_rounded = QtCore.Signal(list)
-	# p_gain_ok = QtCore.Signal(list)
-	# i_gain_rounded = QtCore.Signal(list)
-	# i_gain_ok = QtCore.Signal(list)
 nOfSecondaryPeaks = 2
 
 class peakValue(FloatProperty):
+	'''property to access a specific numeric property of a peak (min time, max time...).'''
 	def __init__(self, propertyAccessor = lambda peak: f"minTime{peak.index+1}", **kwargs):
 		super().__init__( **kwargs)
 		self.propertyAccessor = propertyAccessor
@@ -62,7 +42,8 @@ class peakValue(FloatProperty):
 	def get_value(self, obj : peak):
 		return getattr(obj.redpitaya.scope, self.propertyAccessor(obj))
 class peakInput(SelectProperty):
-	def inputName(self, obj):
+	'''property that specifies the input signal of a peak. It's similar to a peakValue, but it's a select property instead of a float property'''
+	def inputName(self, obj : peak):
 		return f"{obj.redpitaya.scope.peakNames[obj.index]}_input"
 	def set_value(self, obj : peak, val):
 		setattr(obj.redpitaya.scope, self.inputName(obj), val)
@@ -73,15 +54,23 @@ class peakInput(SelectProperty):
 		return getattr(Scope, self.inputName(instance)).options(instance.redpitaya.scope)
 
 class peakSetpoint(FloatProperty):
-	def get_value(self, obj):
+	'''property that specifies the setpoint of the PID module in charge of locking a peak. 
+	Since the PID setpoints are adimensional values, but when acting on peak positions we 
+	would like to work with times, this property handles converting the timings into 
+	adimensional values, and viceversa. Also, it checks if the current peak is to be 
+	normalized, to correctly convert into the correct adimensional range
+	
+	Usually the setpoint is put in between the left and right edges of the peak'''
+	def get_value(self, obj : peak):
 		normalizedSetpointValue = (obj.setpoint + 1) * 0.5
-		if obj.index >= 2:
+		if obj.index >= 2 and obj.normalizeIndex:
 			L, R = self.getMainPeaks(obj)
 			return L + (R - L) * normalizedSetpointValue
 		duration = obj.scanningCavity.duration
 		return normalizedSetpointValue * duration
 	def set_value(self, obj : peak, val):
-		if obj.index >= 2:
+		if obj.index >= 2 and obj.normalizeIndex:
+			#normalized peak, the setpoint is normalized between the 2 main peaks (so, -1 would mean that the setpoint coincides with the left main peak, 1 means that the setpoint coincides with the right main peak)
 			L, R = self.getMainPeaks(obj)
 			if R != L:
 				normalizedSetpointValue = (val - L) / (R - L)
@@ -90,6 +79,7 @@ class peakSetpoint(FloatProperty):
 			else:
 				obj.setpoint = 0
 		else:
+			#non normalized peak
 			duration = obj.scanningCavity.duration
 			normalizedSetpointValue = val / duration
 			valueBetween_m1_and_1 = normalizedSetpointValue * 2 - 1
@@ -102,24 +92,8 @@ class peakSetpoint(FloatProperty):
 		return L, R
 
 
-
-
-class commonPeakIndexRegister(peakIndexRegister):
-	'''same as peak index register, but the set value will affect all the pitayas of the scanning cavity (since all cavities should have the same values for the main peaks)'''
-	def __init__(self, scanCavity, address, norm=1, signed=True, invert=False, **kwargs):
-		super().__init__(address, norm, signed, invert, **kwargs)
-		self.scanCavity = scanCavity
-	@property
-	def objects(self):
-		return [pitaya.scope for pitaya in self.scanCavity.usedPitayas]
-
-	def set_value(self, obj, value):
-		value = value / obj.decimation / 8e-9
-		for o in self.objects:
-			FloatRegister.set_value(self, o, value)
-
-
 class asgSelector(SelectProperty):
+	'''property that specifies the asg module to be used for the cavity scan. when changed, it updates the input signal of ch1 of the scope, the selected asg (waveform, frequency, offset, amplitude...)'''
 	def __init__(self, options, **kwargs):
 		super().__init__(options, **kwargs)
 
@@ -135,7 +109,7 @@ class asgSelector(SelectProperty):
 		return ret
 	
 class mainTriggerSelector(digitalPinProperty):
-	'''this property sets the digital pin of the main pitaya that will trigger the other pitaya's scopes'''
+	'''this property sets the digital pin of the main pitaya that will trigger the other pitaya's scopes. So, connect pin of the main redPitaya (specified in main_acquisitionTrigger(mainTriggerSelector)) to each selected pin of the secondary redPitayas (acquisitionTrigger(scopeTriggerSelector))'''
 	def set_value(self, obj : ScanningCavity, val):
 		val = digitalPinProperty.pinIndexToString(val)
 		hk : HK = obj.mainPitaya.hk
@@ -172,6 +146,9 @@ class peakEnablerSelector(digitalPinProperty):
 		return ret
 
 class enablePeakProperty(BoolProperty):
+	'''this property allows to set the enabling of the AOM responsible for shutting down the laser 
+	when it is not its turn. it also enables/disables the PID responsible for the peak lock (but it 
+	doesn't reset it, so you can use the enable to temporanealy disable the PID)'''
 	def set_value(self, obj : peak, val):
 		index = digitalPinProperty.pinIndexToString(obj.enablingBit)
 		hk = obj.redpitaya.hk
@@ -179,20 +156,9 @@ class enablePeakProperty(BoolProperty):
 		setattr(hk, f"expansion_{index}", 0)
 		obj.paused = not (obj.locking & val)
 		return super().set_value(obj, val)
-	
-class mainInputSelector(BaseProperty):
-
-	def set_value(self, obj, value):
-		scope : Scope = obj.mainPitaya.scope
-		scope.input1 = value
-		ret = super().set_value(obj, value)
-		obj.updateScope()
-		return ret
-	def get_value(self, obj):
-		return  obj.mainPitaya.scope.input1
-	
+		
 class rampVoltageEdge(FloatProperty):
-	'''property to set the low and high edge of an asg signal. Use makeLowerAndUpperEdges() to create 2 
+	'''property to set the low and high edges of an asg signal. Use makeLowerAndUpperEdges() to create 2 
 	connected edges, which will not cross each other (for example, trying to set on the lower edge a 
 	value higher than the current edge will not be permitted)'''
 	@staticmethod
@@ -235,12 +201,18 @@ class rampVoltageEdge(FloatProperty):
 		return low if self.isLowerEdge else high
 
 class normalizeIndexProperty(BoolProperty):
+	'''this property sets if the selected secondary peak has a normalized setpoint or not. 
+	Enable the normalization when the peak should move accordingly to the main peaks (for example 
+	if the cavity is locked to a reference laser)'''
 	def set_value(self, obj : peak, val):
 		if obj.index < 2:
 			return False
 			raise Exception("cannot set a main peak as normalized")
 		super().set_value(obj, val)
-		return setattr(obj.redpitaya.scope, f"{obj.redpitaya.scope.peakNames[obj.index]}_normalizeIndex", val)
+		oldSetpoint = obj.timeSetpoint
+		ret = setattr(obj.redpitaya.scope, f"{obj.redpitaya.scope.peakNames[obj.index]}_normalizeIndex", val)
+		obj.timeSetpoint = oldSetpoint
+		return ret
 	
 	def get_value(self, obj : peak):
 		if obj.index < 2:
@@ -248,7 +220,9 @@ class normalizeIndexProperty(BoolProperty):
 		return getattr(obj.redpitaya.scope, f"{obj.redpitaya.scope.peakNames[obj.index]}_normalizeIndex"
 				 )
 class peak(Module):
-	
+	'''submodule for the handling of a peak detection and lockin. it can be used for both the main peaks and secondary peaks. 
+	The peak is specified with the parent redPitaya and the peak index. Index 0 is for the left main peak, 1 for the right 
+	main peak, and 2 and above are for the normalizable peaks'''
 	_gui_attributes = [
 					"min_voltage",
 					"max_voltage",
@@ -265,12 +239,6 @@ class peak(Module):
 					]
 	_widget_class = peak_widget
 
-	# @staticmethod
-	# def createPeak(redpitaya, index, parent):
-	# 	p = peak(parent)
-	# 	p.redpitaya = redpitaya
-	# 	p.index = index
-	# 	return p
 	def __init__(self, redpitaya, index, scanningCavity : ScanningCavity, name=None):
 		super().__init__(redpitaya, name)
 		self.scanningCavity : ScanningCavity = scanningCavity
@@ -289,14 +257,13 @@ class peak(Module):
 
 	'''setpoint is the actual value of the PID setpoint (value between -1 and 1, 
 	where -1 represents the lower timing for the peak, either
-		0 for the main peaks
-		mainL for the secondary peaks
+		0 for the main peaks or non-normalized secondary peaks
+		mainL for the normalized secondary peaks
 	and 1 represents either
-		mainScope.duration for the main peaks
-		mainR for the secondary peaks
-
-	timeSetpoint is the time corresponding to the PID setpoint
-	)'''
+		mainScope.duration for the main peaks or non-normalized secondary peaks
+		mainR for the normalized secondary peaks
+	)
+	timeSetpoint is the time corresponding to the PID setpoint'''
 	setpoint = DynamicInstanceProperty(Pid.setpoint, lambda peak : peak.pid)
 	timeSetpoint = peakSetpoint(min = 0)
 	p = DynamicInstanceProperty(Pid.p, lambda peak : peak.pid)
@@ -387,6 +354,7 @@ class peak(Module):
 		return allGroups
 
 class secondaryPitaya(Module):
+	'''submodule for the handling of a secondary peak, to set some parameters that involve all the peaks of that same redpitaya'''
 	_gui_attributes = [
 					"input1",
 					"acquisitionTrigger"
@@ -402,7 +370,7 @@ class secondaryPitaya(Module):
 
 class ScanningCavity(AcquisitionModule):
 
-	_gui_attributes = ["duration",
+	_setup_attributes = ["duration",
 					"input1",
 					"usedAsg",
 					"lowValue", 
@@ -413,7 +381,9 @@ class ScanningCavity(AcquisitionModule):
 					"threshold",
 					"hysteresis",
 					]
+	_gui_attributes = _setup_attributes
 	_widget_class = ScanCavity_widget
+	_module_attributes = ["mainL","mainR"]
 
 
 	def __init__(self, parent, name=None):

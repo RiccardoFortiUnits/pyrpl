@@ -70,9 +70,10 @@ wire [numDen_WIDTH -1:0] b_shifted;
 //todo: numeratof and denominator don't have to have the same sizes. Also, length(num)==length(quot), and length(den)==length(rem)
 				
 				
-reg [rawQuotient_WIDTH -1:0] rawQuotient;
-reg [rawQuotient_WIDTH -1:0] rawRemain;
 generate
+/*
+	reg [rawQuotient_WIDTH -1:0] rawQuotient;
+	reg [rawQuotient_WIDTH -1:0] rawRemain;
 	if(areSignalsSigned)begin
 		always @(posedge clk) begin
 			if(reset) begin
@@ -94,6 +95,23 @@ generate
 			end
 		end		
 	end
+/*/
+	wire [rawQuotient_WIDTH -1:0] rawQuotient;
+	wire [rawQuotient_WIDTH -1:0] rawRemain;
+	if(numDen_WIDTH == 29 && rawQuotient_WIDTH == 29 && !areSignalsSigned)begin:div29_29
+		divider_29_29 d29_29(
+			.aclk					(clk),
+			.s_axis_divisor_tvalid	(1),
+			.s_axis_divisor_tdata	(b_shifted),
+			.s_axis_dividend_tvalid	(1),
+			.s_axis_dividend_tdata	(a_shifted),
+			.m_axis_dout_tdata		({rawQuotient, {32 - rawQuotient_WIDTH{1'b0}}, rawRemain})
+		);
+	end else begin
+		$error("combination of register lengths does not have an IP core divider associated. Create a new divider with the correct register sizes and add it to the fractionalDivider module (yes, I know it sucks...). divider/divisor size: %n, quotient size: %n",
+		numDen_WIDTH, rawQuotient_WIDTH);
+	end
+//*/
 endgenerate
 
 

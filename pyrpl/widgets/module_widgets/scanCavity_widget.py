@@ -281,28 +281,30 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.plot_item.showGrid(y=True, alpha=1.)
         self.viewBox = self.plot_item.getViewBox()
         self.viewBox.setMouseEnabled(y=False)
-        
         def add_new_tab(tab, content, tabTitle):
             new_tab = QtWidgets.QWidget()
             new_tab_layout = QtWidgets.QHBoxLayout()
             new_tab_layout.addWidget(content)
             new_tab.setLayout(new_tab_layout)
             tab.addTab(content, tabTitle)
+            if isinstance(content, peak_widget):
+                idx = tab.indexOf(content)
+                tab.tabBar().setTabTextColor(idx, content.line.color)
 
         self.peakTabs = QtWidgets.QTabWidget()
         self.main_layout.addWidget(self.peakTabs)
 
         ml : peak_widget = self.mainL._create_widget()
+        ml.setGraphForPeakLine(self.plot_item, ScanCavity_widget.colors[0])
         add_new_tab(self.peakTabs, ml, "main Left")
-        ml.setGraphForPeakLine(self.plot_item, QtGui.QColor(255, 0, 0))
         mr : peak_widget = self.mainR._create_widget()
+        mr.setGraphForPeakLine(self.plot_item, ScanCavity_widget.colors[1])
         add_new_tab(self.peakTabs, mr, "main Right")
-        mr.setGraphForPeakLine(self.plot_item, QtGui.QColor(0, 255, 0))
         self.peakList = [ml, mr]
         for i, peak in enumerate(self.module.secondaryPeaks):
             widget : peak_widget = peak._create_widget()
-            add_new_tab(self.peakTabs, widget, peak.name)
             widget.setGraphForPeakLine(self.plot_item, ScanCavity_widget.colors[i+2])
+            add_new_tab(self.peakTabs, widget, peak.name)
             self.peakList.append(widget)
                 
         self.secondaryPitayasTabs = QtWidgets.QTabWidget()
@@ -368,6 +370,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.update_rolling_mode_visibility()
         self.rolling_mode = self.module.rolling_mode
         self.attribute_layout.addStretch(1)
+        self.module.duration = 0.001
         
     @property
     def mainL(self):

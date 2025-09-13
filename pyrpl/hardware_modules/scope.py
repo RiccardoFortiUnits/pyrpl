@@ -536,8 +536,8 @@ class Scope(HardwareModule, AcquisitionModule):
     peak_ctrl1_minValue = FloatRegister(0xE0, startBit= 0, bits=14, norm=2 ** 13,
                                 doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
 
-    peak_ctrl0_normalizeIndex = BoolRegister(0xB8, starbit = 0, doc="if set, the index value of this peak will be normalized to respect to the indexes of the peaks refL and refR")
-    peak_ctrl1_normalizeIndex = BoolRegister(0xB8, starbit = 1, doc="if set, the index value of this peak will be normalized to respect to the indexes of the peaks refL and refR")
+    peak_ctrl0_normalizeIndex = BoolRegister(0xB8, bit = 0, doc="if set, the index value of this peak will be normalized to respect to the indexes of the peaks refL and refR")
+    peak_ctrl1_normalizeIndex = BoolRegister(0xB8, bit = 1, doc="if set, the index value of this peak will be normalized to respect to the indexes of the peaks refL and refR")
 
     peakRangeRegisters = dict(
         minTime1 = minTime1,
