@@ -75,7 +75,7 @@ module red_pitaya_asg (
   input                 dac_rstn_i,  // DAC reset - active low
   input                 trig_a_i  ,  // starting trigger CHA
   input                 trig_b_i  ,  // starting trigger CHB
-  output     [  2-1: 0] trig_out_o,  // notification trigger
+  output reg [  2-1: 0] trig_out_o,  // notification trigger
  
   input                 trig_scope_i    ,  // trigger from the scope
 
@@ -219,9 +219,8 @@ begin
    buf_b_we   <= sys_wen && (sys_addr[19:RSZ+2] == 'h2);
    buf_a_addr <= sys_addr[RSZ+1:2] ;  // address timing violation
    buf_b_addr <= sys_addr[RSZ+1:2] ;  // can change only synchronous to write clock
+   trig_out_o <= {trig_b_done,trig_a_done};
 end
-
-assign trig_out_o = {trig_b_done,trig_a_done};
 
 //---------------------------------------------------------------------------------
 //
