@@ -12,11 +12,27 @@ import numpy as np
 from ...errors import NotReadyError
 from .base_module_widget import ModuleWidget
 from .acquisition_module_widget import AcquisitionModuleWidget
+# from ...software_modules.scanningCavity import ScanningCavity, peak
 
+class PeakBorderLine(QtWidgets.QGraphicsLineItem):
+    def __init__(self, parent, peakLine):
+        super().__init__(0.0, 0, 0.001, 0, parent = parent)
+        self.peakLine = peakLine
+        self.setFlags(QtWidgets.QGraphicsItem.ItemIsSelectable)
+    def mousePressEvent(self, event):
+        return self.peakLine.mousePressEvent(event)
+    
+    def mouseMoveEvent(self, event):
+        return self.peakLine.mouseMoveEvent(event)
+    def mouseReleaseEvent(self, event):
+        return self.peakLine.mouseReleaseEvent(event)
 class PeakLine(QtWidgets.QGraphicsLineItem):
-    def __init__(self, parent, peakWidget, color = QtCore.Qt.red):
+    
+
+    def __init__(self, parent, peakWidget, scanCavityWidget, color = QtCore.Qt.red):
         super().__init__(0.0, 0, 0.001, 0, parent = parent)
         self.peak = peakWidget
+        self.scanCavityWidget = scanCavityWidget
         self.setFlags(
             QtWidgets.QGraphicsItem.ItemIsSelectable |
             QtWidgets.QGraphicsItem.ItemIsMovable
@@ -25,9 +41,9 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
         self.color = color
         self.centerLine = QtWidgets.QGraphicsLineItem(0.0, 0, 0.001, 0, parent=parent)
         parent.addItem(self.centerLine)
-        self.leftEdgeLine = QtWidgets.QGraphicsLineItem(0, 0.1, 0, -0.1, parent=parent)
+        self.leftEdgeLine = PeakBorderLine(parent, self)
         parent.addItem(self.leftEdgeLine)
-        self.rightEdgeLine = QtWidgets.QGraphicsLineItem(0.001, 0.1, 0.001, -0.1, parent=parent)
+        self.rightEdgeLine = PeakBorderLine(parent, self)
         parent.addItem(self.rightEdgeLine)
         self.targetLine = QtWidgets.QGraphicsLineItem(0.0, 0, 0.0005, 0, parent=parent)
         parent.addItem(self.targetLine)
@@ -58,10 +74,9 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
 
     def updateBarPositions(self):
         self.centerLine.setLine(self.line().x1(), self.line().y1(), self.line().x2(), self.line().y2())
-        self.leftEdgeLine.setLine(self.line().x1() + self.barWidths/2, self.line().y1() + self.barHeight/2, self.line().x1() + self.barWidths/2, self.line().y1() - self.barHeight/2)
-        self.rightEdgeLine.setLine(self.line().x2() - self.barWidths/2, self.line().y2() + self.barHeight/2, self.line().x2() - self.barWidths/2, self.line().y2() - self.barHeight/2)
+        self.leftEdgeLine.setLine(self.line().x1() - self.barWidths/2, self.line().y1() + self.barHeight/2, self.line().x1() - self.barWidths/2, self.line().y1() - self.barHeight/2)
+        self.rightEdgeLine.setLine(self.line().x2() + self.barWidths/2, self.line().y2() + self.barHeight/2, self.line().x2() + self.barWidths/2, self.line().y2() - self.barHeight/2)
         self.targetLine.setLine((self.line().x1() + self.line().x2()) / 2, self.line().y1() + self.barHeight/2, (self.line().x1() + self.line().x2()) / 2, self.line().y2() - self.barHeight/2)
-            
 
     def updatePeakRanges(self):
         self.peak.minTime.attribute_value = self.line().x1()
@@ -81,6 +96,7 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
             self.updateSetpoint()
             self.setLine(newLeft, self.line().y1(), right, self.line().y1())
             self.updateBarPositions()
+            self.scanCavityWidget.setPeakGroups()
         
     def updateRightValue(self, newRight):
         left = self.line().x1()
@@ -88,6 +104,7 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
             self.updateSetpoint()
             self.setLine(left, self.line().y1(), newRight, self.line().y1())
             self.updateBarPositions()
+            self.scanCavityWidget.setPeakGroups()
     def updateHeight(self, newHeigth):
         self.setLine(self.line().x1(), newHeigth, self.line().x2(), newHeigth)
         self.updateBarPositions()
@@ -116,7 +133,6 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
     def mousePressEvent(self, event):
         # Determine if the click is near one of the line's endpoints
         line = self.line()
-        edge_threshold = 10  # pixels
         self._drag_edge = None
 
         # Map scene position to line coordinates
@@ -125,13 +141,12 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
 
         # Use mapFromScene to get local coordinates
         click = event.pos()
-        if (np.abs(QtCore.QLineF(click, p1).dx()) < self.barWidths):
+        if (QtCore.QLineF(p1, click).dx() < 0):
             self._drag_edge = 'left'
-        elif (np.abs(QtCore.QLineF(click, p2).dx()) < self.barWidths):
+        elif (QtCore.QLineF(click, p2).dx() < 0):
             self._drag_edge = 'right'
         else:
             self._drag_edge = None
-        print(self._drag_edge)
         self._distanceBetweenClickAndTop = self.line().x1() - event.pos().x(), self.line().y1() - event.pos().y()
         self._width = self.line().x2() - self.line().x1()
         super().mousePressEvent(event)
@@ -149,27 +164,26 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
             self.setLine(topCorner[0], topCorner[1], topCorner[0] + self._width, topCorner[1])
         self.updateBarPositions()
         self.updatePeakRanges()
+        self.scanCavityWidget.setPeakGroups()
 
     def mouseReleaseEvent(self, event):
         self._drag_edge = None
         super().mouseReleaseEvent(event)
 
-
-
 class peak_widget(ModuleWidget):
     """
     Widget for a single peak.
     """
-    def _togglePID(self):
-        activated = self.module.togglePID()
-        self.line.isSetpointActive = activated
-        self.line.updateFromPeakRanges()
-        if hasattr(self, "line"):
-            self.line.isSetpointActive = activated
-            self.line.updateFromPeakRanges()
-        self.button_activatePID.setText("unlock peak" if activated else "lock peak")
-    def _enableLocking(self):
-        self.button_activatePID.setEnabled(self.enabled.attribute_value)
+    # def _togglePID(self):
+    #     activated = self.module.togglePID()
+    #     self.line.isSetpointActive = activated
+    #     self.line.updateFromPeakRanges()
+    #     if hasattr(self, "line"):
+    #         self.line.isSetpointActive = activated
+    #         self.line.updateFromPeakRanges()
+    #     self.button_activatePID.setText("unlock peak" if activated else "lock peak")
+    # def _enableLocking(self):
+    #     self.button_activatePID.setEnabled(self.enabled.attribute_value)
         
 
     def init_gui(self):
@@ -190,20 +204,34 @@ class peak_widget(ModuleWidget):
         self.maxTime.value_changed.connect(lambda : self.line.updateRightValue(self.maxTime.attribute_value))
         self.minValue.value_changed.connect(lambda : self.line.updateHeight(self.minValue.attribute_value))
         
-        self.button_activatePID = QtWidgets.QPushButton("lock peak")
-        self.button_activatePID.clicked.connect(self._togglePID)
-        self.main_layout.addWidget(self.button_activatePID)
+        # self.button_activatePID = QtWidgets.QPushButton("lock peak")
+        # self.button_activatePID.clicked.connect(self._togglePID)
+        # self.main_layout.addWidget(self.button_activatePID)
         self.enabled = aws["enabled"]
-        self.enabled.value_changed.connect(self._enableLocking)
-        self._enableLocking()        
+        self.locking = aws["locking"]
+        # self.enabled.value_changed.connect(self._enableLocking)
+        # self._enableLocking()
 
     def __init__(self, name, module, parent=None):
         super().__init__(name, module, parent)
         self.graph = None
-    def setGraphForPeakLine(self, graph, color):
+    def setGraphForPeakLine(self, graph, scanCavityWidget, color):
         self.graph = graph
-        self.line = PeakLine(graph, self, color)
+        self.line = PeakLine(graph, self, scanCavityWidget, color)
         self.line.updateFromPeakRanges()
+        self.curve = graph.plot(pen=(QtGui.QColor(color).red(),
+                                    QtGui.QColor(color).green(),
+                                    QtGui.QColor(color).blue()
+                                    ))
+    def updateCurve(self, t, x):
+        if self.module.active:
+            indexes = np.logical_and(t > self.minTime.attribute_value, t < self.maxTime.attribute_value)
+            x = x[indexes]
+            t = t[indexes]      
+            self.curve.setData(t, x)
+            self.curve.setVisible(True)
+        else:
+            self.curve.setVisible(True)
       
     def setpointToCurrentValue(self):
         #get the last acquisition from the scope and put its average as the new setpoint
@@ -237,7 +265,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         """
         self.datas = [None, None]
         self.times = None
-        self.ch_color = 'yellow'#('green', 'red', 'blue')
+        self.ch_color = ['white']#('green', 'red', 'blue')
         self.ch_transparency = 0x80#(255, 255, 255)  # 0 is transparent, 255 is not  # deactivated transparency for speed reasons
         #self.module.__dict__['curve_name'] = 'scope'
         #self.main_layout = QtWidgets.QVBoxLayout()
@@ -290,20 +318,30 @@ class ScanCavity_widget(AcquisitionModuleWidget):
             if isinstance(content, peak_widget):
                 idx = tab.indexOf(content)
                 tab.tabBar().setTabTextColor(idx, content.line.color)
+        
+        def on_view_changed():
+            for peak in self.peakList:
+                peak.line.updateSizes()
+
+        self.curves = [self.plot_item.plot(pen=(QtGui.QColor(color).red(),
+                                                QtGui.QColor(color).green(),
+                                                QtGui.QColor(color).blue()
+                                                )) for color in self.ch_color]
+        # self.main_layout.addWidget(self.win, stretch=10) #let's do it later, so that the graph is on the bottom of the window
 
         self.peakTabs = QtWidgets.QTabWidget()
         self.main_layout.addWidget(self.peakTabs)
 
         ml : peak_widget = self.mainL._create_widget()
-        ml.setGraphForPeakLine(self.plot_item, ScanCavity_widget.colors[0])
+        ml.setGraphForPeakLine(self.plot_item, self, ScanCavity_widget.colors[0])
         add_new_tab(self.peakTabs, ml, "main Left")
         mr : peak_widget = self.mainR._create_widget()
-        mr.setGraphForPeakLine(self.plot_item, ScanCavity_widget.colors[1])
+        mr.setGraphForPeakLine(self.plot_item, self, ScanCavity_widget.colors[1])
         add_new_tab(self.peakTabs, mr, "main Right")
         self.peakList = [ml, mr]
         for i, peak in enumerate(self.module.secondaryPeaks):
             widget : peak_widget = peak._create_widget()
-            widget.setGraphForPeakLine(self.plot_item, ScanCavity_widget.colors[i+2])
+            widget.setGraphForPeakLine(self.plot_item, self, ScanCavity_widget.colors[i+2])
             add_new_tab(self.peakTabs, widget, peak.name)
             self.peakList.append(widget)
                 
@@ -312,33 +350,9 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         for secondaryPitaya in self.module.secondaryPitayas:
             widget : peak_widget = secondaryPitaya._create_widget()
             add_new_tab(self.secondaryPitayasTabs, widget, peak.name)
-        self.module.duration = .01
 
-        
-        def on_view_changed():
-            for peak in self.peakList:
-                peak.line.updateSizes()
 
-        self.plot_item.sigRangeChanged.connect(lambda _, __: on_view_changed())
-        self.plot_item.getViewBox().sigResized.connect(on_view_changed)
-
-        #self.button_single = QtWidgets.QPushButton("Run single")
-        #self.button_continuous = QtWidgets.QPushButton("Run continuous")
-        #self.button_save = QtWidgets.QPushButton("Save curve")
-
-        # self.curves = [self.plot_item.plot(pen=(QtGui.QColor(color).red(),
-        #                                         QtGui.QColor(color).green(),
-        #                                         QtGui.QColor(color).blue()
-        #                                         ))
-        #                                         #,trans)) \
-        #                for color, trans in zip(self.ch_color,
-        #                                        self.ch_transparency)]
-        self.curves = [self.plot_item.plot(pen=(QtGui.QColor(self.ch_color).red(),
-                                                QtGui.QColor(self.ch_color).green(),
-                                                QtGui.QColor(self.ch_color).blue()
-                                                ))]
         self.main_layout.addWidget(self.win, stretch=10)
-
         self.main_layout.addLayout(self.button_layout)
 
         
@@ -370,8 +384,9 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.update_rolling_mode_visibility()
         self.rolling_mode = self.module.rolling_mode
         self.attribute_layout.addStretch(1)
-        self.module.duration = 0.001
+        self.setPeakGroups()
         
+
     @property
     def mainL(self):
         return self.module.mainL
@@ -419,6 +434,10 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.curves[0].setData(times, ch1)
         self.curves[0].setVisible(True)
         self.update_current_average() # to update the number of averages
+
+        self.changePeakGroup()
+        for peak in self.peakList:
+            peak.updateCurve(times, ch1)
 
     def set_rolling_mode(self):
         """
@@ -478,3 +497,53 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 
     def save_clicked(self):
         self.module.save_curve()
+
+    @staticmethod
+    def getGroupsOfNonOverlapping(peakList):
+        ranges = [(p.left, p.right) for p in peakList]
+        def areIntersecting(range0, range1):
+            return (range0[0] < range1[1]) ^ (range0[1] <= range1[0])
+        intersections = np.zeros((len(ranges), len(ranges)), dtype=bool)
+        for i in range(len(ranges)):
+            for j in range(len(ranges)):
+                intersections[i,j] = areIntersecting(ranges[i], ranges[j])
+        stillFree = np.arange(len(ranges))
+        allGroups = []
+        while len(stillFree) > 0:
+            run = [stillFree[0]]
+            addedIndexes = [0]
+            for i in range(1, len(stillFree)):
+                testedLine = np.repeat(stillFree[i],len(run))
+                if not np.any(intersections[testedLine, run]):
+                    addedIndexes.append(i)
+                    run.append(stillFree[i])
+            stillFree = np.delete(stillFree, addedIndexes)
+            allGroups.append(run)
+        return [[peakList[i] for i in group] for group in allGroups]
+    
+    def setPeakGroups(self):
+        # sc : ScanningCavity = self.module
+        sc = self.module
+        peaks = sc.usedPeaks
+        self.peakGroups = ScanCavity_widget.getGroupsOfNonOverlapping(peaks)
+        print(self.peakGroups)
+        self.currentGroupIndex = np.random.randint(len(self.peakGroups))#let's randomize the first group, 
+                # so that if we have very fast updates of the peaks (example, while dragging a peak around), 
+                # we won't end up controlling only the first group
+        for p in peaks:
+            p.inCurrentPeakGroup = p in self.peakGroups[self.currentGroupIndex]
+        for i in range(1, len(self.curves)):
+            self.curves[i].setVisible(False)
+    def changePeakGroup(self):
+        if len(self.peakGroups) < 1:
+            #let's not do anything, since we don't need to swap peaks around
+            return
+        newIndex = (self.currentGroupIndex + 1) % len(self.peakGroups)
+        for p in self.peakGroups[self.currentGroupIndex]:
+            p.inCurrentPeakGroup = False
+        for p in self.peakGroups[newIndex]:
+            p.inCurrentPeakGroup = True
+
+        self.currentGroupIndex = newIndex
+
+

@@ -66,8 +66,33 @@ Created on Mon Jun 17 18:01:10 2024
 
 
 
-from pyrpl import Pyrpl
+# from pyrpl import Pyrpl
 
-p = Pyrpl()
-
+# p = Pyrpl("erdt")
 # input("press enter to close pyrpl")
+# Python
+# Import necessary modules
+from PyQt5.QtWidgets import QApplication
+from pyrpl import Pyrpl
+import sys
+
+# Create the Qt Application
+app = QApplication(sys.argv)
+
+# Initialize Pyrpl
+p = Pyrpl("singlePitaya")
+
+# (Optional) Interact with your Pyrpl object here
+# e.g., p.set_attribute(...)
+
+# Start the Qt event loop
+sys.exit(app.exec_())
+
+
+
+
+
+
+
+
+

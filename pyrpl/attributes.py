@@ -256,6 +256,7 @@ class DynamicInstanceProperty(propertyWrapper):
 	def __set__(self, instance, value):
 		# Ignore the passed instance, use the forced one
 		self._prop.__set__(self.dynamicAccessor(instance), value)
+		self._prop.value_updated(instance, value, [])
 		if self.extraFunctionToDoAfterSettingValue is not None:
 			self.extraFunctionToDoAfterSettingValue(self, instance, value)
 	
@@ -280,6 +281,7 @@ class MultipleDynamicInstanceProperty(propertyWrapper):
 		instances = self.dynamicAccessor(instance)
 		for inst in instances:
 			self._prop.__set__(inst, value)
+		self._prop.value_updated(instance, value, [])
 		if self.extraFunctionToDoAfterSettingValue is not None:
 			self.extraFunctionToDoAfterSettingValue(self, instance, value)
 	
@@ -329,10 +331,10 @@ class BaseRegister(BaseProperty):
 		# self.parent = obj  # store obj in memory
 		val = obj._read(self.address, not self.isAddressStatic)
 		if self.bitmask is None:
-			# print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
+			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
 			return self.to_python(obj, val)
 		else:
-			# print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
+			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
 			retVal = val & self.bitmask
 			if self.startBit is not None: 
 				# try:
@@ -348,7 +350,7 @@ class BaseRegister(BaseProperty):
 		"""
 		if self.bitmask is None:
 			obj._write(self.address, self.from_python(obj, val), not self.isAddressStatic)
-			# print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(self.from_python(obj, val))}")
+			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(self.from_python(obj, val))}")
 		else:
 			act = obj._read(self.address, not self.isAddressStatic)
 			new = act & (~self.bitmask)
@@ -357,7 +359,7 @@ class BaseRegister(BaseProperty):
 				addValue <<= self.startBit
 			new |= (addValue & self.bitmask)
 			obj._write(self.address, new, not self.isAddressStatic)
-			# print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(new)}")
+			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(new)}")
 				
 
 	def __set__(self, obj, value):

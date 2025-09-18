@@ -97,7 +97,7 @@ class asgSelector(SelectProperty):
 	def __init__(self, options, **kwargs):
 		super().__init__(options, **kwargs)
 
-	def set_value(self, obj, value):
+	def set_value(self, obj : ScanningCavity, value):
 		scope : Scope = obj.mainPitaya.scope
 		scope.trigger_source = value
 		oldValues = (obj.output_direct,obj.trigger_source)
@@ -131,30 +131,36 @@ class scopeTriggerSelector(digitalPinProperty):
 		scope.external_trigger_pin = val
 		return super().set_value(obj, val)
 
-class peakEnablerSelector(digitalPinProperty):
+class peakActivatingBitSelector(digitalPinProperty):
 	'''this property sets the digital pin that will enable the AOM responsible for shutting down the laser when it is not its turn'''
 	def set_value(self, obj : peak, val):
 		oldEnabled = obj.enabled
+		if obj.isOverlappingWithMainPeaks():
+			return False
+			raise Exception("cannot enable this peak when its range is overlapping with the main peaks")
+		oldEnabled = obj.active
 		val = digitalPinProperty.pinIndexToString(val)
 		hk : HK = obj.redpitaya.hk
 		setattr(hk, f"expansion_{val}_output", 1)
-		# setattr(hk, f"pinState_{val}", "dsp" if oldEnabled else "memory")  #already done by obj.enabled
+		# setattr(hk, f"pinState_{val}", "dsp" if oldEnabled else "memory")  #already done by obj.active
 		# setattr(hk, f"expansion_{val}", 0)
 		setattr(hk, f"external_{val}_dspBitSelector", DSP_TRIGGERS[f"inPeakRange_{obj.index + 1}"])
 		ret = super().set_value(obj, val)
-		obj.enabled = oldEnabled
+		obj.active = oldEnabled
 		return ret
 
-class enablePeakProperty(BoolProperty):
+class activatePeakProperty(BoolProperty):
 	'''this property allows to set the enabling of the AOM responsible for shutting down the laser 
-	when it is not its turn. it also enables/disables the PID responsible for the peak lock (but it 
-	doesn't reset it, so you can use the enable to temporanealy disable the PID)'''
+	when it is not its turn'''
 	def set_value(self, obj : peak, val):
+		if obj.isOverlappingWithMainPeaks():
+			return False
+			raise Exception("cannot enable this peak when its range is overlapping with the main peaks")
 		index = digitalPinProperty.pinIndexToString(obj.enablingBit)
 		hk = obj.redpitaya.hk
 		setattr(hk, f"pinState_{index}", "dsp" if val else "memory")
 		setattr(hk, f"expansion_{index}", 0)
-		obj.paused = not (obj.locking & val)
+		# obj.paused = not (obj.locking & val)
 		return super().set_value(obj, val)
 		
 class rampVoltageEdge(FloatProperty):
@@ -208,6 +214,9 @@ class normalizeIndexProperty(BoolProperty):
 		if obj.index < 2:
 			return False
 			raise Exception("cannot set a main peak as normalized")
+		if obj.isOverlappingWithMainPeaks(checkIfPeakIsCurrentlyNormalized = False):
+			return False
+			raise Exception("cannot set this peak to be normalized, because it is overlapping with the main peaks")
 		super().set_value(obj, val)
 		oldSetpoint = obj.timeSetpoint
 		ret = setattr(obj.redpitaya.scope, f"{obj.redpitaya.scope.peakNames[obj.index]}_normalizeIndex", val)
@@ -219,6 +228,16 @@ class normalizeIndexProperty(BoolProperty):
 			return 0
 		return getattr(obj.redpitaya.scope, f"{obj.redpitaya.scope.peakNames[obj.index]}_normalizeIndex"
 				 )
+class peakEnablingProperty(BoolProperty):
+	'''property that calls the function peak.setActiveAndPaused(), to correctly toggle the active and paused properties'''
+	def set_value(self, obj : peak, val):
+		ret = super().set_value(obj, val)
+		obj.setActiveAndPaused()
+		return ret
+class peakLockingProperty(BoolProperty):
+	def set_value(self, obj, val):
+		obj.setupPid()
+		return super().set_value(obj, val)
 class peak(Module):
 	'''submodule for the handling of a peak detection and lockin. it can be used for both the main peaks and secondary peaks. 
 	The peak is specified with the parent redPitaya and the peak index. Index 0 is for the left main peak, 1 for the right 
@@ -235,26 +254,46 @@ class peak(Module):
 					"output_direct",
 					"enablingBit",
 					"enabled",
+					"locking",
 					"normalizeIndex",#can be removed by manually by peak_widget, it stays only for the normalizable peaks
 					]
 	_widget_class = peak_widget
 
 	def __init__(self, redpitaya, index, scanningCavity : ScanningCavity, name=None):
 		super().__init__(redpitaya, name)
+		self._load_setup_attributes()
 		self.scanningCavity : ScanningCavity = scanningCavity
 		self.index = index
 		self.pid = redpitaya.pids.all_modules[index - 1 if index >= 2 else 0]
 		self.input
-
 	 
 	left = peakValue(lambda peak: f"minTime{peak.index+1}", min = 0)
 	right = peakValue(lambda peak: f"maxTime{peak.index+1}")
 	height = peakValue(lambda peak: f"{peak.redpitaya.scope.peakNames[peak.index]}_minValue")
 	input = peakInput()
-	enablingBit = peakEnablerSelector()
-	enabled = enablePeakProperty()
 	normalizeIndex = normalizeIndexProperty()
+	'''let's talk about "enabling" a peak. There are 2 levels of enabling:
+		- active: the pin specified by self.enablingBit toggles when the peak is in its range of the scan
+		- locking: the PI control is running (not paused), so if the parameters are correct, the peak should 	
+			follow the setpoint (center of the range). When it's toggled, the PI module should be reset
+		the peak can be locking only if it is active. You can use a peak active but not locking when you 
+		are adding a new peak to the cavity, and you don't know where it might be
+		There are a bunch of "virtual" enabling bits, which indirectly control the 2 physical bits: self.active and self.paused.
+		For now, these 2 bits are calculated as follows:
+		- active = enabled & inCurrentPeakGroup
+		- paused = ! (active & locking)'''
+	enablingBit = peakActivatingBitSelector()
+	active = activatePeakProperty()
+	enabled = peakEnablingProperty()
+	inCurrentPeakGroup = peakEnablingProperty()
+	locking = peakLockingProperty()
 
+	p = DynamicInstanceProperty(Pid.p, lambda peak : peak.pid)
+	i = DynamicInstanceProperty(Pid.i, lambda peak : peak.pid)
+	paused = DynamicInstanceProperty(Pid.paused, lambda peak : peak.pid)
+	min_voltage = DynamicInstanceProperty(Pid.min_voltage, lambda peak : peak.pid)
+	max_voltage = DynamicInstanceProperty(Pid.max_voltage, lambda peak : peak.pid)
+	output_direct = DynamicInstanceProperty(Pid.output_direct, lambda peak : peak.pid)
 	'''setpoint is the actual value of the PID setpoint (value between -1 and 1, 
 	where -1 represents the lower timing for the peak, either
 		0 for the main peaks or non-normalized secondary peaks
@@ -266,15 +305,22 @@ class peak(Module):
 	timeSetpoint is the time corresponding to the PID setpoint'''
 	setpoint = DynamicInstanceProperty(Pid.setpoint, lambda peak : peak.pid)
 	timeSetpoint = peakSetpoint(min = 0)
-	p = DynamicInstanceProperty(Pid.p, lambda peak : peak.pid)
-	i = DynamicInstanceProperty(Pid.i, lambda peak : peak.pid)
-	paused = DynamicInstanceProperty(Pid.paused, lambda peak : peak.pid)
-	min_voltage = DynamicInstanceProperty(Pid.min_voltage, lambda peak : peak.pid)
-	max_voltage = DynamicInstanceProperty(Pid.max_voltage, lambda peak : peak.pid)
-	output_direct = DynamicInstanceProperty(Pid.output_direct, lambda peak : peak.pid)
 
-	locking = BoolProperty()
-	
+	def setActiveAndPaused(self):
+		self.active = self.enabled and self.inCurrentPeakGroup
+		self.paused = not (self.active & self.locking)
+	def isOverlappingWithMainPeaks(self, checkIfPeakIsCurrentlyNormalized = True):
+		#checkIfPeakIsCurrentlyNormalized is only used when we are checking if we can set self.normalizeIndex 
+		# to True (and so self.normalizeIndex would likely be False at the moment)
+		if self.peakType != "secondary" or (checkIfPeakIsCurrentlyNormalized and not self.normalizeIndex):
+			return False
+		def areIntersecting(peak0, peak1):
+			range0 = peak0.left, peak0.right
+			range1 = peak1.left, peak1.right
+			return (range0[0] < range1[1]) ^ (range0[1] <= range1[0])
+		return areIntersecting(self, self.scanningCavity.mainL) and \
+				areIntersecting(self, self.scanningCavity.mainR)
+
 	def setupPid(self):
 		self.pid.ival=0
 		self.pid.setpoint_source="from memory"
@@ -290,17 +336,20 @@ class peak(Module):
 		return self.locking
 
 	def _activatePID(self):
-		if self.enabled:
+		if self.active:
+			if self.isOverlappingWithMainPeaks():
+				return False
+				raise Exception("cannot enable the secondary peak when its range is overlapping with the main peaks")
 			self.setupPid()
 			self.locking = True
 		else:
 			self.locking = False
-		self.paused = not (self.locking & self.enabled)
+		# self.paused = not (self.locking & self.active)
 
 	def _deactivatePID(self):
 		self.setupPid()
 		self.locking = False
-		self.paused = not (self.locking & self.enabled)
+		# self.paused = not (self.locking & self.active)
 
 	@staticmethod
 	def allUnusedSecondaryPeaks(scanCavity):
@@ -363,6 +412,7 @@ class secondaryPitaya(Module):
 	def __init__(self,redpitaya, scanningCavity):
 		self.rp = redpitaya
 		super().__init__(scanningCavity, name=None)
+		self._load_setup_attributes()
 		# self.controlPeak1 = peak(self, 2, scanningCavity, f"{self.rp.name}_controlled1")
 		# scanningCavity.usedPeaks += [self.controlPeak1]
 	input1 = DynamicInstanceProperty(Scope.input1, lambda secondaryPitaya : secondaryPitaya.rp.scope)
@@ -401,6 +451,8 @@ class ScanningCavity(AcquisitionModule):
 		self.mainPitaya = pitaya
 		self.mainL = peak(pitaya, 0, self, "mainL")
 		self.mainR = peak(pitaya, 1, self, "mainR")
+		self.usedPeaks.append(self.mainL)
+		self.usedPeaks.append(self.mainR)
 		self.usedPitayas = [pitaya]
 		for i in range(nOfSecondaryPeaks):
 			self.addSecondaryPeak(peak(pitaya, i + 2, self, f"{pitaya.name}_secondary{i}"))
@@ -469,6 +521,7 @@ class ScanningCavity(AcquisitionModule):
 	def asg(self):
 		return self.mainPitaya.asg0 if self.usedAsg == "asg0" else self.mainPitaya.asg1
 	def updateRamp(self, oldValues = None):
+		print("____________________starting updateRAmp")
 		asg = self.asg
 		asg.waveform = "ramp"
 		asg.frequency = 0.5 / self.duration
@@ -480,6 +533,8 @@ class ScanningCavity(AcquisitionModule):
 		ScanningCavity.highValue.value_updated(self)
 		ScanningCavity.trigger_source.value_updated(self)
 		ScanningCavity.output_direct.value_updated(self)
+		
+		print("____________________updateRAmp ended")
 	
 	def _rolling_mode_allowed(self):
 		return False
