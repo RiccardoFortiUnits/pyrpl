@@ -349,8 +349,11 @@ class MemoryBranch(object):
         return value
 
     def _rename(self, name):
-        self._parent[name] = self._parent._pop(self._branch)
+        self._parent[name] = self._parent._pop(self._branch)        
+        self._branch = name
+        self.__setattr__("_branch", name)
         self._save()
+        self._reload()
 
     def _get_or_create(self, name):
         """

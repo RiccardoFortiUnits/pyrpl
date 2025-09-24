@@ -335,8 +335,13 @@ class Pyrpl(object):
             renameDevice = False
         redpitayaBranch = self.c._get_or_create(f'{name}.redpitaya')
         self.c[name].redpitaya._update(configs)
-        self.name = self.c.pyrpl.name
         self.rps[name] = RedPitaya(config=self.c[name])
+        if renameDevice:
+            newName = self.c[name].redpitaya.hostname.replace(".","_")
+            self.rps[name].c._rename(newName)
+            self.rps[newName] = self.rps.pop(name)
+            name = newName
+        self.name = self.c.pyrpl.name
         self.redpitaya = self.rps  # alias
         self.rps[name].parent=self
         # initialize RedPitaya object with the configured or default parameters
@@ -349,11 +354,6 @@ class Pyrpl(object):
         # self.rps[name].load_software_modules(module_classes)
         
         self.rps[name].load_software_modules()
-        if renameDevice:
-            newName = self.c[name].redpitaya.hostname.replace(".","_")
-            self.c[name]._rename(newName)
-            self.rps[newName] = self.rps.pop(name)
-            name = newName
         self.rps[name]._name = name
         
                     
