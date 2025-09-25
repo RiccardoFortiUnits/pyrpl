@@ -236,8 +236,9 @@ class peakEnablingProperty(BoolProperty):
 		return ret
 class peakLockingProperty(BoolProperty):
 	def set_value(self, obj, val):
-		obj.setupPid()
-		return super().set_value(obj, val)
+		ret = super().set_value(obj, val)
+		obj.setActiveAndPaused()
+		return ret
 class peak(Module):
 	'''submodule for the handling of a peak detection and lockin. it can be used for both the main peaks and secondary peaks. 
 	The peak is specified with the parent redPitaya and the peak index. Index 0 is for the left main peak, 1 for the right 

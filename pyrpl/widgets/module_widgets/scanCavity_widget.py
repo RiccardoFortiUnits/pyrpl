@@ -535,7 +535,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         for i in range(1, len(self.curves)):
             self.curves[i].setVisible(False)
     def changePeakGroup(self):
-        if len(self.peakGroups) < 1:
+        if len(self.peakGroups) <= 1:
             #let's not do anything, since we don't need to swap peaks around
             return
         newIndex = (self.currentGroupIndex + 1) % len(self.peakGroups)

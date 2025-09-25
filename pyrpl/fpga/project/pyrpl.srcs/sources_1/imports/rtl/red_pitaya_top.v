@@ -236,17 +236,18 @@ wire              sys_rstn  = ps_sys_rstn ;
 wire  [  32-1: 0] sys_addr  = ps_sys_addr ;
 wire  [  32-1: 0] sys_wdata = ps_sys_wdata;
 wire  [   4-1: 0] sys_sel   = ps_sys_sel  ;
-wire  [8   -1: 0] sys_wen   ;
-wire  [8   -1: 0] sys_ren   ;
+reg  [8   -1: 0] sys_wen   ;
+reg  [8   -1: 0] sys_ren   ;
 wire  [8*32-1: 0] sys_rdata ;
 wire  [8* 1-1: 0] sys_err   ;
 wire  [8* 1-1: 0] sys_ack   ;
 wire  [8   -1: 0] sys_cs    ;
 
 assign sys_cs = 8'h01 << sys_addr[22:20];
-
-assign sys_wen = sys_cs & {8{ps_sys_wen}};
-assign sys_ren = sys_cs & {8{ps_sys_ren}};
+always @(posedge adc_clk) begin		
+	sys_wen <= sys_cs & {8{ps_sys_wen}};
+	sys_ren <= sys_cs & {8{ps_sys_ren}};
+end
 
 assign ps_sys_rdata = sys_rdata[sys_addr[22:20]*32+:32];
 

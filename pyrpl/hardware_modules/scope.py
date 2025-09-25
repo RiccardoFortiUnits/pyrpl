@@ -281,44 +281,7 @@ class Scope(HardwareModule, AcquisitionModule):
         Scope.lastInputs = inputs
 
         return data
-
-    #____________added controls________________________________________
-    asg0_offset = FloatRegister(address= 0x40200004 - addr_base, 
-                           bits=14, startBit=16,
-                           norm=2 ** 13, doc="output offset [volts]",
-                           increment= 0.05,
-                           min=-1., max=1.)
-    
-    _PSR = 12  # Register(0x200)
-    _ISR = 32  # Register(0x204)
-    _DSR = 10  # Register(0x208)
-    _GAINBITS = 24  # Register(0x20C)  
-    pid0_setpoint = FloatRegister(dsp_addr_base('pid0') + 0x104 - addr_base,
-                    bits=14, norm= 2 **13,
-                    doc="pid setpoint [volts]")
-
-    pid0_min_voltage = FloatRegister(dsp_addr_base('pid0') + 0x124 - addr_base,
-                    bits=14, norm= 2 **13,
-                    doc="minimum output signal [volts]")
-    pid0_max_voltage = FloatRegister(dsp_addr_base('pid0') + 0x128 - addr_base,
-                    bits=14, norm= 2 **13,
-                    doc="maximum output signal [volts]")
-
-    pid0_p = GainRegister(dsp_addr_base('pid0') + 0x108 - addr_base,
-                    bits=_GAINBITS, norm= 2 **_PSR,
-                    doc="pid proportional gain [1]")
-    pid0_i = GainRegister(dsp_addr_base('pid0') + 0x10C - addr_base,
-                    bits=_GAINBITS, norm= 2 **_ISR * 2.0 * np.pi * 8e-9,
-                    doc="pid integral unity-gain frequency [Hz]")
-    
-    ival = IValAttribute(min=-4, max=4, increment= 8. / 2**16, doc="Current "
-            "value of the integrator memory (i.e. pid output voltage offset)")
-    
-    #__________________________________________________________________
-    
-    
-    
-    
+   
     
     
     

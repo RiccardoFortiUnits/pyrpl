@@ -737,39 +737,38 @@ assign asg_trig_n = (asg_trig_dn == 2'b01) ;
 //---------------------------------------------------------------------------------
 //  System bus connection
 integer y;
-always @(posedge adc_clk_i)
-if (adc_rstn_i == 1'b0) begin
-   adc_we_keep   <=   1'b0      ;
-   set_a_tresh   <=  14'd0000   ;
-   //set_b_tresh   <=  14'd0000   ;
-   set_dly       <=  2**(RSZ-1);
-   set_dec       <=  17'h2000; // corresponds to 1s duration, formerly at minimum: 17'd1
-   set_a_hyst    <=  14'd20     ;
-   //set_b_hyst    <=  14'd20     ;
-   set_avg_en    <=   1'b0      ;
-   set_deb_len   <=  20'd62500  ;
-   set_a_axi_en  <=   1'b0      ;
-   set_b_axi_en  <=   1'b0      ;
-    
-   peak_L_minIndex <= 0;
-   peak_L_maxIndex <= 2**(RSZ-1);
-   peak_R_minIndex <= 0;
-   peak_R_maxIndex <= 2**(RSZ-1);
-   peaks_extra_minIndex <= 0;
-   peaks_extra_maxIndex <= 2**(RSZ-1);
-   // peak_flipIndex <= 0;
+always @(posedge adc_clk_i)begin
+	if (adc_rstn_i == 1'b0) begin
+	adc_we_keep   <=   1'b0      ;
+	set_a_tresh   <=  14'd0000   ;
+	//set_b_tresh   <=  14'd0000   ;
+	set_dly       <=  2**(RSZ-1);
+	set_dec       <=  17'h2000; // corresponds to 1s duration, formerly at minimum: 17'd1
+	set_a_hyst    <=  14'd20     ;
+	//set_b_hyst    <=  14'd20     ;
+	set_avg_en    <=   1'b0      ;
+	set_deb_len   <=  20'd62500  ;
+	set_a_axi_en  <=   1'b0      ;
+	set_b_axi_en  <=   1'b0      ;
+		
+	peak_L_minIndex <= 0;
+	peak_L_maxIndex <= 2**(RSZ-1);
+	peak_R_minIndex <= 0;
+	peak_R_maxIndex <= 2**(RSZ-1);
+	peaks_extra_minIndex <= 0;
+	peaks_extra_maxIndex <= 2**(RSZ-1);
+	// peak_flipIndex <= 0;
 
-   chUsedBy_peak_L <= chFor_peak_realAdc0;
-   chUsedBy_peak_R <= chFor_peak_realAdc1;
-   chUsedBy_peaks_extra <= {nOfNormalizable_peaks{chFor_peak_realAdc0}};
-   peak_L_minValue <= 0;
-   peak_R_minValue <= 0;
-   peaks_extra_minValue <= 0;
-   normalize_peaks_extra <= 0;
+	chUsedBy_peak_L <= chFor_peak_realAdc0;
+	chUsedBy_peak_R <= chFor_peak_realAdc1;
+	chUsedBy_peaks_extra <= {nOfNormalizable_peaks{chFor_peak_realAdc0}};
+	peak_L_minValue <= 0;
+	peak_R_minValue <= 0;
+	peaks_extra_minValue <= 0;
+	normalize_peaks_extra <= 0;
 
 
-end else begin
-	if (sys_wen) begin
+	end else if (sys_wen) begin
 		if (sys_addr[19:0]==20'h00)   adc_we_keep   <= sys_wdata[     3] ;
 
 		if (sys_addr[19:0]==20'h08)   set_a_tresh   <= sys_wdata[14-1:0] ;
@@ -799,7 +798,6 @@ end else begin
 		end
 	end
 end
-
 
 
 wire sys_en;
