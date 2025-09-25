@@ -29,24 +29,24 @@ var/
 *.egg
 # vivado windows stuff
 #pyrpl/fpga/.srcs
-pyrpl/fpga/.*
+#pyrpl/fpga/.*
 #pyrpl/fpga/.Xil
 #pyrpl/fpga/out
-pyrpl/fpga/out/*.bin
-pyrpl/fpga/out/*.bit
-pyrpl/fpga/out/*.dcp
-pyrpl/fpga/out/*.xml
-pyrpl/fpga/sdk
-pyrpl/fpga/*.html
-pyrpl/fpga/*.xml
-pyrpl/fpga/red_pitaya.prm
-pyrpl/fpga/*.dmp
-pyrpl/.idea
+#pyrpl/fpga/out/*.bin
+#pyrpl/fpga/out/*.bit
+#pyrpl/fpga/out/*.dcp
+#pyrpl/fpga/out/*.xml
+#pyrpl/fpga/sdk
+#pyrpl/fpga/*.html
+#pyrpl/fpga/*.xml
+#pyrpl/fpga/red_pitaya.prm
+#pyrpl/fpga/*.dmp
+#pyrpl/.idea
 
 # Vivado project-related stuff
 #pyrpl/fpga/project/.*
 #pyrpl/fpga/project/
-*.jou
+#*.jou
 
 #fpga-related
 fpga/out/

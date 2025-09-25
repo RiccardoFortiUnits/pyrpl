@@ -128,12 +128,12 @@ localparam	PEAK_IDX4				= 19;											/*;*/
 localparam	ALLTRIGGERS				= 20;											/*;*/
 /*§§#§§*/
 
-localparam nOfDSP_arrivingIn = 21, 				nOfDSP_goingOut = 15;
+localparam nOfDSP_arrivingFrom = 21, 			nOfDSP_goingTo = 15;
 localparam MODULES = 8;
 localparam nOfDSP_directOutputs = 10;//directOutputs are the outputs tha can be outputed to the DACs
 
-localparam LOG_INPUT_MODULES = $clog2(nOfDSP_arrivingIn);
-localparam LOG_OUTPUT_MODULES = $clog2(nOfDSP_goingOut);
+localparam LOG_INPUT_MODULES = $clog2(nOfDSP_arrivingFrom);
+localparam LOG_OUTPUT_MODULES = $clog2(nOfDSP_goingTo);
 localparam LOG_DIRECT_OUTPUT_MODULES = $clog2(nOfDSP_directOutputs);
 
 localparam NONE = 2**LOG_INPUT_MODULES-1; //code for no module; only used to switch off PWM outputs
@@ -142,8 +142,8 @@ initial begin
    if (LOG_OUTPUT_MODULES > 6)begin
         $error("LOG_OUTPUT_MODULES is too high, the current memory architecture does not allow for a number higher than 4. you would need to change the memory structure");
    end
-   if(NONE <= nOfDSP_arrivingIn)begin
-        $error("nOfDSP_goingOut is too high, there's no space for index NONE");
+   if(NONE <= nOfDSP_arrivingFrom)begin
+        $error("nOfDSP_goingTo is too high, there's no space for index NONE");
    end
 end
 
@@ -157,13 +157,13 @@ localparam s_OFF  = 2'b00;
 
 // the selected input signal of each module: modules and extramodules have inputs
 // extraoutputs are treated like extramodules that do not provide their own signal_arrivingFrom
-wire [14-1:0] signal_goingTo [nOfDSP_goingOut -1:0];
+wire [14-1:0] signal_goingTo [nOfDSP_goingTo -1:0];
 // the selected input signal NUMBER of each module
-reg [LOG_INPUT_MODULES-1:0] switchSignal [nOfDSP_goingOut -1:0];
+reg [LOG_INPUT_MODULES-1:0] switchSignal [nOfDSP_goingTo -1:0];
 
 // the output of each module for internal routing, including 'virtual outputs' for the EXTRAINPUTS
-wire [14-1:0] signal_arrivingFrom [nOfDSP_arrivingIn-1+1:0];
-wire [nOfDSP_arrivingIn-1+1:0] isValid_arrivingFrom;
+wire [14-1:0] signal_arrivingFrom [nOfDSP_arrivingFrom-1+1:0];
+wire [nOfDSP_arrivingFrom-1+1:0] isValid_arrivingFrom;
 
 // the output of each module that is added to the chosen DAC
 reg [2-1:0] output_direct_selectDAC [nOfDSP_directOutputs-1:0]; 
@@ -221,7 +221,7 @@ wire dac_b_saturated; //high when dac_b is saturated
 
 //select inputs
 generate 
-   for (j = 0; j < nOfDSP_goingOut; j = j+1) begin
+   for (j = 0; j < nOfDSP_goingTo; j = j+1) begin
         assign signal_goingTo[j] = (switchSignal[j]==NONE) ? 14'b0 : signal_arrivingFrom[switchSignal[j]];
    end
 endgenerate
@@ -263,11 +263,11 @@ red_pitaya_saturate #(
 always @(posedge clk_i) begin
    if (rstn_i == 1'b0) begin
       //default settings for backwards compatibility with original code
-      for(i=0;i<nOfDSP_goingOut;i=i+1)begin
+      for(i=0;i<nOfDSP_goingTo;i=i+1)begin
       	switchSignal [i] <= IN1;
       end
       
-      for(i=0;i<nOfDSP_arrivingIn;i=i+1)begin
+      for(i=0;i<nOfDSP_arrivingFrom;i=i+1)begin
       	output_direct_selectDAC [i] <= s_OFF;
       end
       

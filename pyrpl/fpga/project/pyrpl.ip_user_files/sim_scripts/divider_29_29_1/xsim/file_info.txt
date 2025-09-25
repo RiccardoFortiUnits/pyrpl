@@ -1,0 +1,2 @@
+divider_29_29.vhd,vhdl,xil_defaultlib,../../../../pyrpl.srcs/sources_1/ip/divider_29_29_1/sim/divider_29_29.vhd,
+glbl.v,Verilog,xil_defaultlib,glbl.v
