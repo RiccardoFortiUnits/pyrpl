@@ -36,19 +36,19 @@ class peakValue(FloatProperty):
 	def __init__(self, propertyAccessor = lambda peak: f"minTime{peak.index+1}", **kwargs):
 		super().__init__( **kwargs)
 		self.propertyAccessor = propertyAccessor
-	def set_value(self, obj : peak, val):
+	def set_value(self, obj, val):
 		setattr(obj.redpitaya.scope, self.propertyAccessor(obj), val)
 		return super().set_value(obj, val)
-	def get_value(self, obj : peak):
+	def get_value(self, obj):
 		return getattr(obj.redpitaya.scope, self.propertyAccessor(obj))
 class peakInput(SelectProperty):
 	'''property that specifies the input signal of a peak. It's similar to a peakValue, but it's a select property instead of a float property'''
-	def inputName(self, obj : peak):
+	def inputName(self, obj):
 		return f"{obj.redpitaya.scope.peakNames[obj.index]}_input"
-	def set_value(self, obj : peak, val):
+	def set_value(self, obj, val):
 		setattr(obj.redpitaya.scope, self.inputName(obj), val)
 		return super().set_value(obj, val)
-	def get_value(self, obj : peak):
+	def get_value(self, obj):
 		return getattr(obj.redpitaya.scope, self.inputName(obj))
 	def options(self, instance=None):
 		return getattr(Scope, self.inputName(instance)).options(instance.redpitaya.scope)
@@ -61,14 +61,14 @@ class peakSetpoint(FloatProperty):
 	normalized, to correctly convert into the correct adimensional range
 	
 	Usually the setpoint is put in between the left and right edges of the peak'''
-	def get_value(self, obj : peak):
+	def get_value(self, obj):
 		normalizedSetpointValue = (obj.setpoint + 1) * 0.5
 		if obj.index >= 2 and obj.normalizeIndex:
 			L, R = self.getMainPeaks(obj)
 			return L + (R - L) * normalizedSetpointValue
 		duration = obj.scanningCavity.duration
 		return normalizedSetpointValue * duration
-	def set_value(self, obj : peak, val):
+	def set_value(self, obj, val):
 		if obj.index >= 2 and obj.normalizeIndex:
 			#normalized peak, the setpoint is normalized between the 2 main peaks (so, -1 would mean that the setpoint coincides with the left main peak, 1 means that the setpoint coincides with the right main peak)
 			L, R = self.getMainPeaks(obj)
@@ -86,7 +86,7 @@ class peakSetpoint(FloatProperty):
 			obj.setpoint = valueBetween_m1_and_1
 		return super().set_value(obj, val)
 	
-	def getMainPeaks(self, obj : peak):
+	def getMainPeaks(self, obj):
 		L = obj.scanningCavity.mainL.timeSetpoint
 		R = obj.scanningCavity.mainR.timeSetpoint
 		return L, R
@@ -97,7 +97,7 @@ class asgSelector(SelectProperty):
 	def __init__(self, options, **kwargs):
 		super().__init__(options, **kwargs)
 
-	def set_value(self, obj : ScanningCavity, value):
+	def set_value(self, obj, value):
 		scope : Scope = obj.mainPitaya.scope
 		scope.trigger_source = value
 		oldValues = (obj.output_direct,obj.trigger_source)
@@ -110,7 +110,7 @@ class asgSelector(SelectProperty):
 	
 class mainTriggerSelector(digitalPinProperty):
 	'''this property sets the digital pin of the main pitaya that will trigger the other pitaya's scopes. So, connect pin of the main redPitaya (specified in main_acquisitionTrigger(mainTriggerSelector)) to each selected pin of the secondary redPitayas (acquisitionTrigger(scopeTriggerSelector))'''
-	def set_value(self, obj : ScanningCavity, val):
+	def set_value(self, obj, val):
 		val = digitalPinProperty.pinIndexToString(val)
 		hk : HK = obj.mainPitaya.hk
 		selectedAsg = obj.usedAsg
@@ -122,7 +122,7 @@ class mainTriggerSelector(digitalPinProperty):
 
 class scopeTriggerSelector(digitalPinProperty):
 	'''this property sets the digital pin that trigger the scope acquisition. Can also be used for the main pitaya, if the ramp trigger is external'''
-	def set_value(self, obj : secondaryPitaya, val):
+	def set_value(self, obj, val):
 		val = digitalPinProperty.pinIndexToString(val)
 		hk : HK = obj.rp.hk
 		setattr(hk, f"expansion_{val}_output", 0)
@@ -133,18 +133,26 @@ class scopeTriggerSelector(digitalPinProperty):
 
 class peakActivatingBitSelector(digitalPinProperty):
 	'''this property sets the digital pin that will enable the AOM responsible for shutting down the laser when it is not its turn'''
-	def set_value(self, obj : peak, val):
+	def set_value(self, obj, val):
 		oldEnabled = obj.enabled
 		if obj.isOverlappingWithMainPeaks():
 			return False
 			raise Exception("cannot enable this peak when its range is overlapping with the main peaks")
+		
+		if obj.peakType == "main_R":
+			print("cannot change main R activating pin")
+			return
 		oldEnabled = obj.active
 		val = digitalPinProperty.pinIndexToString(val)
 		hk : HK = obj.redpitaya.hk
 		setattr(hk, f"expansion_{val}_output", 1)
 		# setattr(hk, f"pinState_{val}", "dsp" if oldEnabled else "memory")  #already done by obj.active
 		# setattr(hk, f"expansion_{val}", 0)
-		setattr(hk, f"external_{val}_dspBitSelector", DSP_TRIGGERS[f"inPeakRange_{obj.index + 1}"])
+		if obj.peakType == "main_L":
+			#this bit turns on when the left or the right peaks are active
+			setattr(hk, f"external_{val}_dspBitSelector", DSP_TRIGGERS[f"inPeakRange_1_or_2"])
+		else:
+			setattr(hk, f"external_{val}_dspBitSelector", DSP_TRIGGERS[f"inPeakRange_{obj.index + 1}"])
 		ret = super().set_value(obj, val)
 		obj.active = oldEnabled
 		return ret
@@ -152,7 +160,7 @@ class peakActivatingBitSelector(digitalPinProperty):
 class activatePeakProperty(BoolProperty):
 	'''this property allows to set the enabling of the AOM responsible for shutting down the laser 
 	when it is not its turn'''
-	def set_value(self, obj : peak, val):
+	def set_value(self, obj, val):
 		if obj.isOverlappingWithMainPeaks():
 			return False
 			raise Exception("cannot enable this peak when its range is overlapping with the main peaks")
@@ -210,7 +218,7 @@ class normalizeIndexProperty(BoolProperty):
 	'''this property sets if the selected secondary peak has a normalized setpoint or not. 
 	Enable the normalization when the peak should move accordingly to the main peaks (for example 
 	if the cavity is locked to a reference laser)'''
-	def set_value(self, obj : peak, val):
+	def set_value(self, obj, val):
 		if obj.index < 2:
 			return False
 			raise Exception("cannot set a main peak as normalized")
@@ -223,14 +231,14 @@ class normalizeIndexProperty(BoolProperty):
 		obj.timeSetpoint = oldSetpoint
 		return ret
 	
-	def get_value(self, obj : peak):
+	def get_value(self, obj):
 		if obj.index < 2:
 			return 0
 		return getattr(obj.redpitaya.scope, f"{obj.redpitaya.scope.peakNames[obj.index]}_normalizeIndex"
 				 )
 class peakEnablingProperty(BoolProperty):
 	'''property that calls the function peak.setActiveAndPaused(), to correctly toggle the active and paused properties'''
-	def set_value(self, obj : peak, val):
+	def set_value(self, obj, val):
 		ret = super().set_value(obj, val)
 		obj.setActiveAndPaused()
 		return ret
@@ -261,11 +269,11 @@ class peak(Module):
 	_setup_attributes = _gui_attributes
 	_widget_class = peak_widget
 
-	def __init__(self, redpitaya, index, scanningCavity : ScanningCavity, name=None):
+	def __init__(self, redpitaya, index, scanningCavity, name=None):
 		super().__init__(redpitaya, name)
-		self.scanningCavity : ScanningCavity = scanningCavity
+		self.scanningCavity = scanningCavity
 		self.index = index
-		self.pid = redpitaya.pids.all_modules[index - 1 if index >= 2 else 0]
+		self.pid = redpitaya.pids.all_modules[index - 1 if index >= 2 else index]
 		self.input
 		self.addToSubmodules()
 	 
@@ -381,28 +389,30 @@ class peak(Module):
 		setattr(self.redpitaya.scope, f"{self.redpitaya.scope.peakNames[self.index]}_minValue", newTiming)
 
 	
-	@staticmethod
-	def getGroupsOfNonOverlapping(peakList):
-		ranges = [(p.minTime, p.maxTime) for p in peakList]
-		def areIntersecting(range0, range1):
-			return (range0[0] < range1[1]) ^ (range0[1] <= range1[0])
-		intersections = np.zeros((len(ranges), len(ranges)), dtype=bool)
-		for i in range(len(ranges)):
-			for j in range(len(ranges)):
-				intersections[i,j] = areIntersecting(ranges[i], ranges[j])
-		stillFree = np.arange(len(ranges))
-		allGroups = []
-		while len(stillFree) > 0:
-			run = [stillFree[0]]
-			addedIndexes = [0]
-			for i in range(1, len(stillFree)):
-				testedLine = np.repeat(stillFree[i],len(run))
-				if not np.any(intersections[testedLine, run]):
-					addedIndexes.append(i)
-					run.append(stillFree[i])
-			stillFree = np.delete(stillFree, addedIndexes)
-			allGroups.append(run)
-		return allGroups
+	# @staticmethod
+	# def getGroupsOfNonOverlapping(peakList):
+	# 	ranges = [(p.minTime, p.maxTime) for p in peakList]
+	# 	def areIntersecting(range0, range1):
+	# 		return (range0[0] < range1[1]) ^ (range0[1] <= range1[0])
+	# 	intersections = np.zeros((len(ranges), len(ranges)), dtype=bool)
+	# 	for i in range(len(ranges)):
+	# 		for j in range(len(ranges)):
+	# 			intersections[i,j] = areIntersecting(ranges[i], ranges[j])
+	# 	stillFree = np.arange(len(ranges))
+	# 	allGroups = []
+	# 	while len(stillFree) > 0:
+	# 		run = [stillFree[0]]
+	# 		addedIndexes = [0]
+	# 		for i in range(1, len(stillFree)):
+	# 			testedLine = np.repeat(stillFree[i],len(run))
+	# 			if not np.any(intersections[testedLine, run]):
+	# 				addedIndexes.append(i)
+	# 				run.append(stillFree[i])
+	# 		stillFree = np.delete(stillFree, addedIndexes)
+	# 		allGroups.append(run)
+	# 	return allGroups
+	
+	
 
 class secondaryPitaya(Module):
 	'''submodule for the handling of a secondary peak, to set some parameters that involve all the peaks of that same redpitaya'''
@@ -457,7 +467,9 @@ class ScanningCavity(AcquisitionModule):
 		self.usedPeaks.append(self.mainL)
 		self.usedPeaks.append(self.mainR)
 		self.usedPitayas = [pitaya]
-		for i in range(nOfSecondaryPeaks):
+		#we won't be able to use 2 secondary peaks on the first pitaya (not enough outputs), so let's just use one, 
+		# and let's keep the 2nd pid free for the mainR peak, which does not require a pid, but it can still be useful
+		for i in range(1, nOfSecondaryPeaks):
 			self.addSecondaryPeak(peak(pitaya, i + 2, self, f"{pitaya.name}_secondary{i}"))
 		self.mainPitaya.hk.input1 = "alltriggers"
 	def addPitaya(self, pitaya):

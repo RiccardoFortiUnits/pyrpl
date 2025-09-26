@@ -209,7 +209,8 @@ generate
 endgenerate
 //ALLTRIGGERS contains some useful triggers, so that they can be sent to the hk module. It's not the cleanest solution, but for sure it's compact
 wire inPeakRange_1 = inPeakRange[0], inPeakRange_2 = inPeakRange[1], inPeakRange_3 = inPeakRange[2], inPeakRange_4 = inPeakRange[3];
-assign signal_arrivingFrom[ALLTRIGGERS] = {inPeakRange_4, inPeakRange_3, inPeakRange_2, inPeakRange_1, asg1_trigger, asg0_trigger, ramp_trigger, generic_module_trigger};
+wire inPeakRange_1_or_2 = |inPeakRange[1:0];
+assign signal_arrivingFrom[ALLTRIGGERS] = {inPeakRange_1_or_2, inPeakRange_4, inPeakRange_3, inPeakRange_2, inPeakRange_1, asg1_trigger, asg0_trigger, ramp_trigger, generic_module_trigger};
 assign isValid_arrivingFrom = {peaks_valid, peaks_valid, {PEAK1{1'b1}}};// all inputs are always valid, except for the peak signals
 
 wire  signed [   14+LOG_DIRECT_OUTPUT_MODULES -1: 0] sum1; 

@@ -12,7 +12,6 @@ import numpy as np
 from ...errors import NotReadyError
 from .base_module_widget import ModuleWidget
 from .acquisition_module_widget import AcquisitionModuleWidget
-# from ...software_modules.scanningCavity import ScanningCavity, peak
 
 class PeakBorderLine(QtWidgets.QGraphicsLineItem):
     def __init__(self, parent, peakLine):
@@ -231,7 +230,7 @@ class peak_widget(ModuleWidget):
             self.curve.setData(t, x)
             self.curve.setVisible(True)
         else:
-            self.curve.setVisible(True)
+            self.curve.setVisible(self.module in self.line.scanCavityWidget.unusablePeaks)
       
     def setpointToCurrentValue(self):
         #get the last acquisition from the scope and put its average as the new setpoint
@@ -500,32 +499,63 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 
     @staticmethod
     def getGroupsOfNonOverlapping(peakList):
+        #I have to put it here instead than inside the peak class, because python doesn't let me import it 
+        # (cannot import name 'ScanningCavity' from partially initialized module 
+        #'pyrpl.software_modules.scanningCavity' (most likely due to a circular import))
+        peakList = [p for p in peakList if p.enabled]
+        if len(peakList) == 0:
+            return [[]]
         ranges = [(p.left, p.right) for p in peakList]
+        mainPeaks = np.where([p.peakType != "secondary" for p in peakList])[0]
+        normalizedPeaks = np.where([p.peakType == "secondary" and p.normalizeIndex for p in peakList])[0]
+
         def areIntersecting(range0, range1):
             return (range0[0] < range1[1]) ^ (range0[1] <= range1[0])
-        intersections = np.zeros((len(ranges), len(ranges)), dtype=bool)
+        
+        intersections = np.eye(len(ranges), dtype=bool)
         for i in range(len(ranges)):
-            for j in range(len(ranges)):
+            for j in range(i+1, len(ranges)):
                 intersections[i,j] = areIntersecting(ranges[i], ranges[j])
-        stillFree = np.arange(len(ranges))
+        intersections = np.logical_or(intersections, intersections[::-1,::-1])
+        
         allGroups = []
-        while len(stillFree) > 0:
-            run = [stillFree[0]]
-            addedIndexes = [0]
-            for i in range(1, len(stillFree)):
+        run = []
+        inaccessiblePeaks = []
+        if len(normalizedPeaks) > 0 and intersections[mainPeaks[0], mainPeaks[1]]:
+            print("main peaks overlapping, the normalized peaks cannot be enabled")
+            inaccessiblePeaks = normalizedPeaks
+        elif len(normalizedPeaks) > 0:
+            #main peaks non overlapping, let's add them to the first group
+            run = mainPeaks
+            intersectionWithMains = intersections[mainPeaks][:,normalizedPeaks]
+            intersectionWithMains = np.logical_or(intersectionWithMains[0], intersectionWithMains[1])
+            if any(intersectionWithMains):
+                print("there's a normalized peak overlapping with the main ones")
+                run = np.concatenate((run, normalizedPeaks[~intersectionWithMains]))
+            else:                
+                run = np.concatenate((run, normalizedPeaks))
+            inaccessiblePeaks = normalizedPeaks[intersectionWithMains]
+            run = list(run)
+
+        stillFree = np.delete(np.arange(len(peakList)), np.concatenate((inaccessiblePeaks, run)).astype(int))
+        while len(stillFree) > 0 or len(run) > 0:
+            addedIndexes = []
+            for i in range(len(stillFree)):
                 testedLine = np.repeat(stillFree[i],len(run))
-                if not np.any(intersections[testedLine, run]):
+                if not np.any(intersections[run, testedLine]):
                     addedIndexes.append(i)
                     run.append(stillFree[i])
             stillFree = np.delete(stillFree, addedIndexes)
             allGroups.append(run)
-        return [[peakList[i] for i in group] for group in allGroups]
+            run = []
+                
+        return [[peakList[i] for i in group] for group in allGroups], inaccessiblePeaks
     
     def setPeakGroups(self):
         # sc : ScanningCavity = self.module
         sc = self.module
         peaks = sc.usedPeaks
-        self.peakGroups = ScanCavity_widget.getGroupsOfNonOverlapping(peaks)
+        self.peakGroups, self.unusablePeaks = ScanCavity_widget.getGroupsOfNonOverlapping(peaks)
         print(self.peakGroups)
         self.currentGroupIndex = np.random.randint(len(self.peakGroups))#let's randomize the first group, 
                 # so that if we have very fast updates of the peaks (example, while dragging a peak around), 
