@@ -258,15 +258,16 @@ class peak(Module):
 					"locking",
 					"normalizeIndex",#can be removed by manually by peak_widget, it stays only for the normalizable peaks
 					]
+	_setup_attributes = _gui_attributes
 	_widget_class = peak_widget
 
 	def __init__(self, redpitaya, index, scanningCavity : ScanningCavity, name=None):
 		super().__init__(redpitaya, name)
-		self._load_setup_attributes()
 		self.scanningCavity : ScanningCavity = scanningCavity
 		self.index = index
 		self.pid = redpitaya.pids.all_modules[index - 1 if index >= 2 else 0]
 		self.input
+		self.addToSubmodules()
 	 
 	left = peakValue(lambda peak: f"minTime{peak.index+1}", min = 0)
 	right = peakValue(lambda peak: f"maxTime{peak.index+1}")
@@ -409,11 +410,12 @@ class secondaryPitaya(Module):
 					"input1",
 					"acquisitionTrigger"
 					]
+	_setup_attributes = _gui_attributes
 	_widget_class = secondaryPitaya_widget
 	def __init__(self,redpitaya, scanningCavity):
 		self.rp = redpitaya
-		super().__init__(scanningCavity, name=None)
-		self._load_setup_attributes()
+		super().__init__(scanningCavity, name=redpitaya.name)
+		self.addToSubmodules()
 		# self.controlPeak1 = peak(self, 2, scanningCavity, f"{self.rp.name}_controlled1")
 		# scanningCavity.usedPeaks += [self.controlPeak1]
 	input1 = DynamicInstanceProperty(Scope.input1, lambda secondaryPitaya : secondaryPitaya.rp.scope)

@@ -325,6 +325,9 @@ class Pyrpl(object):
         for module in self.software_modules:
             if module.owner is None:
                 module._load_setup_attributes()
+        for module in self.submodules:
+            if module.owner is None:
+                module._load_setup_attributes()
         self.show_gui()
         
     def addRedPitaya(self, name = None, reloadGUI = True, **configs):
@@ -378,6 +381,9 @@ class Pyrpl(object):
         load all software modules defined as root element of the config file.
         """
         self.software_modules = []
+		#each submodule should add itself to this list when it is instantiated
+        self.submodules = []
+        
         # software modules are Managers for various modules plus those defined in the config file
         # soft_mod_names = ['Asgs', 'Iqs', 'Pids', 'Scopes', 'Iirs', 'Trigs','Pwms',
         #                 'Hks', 'Linearizers', 'Ramps'] + self.c.pyrpl.modules

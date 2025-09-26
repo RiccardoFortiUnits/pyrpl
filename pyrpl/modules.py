@@ -458,6 +458,10 @@ class Module(with_metaclass(ModuleMetaClass, object)):
                                          "that is parent of the module %s." %
                                          (self.name))
         return parent
+    
+    def addToSubmodules(self):
+        self.pyrpl.submodules.append(self)
+                               
     @property
     def redpitaya(self):
         """
