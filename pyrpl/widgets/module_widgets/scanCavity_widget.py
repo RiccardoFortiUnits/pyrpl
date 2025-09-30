@@ -208,6 +208,10 @@ class peak_widget(ModuleWidget):
         # self.main_layout.addWidget(self.button_activatePID)
         self.enabled = aws["enabled"]
         self.locking = aws["locking"]
+        
+        self.color = aws["peakColor"]
+        self.color.value_changed.connect(self.updateCurve)
+        self.enabled.value_changed.connect(self.updateCurve)
         # self.enabled.value_changed.connect(self._enableLocking)
         # self._enableLocking()
 
@@ -218,19 +222,31 @@ class peak_widget(ModuleWidget):
         self.graph = graph
         self.line = PeakLine(graph, self, scanCavityWidget, color)
         self.line.updateFromPeakRanges()
+        if self.color.attribute_value == 0:
+            self.color.attribute_value = color
         self.curve = graph.plot(pen=(QtGui.QColor(color).red(),
                                     QtGui.QColor(color).green(),
                                     QtGui.QColor(color).blue()
                                     ))
-    def updateCurve(self, t, x):
-        if self.module.active:
+        self.updateCurve()
+    def updateCurve(self, t = None, x = None):
+        color = QtGui.QColor(self.color.attribute_value)
+        self.line.color = color
+        self.curve.setPen(( color.red(),
+                            color.green(),
+                            color.blue()
+                            ))        
+        if t is not None and self.module.inCurrentPeakGroup:
             indexes = np.logical_and(t > self.minTime.attribute_value, t < self.maxTime.attribute_value)
             x = x[indexes]
             t = t[indexes]      
             self.curve.setData(t, x)
+            
+        if self.module.active:
             self.curve.setVisible(True)
         else:
-            self.curve.setVisible(self.module in self.line.scanCavityWidget.unusablePeaks)
+            self.curve.setVisible(False)#self.module not in self.line.scanCavityWidget.unusablePeaks)
+        self.line.updateSizes()
       
     def setpointToCurrentValue(self):
         #get the last acquisition from the scope and put its average as the new setpoint
@@ -372,7 +388,6 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.attribute_widgets['duration'].value_changed.connect(
             self.update_rolling_mode_visibility)
 
-
         self.plot_item.sigRangeChanged.connect(lambda _, __: on_view_changed())
         self.plot_item.getViewBox().sigResized.connect(on_view_changed)
 
@@ -433,10 +448,10 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.curves[0].setData(times, ch1)
         self.curves[0].setVisible(True)
         self.update_current_average() # to update the number of averages
-
-        self.changePeakGroup()
         for peak in self.peakList:
             peak.updateCurve(times, ch1)
+
+        self.changePeakGroup()
 
     def set_rolling_mode(self):
         """
@@ -504,7 +519,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         #'pyrpl.software_modules.scanningCavity' (most likely due to a circular import))
         peakList = [p for p in peakList if p.enabled]
         if len(peakList) == 0:
-            return [[]]
+            return [[]], []
         ranges = [(p.left, p.right) for p in peakList]
         mainPeaks = np.where([p.peakType != "secondary" for p in peakList])[0]
         normalizedPeaks = np.where([p.peakType == "secondary" and p.normalizeIndex for p in peakList])[0]

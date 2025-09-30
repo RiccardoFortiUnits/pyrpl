@@ -1,5 +1,5 @@
 
-from __future__ import division, annotations
+
 from collections import OrderedDict
 from qtpy import QtCore
 import logging
@@ -244,6 +244,7 @@ class peakEnablingProperty(BoolProperty):
 		return ret
 class peakLockingProperty(BoolProperty):
 	def set_value(self, obj, val):
+		obj.setupPid()
 		ret = super().set_value(obj, val)
 		obj.setActiveAndPaused()
 		return ret
@@ -265,6 +266,7 @@ class peak(Module):
 					"enabled",
 					"locking",
 					"normalizeIndex",#can be removed by manually by peak_widget, it stays only for the normalizable peaks
+					"peakColor",
 					]
 	_setup_attributes = _gui_attributes
 	_widget_class = peak_widget
@@ -315,6 +317,8 @@ class peak(Module):
 	timeSetpoint is the time corresponding to the PID setpoint'''
 	setpoint = DynamicInstanceProperty(Pid.setpoint, lambda peak : peak.pid)
 	timeSetpoint = peakSetpoint(min = 0)
+
+	peakColor = ColorProperty()
 
 	def setActiveAndPaused(self):
 		self.active = self.enabled and self.inCurrentPeakGroup

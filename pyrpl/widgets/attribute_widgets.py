@@ -11,6 +11,7 @@ import pyqtgraph as pg
 from .spinbox import NumberSpinBox, IntSpinBox, FloatSpinBox, ComplexSpinBox
 from .. import pyrpl_utils
 from ..curvedb import CurveDB
+from qtpy import QtCore, QtGui, QtWidgets
 
 import sys
 
@@ -190,7 +191,39 @@ class StringAttributeWidget(BaseAttributeWidget):
     def _set_widget_value(self, new_value):
         self.widget.setText(str(new_value))
 
+class ColorAttributeWidget(BaseAttributeWidget):
+	"""
+	Widget for selecting a color using a button that opens a color dialog.
+	"""
+	def _make_widget(self):
+		self.widget = QtWidgets.QPushButton()
+		self.widget.clicked.connect(self.open_color_dialog)
+		self._set_widget_value(self.attribute_value)
 
+	def open_color_dialog(self):
+		color = QtWidgets.QColorDialog.getColor(
+			QtCore.Qt.GlobalColor.white if self.widget.palette().button().color().isValid() == False else self.widget.palette().button().color(),
+			self,
+			"Select Color"
+		)
+		if color.isValid():
+			self._set_widget_value(color)
+			self.write_widget_value_to_attribute()
+ 			# self.widget_value = color.name()
+
+	def _get_widget_value(self):
+		# Return the color as a hex string
+		return self.widget.property("color") if self.widget.property("color") else "#ffffff"
+
+	def _set_widget_value(self, new_value):
+		# Accepts a hex string or QColor
+		if isinstance(new_value, QtGui.QColor):
+			color = new_value
+		else:
+			color = QtGui.QColor.fromRgb((new_value >> 16) & 0xFF, (new_value >> 8) & 0xFF, new_value & 0xFF)
+		self.widget.setStyleSheet("background-color: %s" % color.name())
+		self.widget.setText(color.name())
+		self.widget.setProperty("color", color.name())
 class TextAttributeWidget(StringAttributeWidget):
     """
     Property for multiline string values.

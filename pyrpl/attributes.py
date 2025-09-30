@@ -31,7 +31,8 @@ from .widgets.attribute_widgets import BoolAttributeWidget, \
 									   LedAttributeWidget, \
 									   PlotAttributeWidget, \
 									   BasePropertyListPropertyWidget, \
-									   ComplexAttributeWidget
+									   ComplexAttributeWidget, \
+									   ColorAttributeWidget
 
 from .curvedb import CurveDB
 from collections import OrderedDict
@@ -42,6 +43,7 @@ import numbers
 import ast
 from typing import Type, List, Any, TypeVar
 import weakref
+from qtpy import QtGui
 
 logger = logging.getLogger(name=__name__)
 
@@ -1821,3 +1823,43 @@ class digitalPinRegister(BaseRegister, digitalPinProperty):
 
 	def from_python(self, obj, value):
 		return self.validate_and_normalize(obj, value)
+
+class ColorProperty(BaseProperty):
+	"""
+	An attribute for color values represented as RGB integer (0xRRGGBB).
+	"""
+	_widget_class = ColorAttributeWidget  # You can assign a widget if you have one
+	default = 0x000000  # Default: black
+
+	def validate_and_normalize(self, obj, value):
+		"""
+		Ensures the value is an integer in the RGB range (0x000000 - 0xFFFFFF).
+		Accepts hex strings like '#RRGGBB' or 'RRGGBB' as well.
+		"""
+		if isinstance(value, str):
+			value = value.strip()
+			if value.startswith('#'):
+				value = value[1:]
+			try:
+				value = int(value, 16)
+			except ValueError:
+				raise ValueError(f"Invalid color string: {value}")
+		elif isinstance(value, QtGui.QColor):
+			value = int(value.name()[1:],base=16)
+		if not isinstance(value, int):
+			raise ValueError(f"Color value must be int, hex string or QtGui.QColor, got {type(value)}")
+		if not (0x000000 <= value <= 0xFFFFFF):
+			raise ValueError(f"Color integer out of range: {hex(value)}")
+		return value
+
+	def to_hex(self, value):
+		"""
+		Converts the integer value to a hex string '#RRGGBB'.
+		"""
+		return "#{:06X}".format(self.validate_and_normalize(None, value))
+
+	def from_hex(self, hex_str):
+		"""
+		Converts a hex string '#RRGGBB' or 'RRGGBB' to an integer.
+		"""
+		return self.validate_and_normalize(None, hex_str)
