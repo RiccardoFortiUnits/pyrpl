@@ -439,6 +439,7 @@ class ScanningCavity(AcquisitionModule):
 
 	_setup_attributes = ["duration",
 					"input1",
+					"ch1_invert",
 					"usedAsg",
 					"lowValue", 
 					"highValue",
@@ -511,7 +512,8 @@ class ScanningCavity(AcquisitionModule):
 	#todo move into a redpitaya module
 	input1 = DynamicInstanceProperty(Scope.input1, lambda scanCavity : scanCavity.mainPitaya.scope, lambda self, instance, value : instance.updateScope())
 	#MultipleDynamicInstanceProperty(Scope.input1, lambda scanCavity : scanCavity.scopes)
-	
+	ch1_invert = MultipleDynamicInstanceProperty(Scope.ch1_invert, lambda scanCavity : scanCavity.scopes)
+
 	main_acquisitionTrigger = mainTriggerSelector()
 	_usableTriggers = {key : val for key,val in Scope._trigger_sources.items() if "asg" in key}
 	usedAsg = asgSelector(_usableTriggers)
@@ -540,7 +542,6 @@ class ScanningCavity(AcquisitionModule):
 	def asg(self):
 		return self.mainPitaya.asg0 if self.usedAsg == "asg0" else self.mainPitaya.asg1
 	def updateRamp(self, oldValues = None):
-		print("____________________starting updateRAmp")
 		asg = self.asg
 		asg.waveform = "ramp"
 		asg.frequency = 0.5 / self.duration
@@ -552,9 +553,7 @@ class ScanningCavity(AcquisitionModule):
 		ScanningCavity.highValue.value_updated(self)
 		ScanningCavity.trigger_source.value_updated(self)
 		ScanningCavity.output_direct.value_updated(self)
-		
-		print("____________________updateRAmp ended")
-	
+			
 	def _rolling_mode_allowed(self):
 		return False
 

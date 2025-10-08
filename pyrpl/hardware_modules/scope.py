@@ -243,6 +243,8 @@ class Scope(HardwareModule, AcquisitionModule):
                        "ch_math_active",
                        "math_formula",
                        "xy_mode",
+                       "ch1_invert",
+                       "ch2_invert",
                     #    "asg0_offset",
                     #    "pid0_setpoint",
                     #    "pid0_min_voltage",
@@ -323,6 +325,9 @@ class Scope(HardwareModule, AcquisitionModule):
                                                  "to false.")
 
     _trigger_armed = BoolRegister(0x0, 0, doc="Set to True to arm trigger")
+    
+    ch1_invert = BoolRegister(0x30, 0, doc="inverts the signal connected on channel 1")
+    ch2_invert = BoolRegister(0x30, 1, doc="inverts the signal connected on channel 2")
 
     _trigger_sources = sorted_dict({"off": 0,
                                     "immediately": 1,

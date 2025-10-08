@@ -70,6 +70,8 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
         self.targetLine.setPen(centerPen)
 
         self.updateBarPositions()
+        if hasattr(self, "tab"):
+            self.tab.tabBar().setTabTextColor(self.tabIdx, self.color)
 
     def updateBarPositions(self):
         self.centerLine.setLine(self.line().x1(), self.line().y1(), self.line().x2(), self.line().y2())
@@ -212,6 +214,7 @@ class peak_widget(ModuleWidget):
         self.color = aws["peakColor"]
         self.color.value_changed.connect(self.updateCurve)
         self.enabled.value_changed.connect(self.updateCurve)
+        self.enabled.value_changed.connect(lambda : self.line.scanCavityWidget.setPeakGroups())
         # self.enabled.value_changed.connect(self._enableLocking)
         # self._enableLocking()
 
@@ -242,10 +245,10 @@ class peak_widget(ModuleWidget):
             t = t[indexes]      
             self.curve.setData(t, x)
             
-        if self.module.active:
+        if self.module.enabled:
             self.curve.setVisible(True)
         else:
-            self.curve.setVisible(False)#self.module not in self.line.scanCavityWidget.unusablePeaks)
+            self.curve.setVisible(self.module not in self.line.scanCavityWidget.unusablePeaks)
         self.line.updateSizes()
       
     def setpointToCurrentValue(self):
@@ -333,6 +336,8 @@ class ScanCavity_widget(AcquisitionModuleWidget):
             if isinstance(content, peak_widget):
                 idx = tab.indexOf(content)
                 tab.tabBar().setTabTextColor(idx, content.line.color)
+                content.line.tab = tab
+                content.line.tabIdx = idx
         
         def on_view_changed():
             for peak in self.peakList:

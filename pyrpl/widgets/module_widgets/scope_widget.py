@@ -233,20 +233,24 @@ class ScopeWidget(AcquisitionModuleWidget):
         self.attribute_layout.removeWidget(aws['xy_mode'])
 
         self.attribute_layout.removeWidget(aws['ch1_active'])
+        self.attribute_layout.removeWidget(aws['ch1_invert'])
         self.attribute_layout.removeWidget(aws['input1'])
         self.attribute_layout.removeWidget(aws['threshold'])
 
         self.layout_ch1.addWidget(aws['ch1_active'])
+        self.layout_ch1.addWidget(aws['ch1_invert'])
         self.layout_ch1.addWidget(aws['input1'])
         self.layout_ch1.addWidget(aws['threshold'])
         aws['ch1_active'].setStyleSheet("color: %s" % self.ch_color[0])
 
         self.attribute_layout.removeWidget(aws['ch2_active'])
+        self.attribute_layout.removeWidget(aws['ch2_invert'])
         self.attribute_layout.removeWidget(aws['input2'])
         self.attribute_layout.removeWidget(aws['hysteresis'])
         aws['ch2_active'].setStyleSheet("color: %s" % self.ch_color[1])
 
         self.layout_ch2.addWidget(aws['ch2_active'])
+        self.layout_ch2.addWidget(aws['ch2_invert'])
         self.layout_ch2.addWidget(aws['input2'])
         self.layout_ch2.addWidget(aws['hysteresis'])
 

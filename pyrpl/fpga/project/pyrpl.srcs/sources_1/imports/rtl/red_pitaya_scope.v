@@ -159,6 +159,9 @@ assign adc_b_filt_out = adc_b_filt_in;
 
 reg  [ 14-1: 0] adc_a_dat     ;
 reg  [ 14-1: 0] adc_b_dat     ;
+reg  invert_adc_a, invert_adc_b;
+wire [ 14-1: 0] invertible_adc_a_dat     ;
+wire [ 14-1: 0] invertible_adc_b_dat     ;
 reg  [ 14-1: 0] real_adc_a_dat;
 reg  [ 14-1: 0] real_adc_b_dat;
 reg  [ 32-1: 0] adc_a_sum     ;
@@ -215,7 +218,8 @@ end else begin
       default   : begin adc_a_dat <= adc_a_sum[15+0 :  0];      adc_b_dat <= adc_b_sum[15+0 :  0];    real_adc_a_dat <= real_adc_a_sum[15+0 :  0];      real_adc_b_dat <= real_adc_b_sum[15+0 :  0];  end
    endcase
 end
-
+assign invertible_adc_a_dat = invert_adc_a ? - adc_a_dat : adc_a_dat;
+assign invertible_adc_b_dat = invert_adc_b ? - adc_b_dat : adc_b_dat;
 //---------------------------------------------------------------------------------
 //  ADC buffer RAM
 
@@ -323,8 +327,8 @@ assign trig_scope_o = triggered;
 
 always @(posedge adc_clk_i) begin
    if (adc_we && adc_dv) begin
-      adc_a_buf[adc_wp] <= adc_a_dat ;
-      adc_b_buf[adc_wp] <= adc_b_dat ;
+      adc_a_buf[adc_wp] <= invertible_adc_a_dat ;
+      adc_b_buf[adc_wp] <= invertible_adc_b_dat ;
    end
 end
 
@@ -362,7 +366,7 @@ reg		[nOfNormalizable_peaks * RSZ -1:0]	peaks_extra_minValue;
 
 reg		[RSZ -1:0]							signalFor_peak_L, signalFor_peak_R;
 reg		[nOfNormalizable_peaks * RSZ -1:0]	signalFor_peaks_extra;
-wire	[RSZ*4 -1:0]						available_peakSignals = {adc_b_dat, adc_a_dat, real_adc_b_dat, real_adc_a_dat};
+wire	[RSZ*4 -1:0]						available_peakSignals = {invertible_adc_b_dat, invertible_adc_a_dat, real_adc_b_dat, real_adc_a_dat};
 
 reg		[nOfNormalizable_peaks -1:0] 		normalize_peaks_extra;
 wire	[nOfNormalizable_peaks * RSZ -1:0] 	peaks_extra_index_nonNormalized;
@@ -615,10 +619,10 @@ end else begin
    //set_b_treshm <= set_b_tresh - set_b_hyst ;
 
    if (adc_dv) begin
-           if ($signed(adc_a_dat) >= $signed(set_a_tresh ))      adc_scht_ap[0] <= 1'b1 ;  // treshold reached
-      else if ($signed(adc_a_dat) <  $signed(set_a_treshm))      adc_scht_ap[0] <= 1'b0 ;  // wait until it goes under hysteresis
-           if ($signed(adc_a_dat) <= $signed(set_a_tresh ))      adc_scht_an[0] <= 1'b1 ;  // treshold reached
-      else if ($signed(adc_a_dat) >  $signed(set_a_treshp))      adc_scht_an[0] <= 1'b0 ;  // wait until it goes over hysteresis
+           if ($signed(invertible_adc_a_dat) >= $signed(set_a_tresh ))      adc_scht_ap[0] <= 1'b1 ;  // treshold reached
+      else if ($signed(invertible_adc_a_dat) <  $signed(set_a_treshm))      adc_scht_ap[0] <= 1'b0 ;  // wait until it goes under hysteresis
+           if ($signed(invertible_adc_a_dat) <= $signed(set_a_tresh ))      adc_scht_an[0] <= 1'b1 ;  // treshold reached
+      else if ($signed(invertible_adc_a_dat) >  $signed(set_a_treshp))      adc_scht_an[0] <= 1'b0 ;  // wait until it goes over hysteresis
 
            if ($signed(adc_b_dat) >= $signed(set_a_tresh ))      adc_scht_bp[0] <= 1'b1 ; //set_b_tresh
       else if ($signed(adc_b_dat) <  $signed(set_a_treshm))      adc_scht_bp[0] <= 1'b0 ; //set_b_treshm
@@ -750,6 +754,8 @@ always @(posedge adc_clk_i)begin
 	set_deb_len   <=  20'd62500  ;
 	set_a_axi_en  <=   1'b0      ;
 	set_b_axi_en  <=   1'b0      ;
+	invert_adc_a <= 0;
+	invert_adc_b <= 0;
 		
 	peak_L_minIndex <= 0;
 	peak_L_maxIndex <= 2**(RSZ-1);
@@ -778,6 +784,7 @@ always @(posedge adc_clk_i)begin
 		if (sys_addr[19:0]==20'h20)   set_a_hyst    <= sys_wdata[14-1:0] ;
 		//if (sys_addr[19:0]==20'h24)   set_b_hyst    <= sys_wdata[14-1:0] ;
 		if (sys_addr[19:0]==20'h28)   set_avg_en    <= sys_wdata[     0] ;
+		if (sys_addr[19:0]==20'h30)   {invert_adc_b, invert_adc_a}    <= sys_wdata[1: 0] ;
 
 		if (sys_addr[19:0]==20'h90)   set_deb_len <= sys_wdata[20-1:0] ;
 
@@ -828,7 +835,8 @@ end else begin
 
 	if(sys_addr[19:0]==20'h00020) begin sys_ack <= sys_en;          sys_rdata <= {{32-14{1'b0}}, set_a_hyst}	; end
 	if(sys_addr[19:0]==20'h00028) begin sys_ack <= sys_en;          sys_rdata <= {{32- 1{1'b0}}, set_avg_en}	; end
-	if(sys_addr[19:0]==20'h0002C) begin sys_ack <= sys_en;          sys_rdata <=adc_we_cnt						; end
+	if(sys_addr[19:0]==20'h0002C) begin sys_ack <= sys_en;          sys_rdata <= adc_we_cnt						; end
+	if(sys_addr[19:0]==20'h00030) begin sys_ack <= sys_en;          sys_rdata <= {invert_adc_b, invert_adc_a}	; end
 
 	if(sys_addr[19:0]==20'h00090) begin sys_ack <= sys_en;          sys_rdata <= {{32-20{1'b0}}, set_deb_len}	; end
 
