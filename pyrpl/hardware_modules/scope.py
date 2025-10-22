@@ -487,13 +487,13 @@ class Scope(HardwareModule, AcquisitionModule):
 
     peakInputsList = {"adc1" : 0, "adc2" : 1, "ch1" : 2, "ch2" : 3}
     peak_refL_input =  SelectRegister(0xB0, startBit=0, doc="input used for the first peak search",
-                                              options=peakInputsList)
-    peak_refR_input =  SelectRegister(0xB0, startBit=2, doc="input used for the first peak search",
-                                              options=peakInputsList)
-    peak_ctrl0_input =  SelectRegister(0xB0, startBit=4, doc="input used for the first peak search",
-                                              options=peakInputsList)
-    peak_ctrl1_input =  SelectRegister(0xB0, startBit=6, doc="input used for the first peak search",
-                                              options=peakInputsList)
+                                              options=peakInputsList, default = peakInputsList["ch1"])
+    peak_refR_input =  SelectRegister(0xB0, startBit=2, doc="input used for the second peak search",
+                                              options=peakInputsList, default = peakInputsList["ch1"])
+    peak_ctrl0_input =  SelectRegister(0xB0, startBit=4, doc="input used for the third peak search",
+                                              options=peakInputsList, default = peakInputsList["ch1"])
+    peak_ctrl1_input =  SelectRegister(0xB0, startBit=6, doc="input used for the fourth peak search",
+                                              options=peakInputsList, default = peakInputsList["ch1"])
 
     peak_refL_minValue = FloatRegister(0xB4, startBit= 0, bits=14, norm=2 ** 13,
                                 doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")

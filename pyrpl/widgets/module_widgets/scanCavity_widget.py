@@ -248,7 +248,7 @@ class peak_widget(ModuleWidget):
         if self.module.enabled:
             self.curve.setVisible(True)
         else:
-            self.curve.setVisible(self.module not in self.line.scanCavityWidget.unusablePeaks)
+            self.curve.setVisible(False)#self.module not in self.line.scanCavityWidget.unusablePeaks)
         self.line.updateSizes()
       
     def setpointToCurrentValue(self):
@@ -272,7 +272,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         QtGui.QColor(255, 165, 0),    # orange
         QtGui.QColor(255, 0, 255),    # magenta
         QtGui.QColor(0, 255, 255),    # cyan
-        QtGui.QColor(255, 255, 0),    # yellow
+        QtGui.QColor(200, 200, 0),    # ocra (yellow is too bright)
         QtGui.QColor(139, 0, 0),      # dark red
         QtGui.QColor(0, 100, 0),      # dark green
         QtGui.QColor(0, 0, 139),       # dark blue
@@ -309,6 +309,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.duration = aws['duration']
         self.layout_duration.addWidget(self.duration)
         self.attribute_layout.addLayout(self.layout_duration)
+        self.duration.value_changed.connect(self.scalePeaksWithNewDuration)
 
         #self.attribute_layout.removeWidget(aws['curve_name'])
 
@@ -364,12 +365,43 @@ class ScanCavity_widget(AcquisitionModuleWidget):
             widget.setGraphForPeakLine(self.plot_item, self, ScanCavity_widget.colors[i+2])
             add_new_tab(self.peakTabs, widget, peak.name)
             self.peakList.append(widget)
-                
-        self.secondaryPitayasTabs = QtWidgets.QTabWidget()
-        self.main_layout.addWidget(self.secondaryPitayasTabs)
+            self.secondaryPitayasTabs = QtWidgets.QTabWidget()
+
+        # Create a collapsible container for the tabs
+        self.secondaryPitayas_container = QtWidgets.QWidget()
+        _container_layout = QtWidgets.QVBoxLayout()
+        _container_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Header with a toggle button (collapses/expands the tabs)
+        header = QtWidgets.QWidget()
+        _h_layout = QtWidgets.QHBoxLayout()
+        _h_layout.setContentsMargins(0, 0, 0, 0)
+        self._secondary_toggle = QtWidgets.QToolButton()
+        self._secondary_toggle.setCheckable(True)
+        self._secondary_toggle.setChecked(True)
+        self._secondary_toggle.setArrowType(QtCore.Qt.DownArrow)
+        # toggle visibility and arrow direction
+        self._secondary_toggle.toggled.connect(
+            lambda checked: (
+            self.secondaryPitayasTabs.setVisible(checked),
+            self._secondary_toggle.setArrowType(QtCore.Qt.DownArrow if checked else QtCore.Qt.RightArrow)
+            )
+        )
+        _h_layout.addWidget(self._secondary_toggle)
+        _h_layout.addWidget(QtWidgets.QLabel("Secondary Pitayas"))
+        _h_layout.addStretch(1)
+        header.setLayout(_h_layout)
+
+        _container_layout.addWidget(header)
+        _container_layout.addWidget(self.secondaryPitayasTabs)
+        self.secondaryPitayas_container.setLayout(_container_layout)
+
+        # Add the whole container (header + tabs) to the main layout
+        self.main_layout.addWidget(self.secondaryPitayas_container)
+
         for secondaryPitaya in self.module.secondaryPitayas:
-            widget : peak_widget = secondaryPitaya._create_widget()
-            add_new_tab(self.secondaryPitayasTabs, widget, peak.name)
+            widget = secondaryPitaya._create_widget()
+            add_new_tab(self.secondaryPitayasTabs, widget, secondaryPitaya.name)
 
 
         self.main_layout.addWidget(self.win, stretch=10)
@@ -387,6 +419,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.attribute_layout.insertWidget(
             list(self.attribute_widgets.keys()).index("trigger_source"),
             self.rolling_group)
+        self.rolling_group.setVisible(False)
         self.checkbox_normal.clicked.connect(self.rolling_mode_toggled)
         self.checkbox_untrigged.clicked.connect(self.rolling_mode_toggled)
         #self.update_rolling_mode_visibility()
@@ -405,7 +438,8 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.attribute_layout.addStretch(1)
         self.setPeakGroups()
         
-
+    def scalePeaksWithNewDuration(self):
+        pass
     @property
     def mainL(self):
         return self.module.mainL
@@ -576,7 +610,6 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         sc = self.module
         peaks = sc.usedPeaks
         self.peakGroups, self.unusablePeaks = ScanCavity_widget.getGroupsOfNonOverlapping(peaks)
-        print(self.peakGroups)
         self.currentGroupIndex = np.random.randint(len(self.peakGroups))#let's randomize the first group, 
                 # so that if we have very fast updates of the peaks (example, while dragging a peak around), 
                 # we won't end up controlling only the first group

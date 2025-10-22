@@ -37,7 +37,11 @@ class peakValue(FloatProperty):
 		super().__init__( **kwargs)
 		self.propertyAccessor = propertyAccessor
 	def set_value(self, obj, val):
-		setattr(obj.redpitaya.scope, self.propertyAccessor(obj), val)
+		if obj.peakType == "secondary":
+			setattr(obj.redpitaya.scope, self.propertyAccessor(obj), val)
+		else:
+			for pitaya in obj.scanningCavity.usedPitayas:
+				setattr(pitaya.scope, self.propertyAccessor(obj), val)
 		return super().set_value(obj, val)
 	def get_value(self, obj):
 		return getattr(obj.redpitaya.scope, self.propertyAccessor(obj))
@@ -108,10 +112,12 @@ class asgSelector(SelectProperty):
 
 		return ret
 	
-class mainTriggerSelector(digitalPinProperty):
+class mainTriggerSelector(nullableDigitalPinProperty):
 	'''this property sets the digital pin of the main pitaya that will trigger the other pitaya's scopes. So, connect pin of the main redPitaya (specified in main_acquisitionTrigger(mainTriggerSelector)) to each selected pin of the secondary redPitayas (acquisitionTrigger(scopeTriggerSelector))'''
 	def set_value(self, obj, val):
-		val = digitalPinProperty.pinIndexToString(val)
+		val = nullableDigitalPinProperty.pinIndexToString(val)
+		if val is None:
+			return super().set_value(obj, val)
 		hk : HK = obj.mainPitaya.hk
 		selectedAsg = obj.usedAsg
 		setattr(hk, f"expansion_{val}_output", 1)
@@ -120,10 +126,12 @@ class mainTriggerSelector(digitalPinProperty):
 
 		return super().set_value(obj, val)
 
-class scopeTriggerSelector(digitalPinProperty):
+class scopeTriggerSelector(nullableDigitalPinProperty):
 	'''this property sets the digital pin that trigger the scope acquisition. Can also be used for the main pitaya, if the ramp trigger is external'''
 	def set_value(self, obj, val):
-		val = digitalPinProperty.pinIndexToString(val)
+		val = nullableDigitalPinProperty.pinIndexToString(val)
+		if val is None:
+			return super().set_value(obj, val)
 		hk : HK = obj.rp.hk
 		setattr(hk, f"expansion_{val}_output", 0)
 
@@ -131,7 +139,7 @@ class scopeTriggerSelector(digitalPinProperty):
 		scope.external_trigger_pin = val
 		return super().set_value(obj, val)
 
-class peakActivatingBitSelector(digitalPinProperty):
+class peakActivatingBitSelector(nullableDigitalPinProperty):
 	'''this property sets the digital pin that will enable the AOM responsible for shutting down the laser when it is not its turn'''
 	def set_value(self, obj, val):
 		oldEnabled = obj.enabled
@@ -143,7 +151,9 @@ class peakActivatingBitSelector(digitalPinProperty):
 			print("cannot change main R activating pin")
 			return
 		oldEnabled = obj.active
-		val = digitalPinProperty.pinIndexToString(val)
+		val = nullableDigitalPinProperty.pinIndexToString(val)
+		if val is None:
+			return super().set_value(obj, val)
 		hk : HK = obj.redpitaya.hk
 		setattr(hk, f"expansion_{val}_output", 1)
 		# setattr(hk, f"pinState_{val}", "dsp" if oldEnabled else "memory")  #already done by obj.active
@@ -164,7 +174,9 @@ class activatePeakProperty(BoolProperty):
 		if obj.isOverlappingWithMainPeaks():
 			return False
 			raise Exception("cannot enable this peak when its range is overlapping with the main peaks")
-		index = digitalPinProperty.pinIndexToString(obj.enablingBit)
+		index = nullableDigitalPinProperty.pinIndexToString(obj.enablingBit)
+		if index is None:
+			return super().set_value(obj, val)
 		hk = obj.redpitaya.hk
 		setattr(hk, f"pinState_{index}", "dsp" if val else "memory")
 		setattr(hk, f"expansion_{index}", 0)

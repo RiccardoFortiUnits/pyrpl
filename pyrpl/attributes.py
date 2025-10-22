@@ -333,10 +333,10 @@ class BaseRegister(BaseProperty):
 		# self.parent = obj  # store obj in memory
 		val = obj._read(self.address, not self.isAddressStatic)
 		if self.bitmask is None:
-			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
+			# print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
 			return self.to_python(obj, val)
 		else:
-			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
+			# print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, reading {hex(val)}")
 			retVal = val & self.bitmask
 			if self.startBit is not None: 
 				# try:
@@ -352,7 +352,7 @@ class BaseRegister(BaseProperty):
 		"""
 		if self.bitmask is None:
 			obj._write(self.address, self.from_python(obj, val), not self.isAddressStatic)
-			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(self.from_python(obj, val))}")
+			# print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(self.from_python(obj, val))}")
 		else:
 			act = obj._read(self.address, not self.isAddressStatic)
 			new = act & (~self.bitmask)
@@ -361,7 +361,7 @@ class BaseRegister(BaseProperty):
 				addValue <<= self.startBit
 			new |= (addValue & self.bitmask)
 			obj._write(self.address, new, not self.isAddressStatic)
-			print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(new)}")
+			# print(f"{obj.redpitaya.name} address {hex(self.address + (0 if self.isAddressStatic else obj._addr_base))}, writing {hex(new)}")
 				
 
 	def __set__(self, obj, value):
@@ -1778,7 +1778,7 @@ class digitalPinProperty(StringProperty):
 	An attribute for digital pins, to convert their string value to an actual number
 	"""
 	_widget_class = StringAttributeWidget
-	default = ""
+	default = "N0"
 
 	def validate_and_normalize(self, obj, value):
 		"""
@@ -1808,6 +1808,47 @@ class digitalPinProperty(StringProperty):
 	def normalizedPinString(value):
 		idx = digitalPinProperty.pinStringToIndex(value)
 		return digitalPinProperty.pinIndexToString(idx)
+
+class nullableDigitalPinProperty(digitalPinProperty):
+	"""
+	the value of this property can also be None, so it is possible to not select any pin
+	"""
+	default = ""
+
+	def validate_and_normalize(self, obj, value):
+		"""
+		Convert argument to string
+		"""
+		if isinstance(value, str):
+			return nullableDigitalPinProperty.pinStringToIndex(value)
+		if value is None:
+			return None
+		return int(value)
+	
+	@staticmethod
+	def pinStringToIndex(value):
+		value = str.lower(value)
+		row = 1 if 'p' in value else (0 if 'n' in value else None)
+		try:
+			idx = int(value.replace('p','').replace('n',''))
+		except:
+			idx = None
+		if row is None or idx is None:
+			return None
+		return row * 8 + idx
+	@staticmethod
+	def pinIndexToString(value):
+		if value is None:
+			return None		
+		if isinstance(value, str):
+			return nullableDigitalPinProperty.normalizedPinString(value)
+		val = int(value)
+		return ('N' if val < 8 else 'P') + str(val & 0x7)
+	
+	@staticmethod
+	def normalizedPinString(value):
+		idx = nullableDigitalPinProperty.pinStringToIndex(value)
+		return nullableDigitalPinProperty.pinIndexToString(idx)
 
 class digitalPinRegister(BaseRegister, digitalPinProperty):
 	"""

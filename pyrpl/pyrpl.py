@@ -254,7 +254,9 @@ class Pyrpl(object):
         # use gui or commandline for questions?
         gui = 'gui' not in kwargs or kwargs['gui']
         # get config file if None is specified
+        selectingFile = False
         if config is None:
+            selectingFile = True
             if gui:
                 self.logger.info("Please select or create a configuration "
                                  "file in the file selector window!")
@@ -283,15 +285,16 @@ class Pyrpl(object):
         self.c = MemoryTree(filename=config, source=source)
         if self.c._filename is not None:
             self.logger.info("All your PyRPL settings will be saved to the "
-                             "config file\n"
-                             "    %s\n"
+                             "config file    %s",
+                             self.c._filename)
+            if selectingFile:
+                self.logger.info(
                              "If you would like to restart "
                              "PyRPL with these settings, type \"pyrpl.exe "
                              "%s\" in a windows terminal or \n"
                              "    from pyrpl import Pyrpl\n"
                              "    p = Pyrpl('%s')\n"
                              "in a python terminal.",
-                             self.c._filename,
                              self.c._filename_stripped,
                              self.c._filename_stripped)
         # make sure config file has the required sections and complete with
