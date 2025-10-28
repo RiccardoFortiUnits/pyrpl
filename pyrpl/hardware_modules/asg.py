@@ -289,7 +289,7 @@ def make_asg(channel=0):
                 return np.zeros(self.data_length)
             else:
                 return np.random.normal(loc=0.0,
-                                        scale=self._rmsamplitude,
+                                        scale=np.abs(self._rmsamplitude),
                                         size=self.data_length)
 
         @property

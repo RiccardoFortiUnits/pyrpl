@@ -151,14 +151,14 @@ class DecimationRegister(SelectRegister):
     Careful: changing decimation changes duration and sampling_time as well
     """
     def set_value(self, obj, value):
-        previousPeaks = [0] * len(obj.peakRangeRegisters)
-        for i, reg in enumerate(obj.peakRangeRegisters.values()):
-            previousPeaks[i] = reg.get_value(obj)
+        # previousPeaks = [0] * len(obj.peakRangeRegisters)
+        # for i, reg in enumerate(obj.peakRangeRegisters.values()):
+        #     previousPeaks[i] = reg.get_value(obj)
         SelectRegister.set_value(self, obj, value)
         obj.__class__.duration.value_updated(obj, obj.duration)
         obj.__class__.sampling_time.value_updated(obj, obj.sampling_time)
-        for i, reg in enumerate(obj.peakRangeRegisters.values()):
-            reg.set_value(obj,previousPeaks[i])
+        # for i, reg in enumerate(obj.peakRangeRegisters.values()):
+        #     reg.set_value(obj,previousPeaks[i])
 
 class peakIndexRegister(FloatRegister):
     def __init__(self, address, norm=1, signed=True, invert=False, **kwargs):

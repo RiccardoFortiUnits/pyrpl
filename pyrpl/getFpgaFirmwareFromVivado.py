@@ -11,7 +11,7 @@ import shutil
 
 newFpgaName = "scanCavity" + datetime.now().strftime(" %d_%m_%Y %H_%M")+".bit.bin"
 
-backupSaveFolder = "d:/lastline/new_backupFpgaBinaries"
+backupSaveFolder = "d:/lastline/new_backupFpgaBinaries/"
 
 fpgaFilePath = "C:/Git/pyrpl/pyrpl/fpga/"
 projectBinFilePath = fpgaFilePath + "project/pyrpl.runs/impl_1/"

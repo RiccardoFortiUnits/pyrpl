@@ -59,7 +59,7 @@ except:
             """
             self.logger = logging.getLogger(name=__name__)
             self.params = dict()
-            x, y = np.array([], dtype=np.float), np.array([], dtype=np.float)
+            x, y = np.array([], dtype=float), np.array([], dtype=float)
             self.data = (x, y)
             self.name = name
 
@@ -80,7 +80,7 @@ except:
             kwds will be passed to self.params
             """
             if len(args) == 0:
-                ser = (np.array([], dtype=np.float), np.array([], dtype=np.float))
+                ser = (np.array([], dtype=float), np.array([], dtype=float))
             if len(args) == 1:
                 if isinstance(args[0], pd.Series):
                     x, y = args[0].index.values, args[0].values
@@ -240,8 +240,8 @@ except:
         def sort(self):
             """numerically sorts the data series so that indexing can be used"""
             X, Y = self.data
-            xs = np.array([x for (x, y) in sorted(zip(X, Y))], dtype=np.float64)
-            ys = np.array([y for (x, y) in sorted(zip(X, Y))], dtype=np.float64)
+            xs = np.array([x for (x, y) in sorted(zip(X, Y))], dtype=float64)
+            ys = np.array([y for (x, y) in sorted(zip(X, Y))], dtype=float64)
             self.data = (xs, ys)
 
         def fit(self):

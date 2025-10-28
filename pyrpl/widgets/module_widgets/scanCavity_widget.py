@@ -12,7 +12,8 @@ import numpy as np
 from ...errors import NotReadyError
 from .base_module_widget import ModuleWidget
 from .acquisition_module_widget import AcquisitionModuleWidget
-
+import networkx as nx
+from ...graphCalculator import greedy_clique_partition
 class PeakBorderLine(QtWidgets.QGraphicsLineItem):
     def __init__(self, parent, peakLine):
         super().__init__(0.0, 0, 0.001, 0, parent = parent)
@@ -210,10 +211,12 @@ class peak_widget(ModuleWidget):
         # self.main_layout.addWidget(self.button_activatePID)
         self.enabled = aws["enabled"]
         self.locking = aws["locking"]
+        self.normalizeIndex = aws["normalizeIndex"]
         
         self.color = aws["peakColor"]
         self.color.value_changed.connect(self.updateCurve)
         self.enabled.value_changed.connect(self.updateCurve)
+        self.normalizeIndex.value_changed.connect(self.updateCurve)
         self.enabled.value_changed.connect(lambda : self.line.scanCavityWidget.setPeakGroups())
         # self.enabled.value_changed.connect(self._enableLocking)
         # self._enableLocking()
@@ -245,12 +248,11 @@ class peak_widget(ModuleWidget):
             t = t[indexes]      
             self.curve.setData(t, x)
             
-        if self.module.enabled:
+        if self.module.active:
             self.curve.setVisible(True)
         else:
-            self.curve.setVisible(False)#self.module not in self.line.scanCavityWidget.unusablePeaks)
+            self.curve.setVisible(self.module not in self.line.scanCavityWidget.unusablePeaks)
         self.line.updateSizes()
-      
     def setpointToCurrentValue(self):
         #get the last acquisition from the scope and put its average as the new setpoint
         acquisition = self.module.parent.scope.getLastAcquisition(self.inputSignal_widget.attribute_value)
@@ -321,7 +323,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 
         #self.setLayout(self.main_layout)
 
-
+        self.unusablePeaks = []
         self.setWindowTitle("Cavity scan")
         self.win = pg.GraphicsLayoutWidget(title="Cavity scan")
         self.plot_item = self.win.addPlot(title="Cavity scan")
@@ -343,6 +345,10 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         def on_view_changed():
             for peak in self.peakList:
                 peak.line.updateSizes()
+        def updateAllPeakLines():
+            for p in self.peakList:
+                p.line.updateFromPeakRanges()
+                p.line.updateBarPositions()
 
         self.curves = [self.plot_item.plot(pen=(QtGui.QColor(color).red(),
                                                 QtGui.QColor(color).green(),
@@ -423,8 +429,8 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         self.checkbox_normal.clicked.connect(self.rolling_mode_toggled)
         self.checkbox_untrigged.clicked.connect(self.rolling_mode_toggled)
         #self.update_rolling_mode_visibility()
-        self.attribute_widgets['duration'].value_changed.connect(
-            self.update_rolling_mode_visibility)
+        self.attribute_widgets['duration'].value_changed.connect(self.update_rolling_mode_visibility)
+        self.attribute_widgets['duration'].value_changed.connect(updateAllPeakLines)
 
         self.plot_item.sigRangeChanged.connect(lambda _, __: on_view_changed())
         self.plot_item.getViewBox().sigResized.connect(on_view_changed)
@@ -533,26 +539,11 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         super(ScanCavity_widget, self).update_running_buttons()
         self.update_rolling_mode_visibility()
 
-    def autoscale_x(self):
-        """Autoscale pyqtgraph. The current behavior is to autoscale x axis
-        and set y axis to  [-1, +1]"""
-        if self.module.xy_mode:
-            return
-        if self.module._is_rolling_mode_active():
-            mini = -self.module.duration
-            maxi = 0
-        else:
-            mini = min(self.module.times)
-            maxi = max(self.module.times)
-        self.plot_item.setRange(xRange=[mini, maxi])
-        self.plot_item.setRange(yRange=[-1,1])
-        # self.plot_item.autoRange()
-
     def save_clicked(self):
         self.module.save_curve()
 
     @staticmethod
-    def getGroupsOfNonOverlapping(peakList):
+    def getGroupsOfNonOverlapping_old(peakList):
         #I have to put it here instead than inside the peak class, because python doesn't let me import it 
         # (cannot import name 'ScanningCavity' from partially initialized module 
         #'pyrpl.software_modules.scanningCavity' (most likely due to a circular import))
@@ -604,6 +595,60 @@ class ScanCavity_widget(AcquisitionModuleWidget):
             run = []
                 
         return [[peakList[i] for i in group] for group in allGroups], inaccessiblePeaks
+    def getGroupsOfNonOverlapping(peakList):
+        '''finds a set of non-overlapping groups of peaks, so that they can be activated at the same time.
+        The way it finds the groups is to transform the problem into a graph (each peak is a node, and edges 
+        represent if 2 peaks are non-overlapping), and then it solves the problem of finding the smallest set 
+        of subgraphs that are internally completely connected (each node is connected to all other nodes, which 
+        means all the corresponding peaks are non-overlapping)
+        The graph problem is solved with a greedy algorithm (the exact algorithm has exponential time, python 
+        takes many seconds even to solve for a 10-node graph, we don't have time), so the solution might not be 
+        the optimal one.
+        Normalized peaks are taken into consideration, so they will always be set in a group that also contains 
+        the main peaks (of course, if a normalized peak overlap with a main peak, it is immediately discarded 
+        with a warning)'''
+        #I have to put it here instead than inside the peak class, because python doesn't let me import it 
+        # (cannot import name 'ScanningCavity' from partially initialized module 
+        #'pyrpl.software_modules.scanningCavity' (most likely due to a circular import))
+
+        #get all the peaks, and check which ones are normalized
+        peakList = [p for p in peakList if p.enabled]
+        indexToPeak = np.arange(len(peakList))
+        if len(peakList) == 0:
+            return [[]], []
+        ranges = [(p.left, p.right) for p in peakList]
+        mainPeaks = np.where([p.peakType != "secondary" for p in peakList])[0]
+        normalizedPeaks = np.where([p.peakType == "secondary" and p.normalizeIndex for p in peakList])[0]
+
+        # calcluate all intersections
+        def areIntersecting(range0, range1):
+            return (range0[0] < range1[1]) ^ (range0[1] <= range1[0])		
+        intersections = np.zeros((len(ranges),len(ranges)), dtype=bool)
+        for i in range(len(ranges)):
+            for j in range(i+1, len(ranges)):
+                intersections[i,j] = areIntersecting(ranges[i], ranges[j])
+        intersections = np.logical_or(intersections, intersections.T)
+        
+        # check for unacceptable intersections (normalized with mains, main with main if there are normalized peaks)
+        inaccessiblePeaks = np.zeros_like(peakList, dtype = bool)
+        if len(normalizedPeaks) > 0 and intersections[mainPeaks[0], mainPeaks[1]]:
+            print("main peaks overlapping, the normalized peaks cannot be enabled")
+            inaccessiblePeaks[normalizedPeaks] = True
+        elif len(normalizedPeaks) > 0:
+            intersectionWithMains = intersections[mainPeaks]
+            intersectionWithMains = np.logical_or(intersectionWithMains[0], intersectionWithMains[1])
+            intersectionMain_Normalized = intersectionWithMains[normalizedPeaks]
+            inaccessiblePeaks[normalizedPeaks[intersectionMain_Normalized]] = True
+            normalizedPeaks = normalizedPeaks[~intersectionMain_Normalized]
+            intersections[normalizedPeaks,:] = np.logical_or(intersections[normalizedPeaks,:], intersectionWithMains)
+            intersections = np.logical_or(intersections, intersections.T)
+        intersections = intersections[~inaccessiblePeaks][:,~inaccessiblePeaks]
+        indexToPeak = indexToPeak[~inaccessiblePeaks]
+        graphEdges = np.array(np.where(~intersections)).T
+        graphEdges = [(row[0],row[1]) for row in graphEdges]
+        G = nx.Graph(graphEdges)
+        groups = greedy_clique_partition(G)
+        return [[peakList[indexToPeak[i]] for i in group] for group in groups], [p for i,p in enumerate(peakList) if inaccessiblePeaks[i]]
     
     def setPeakGroups(self):
         # sc : ScanningCavity = self.module
@@ -617,6 +662,8 @@ class ScanCavity_widget(AcquisitionModuleWidget):
             p.inCurrentPeakGroup = p in self.peakGroups[self.currentGroupIndex]
         for i in range(1, len(self.curves)):
             self.curves[i].setVisible(False)
+        for p in self.unusablePeaks:
+            p.inCurrentPeakGroup = False
     def changePeakGroup(self):
         if len(self.peakGroups) <= 1:
             #let's not do anything, since we don't need to swap peaks around

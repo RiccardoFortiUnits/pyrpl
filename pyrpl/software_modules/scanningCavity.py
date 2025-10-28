@@ -305,7 +305,9 @@ class peak(Module):
 		There are a bunch of "virtual" enabling bits, which indirectly control the 2 physical bits: self.active and self.paused.
 		For now, these 2 bits are calculated as follows:
 		- active = enabled & inCurrentPeakGroup
-		- paused = ! (active & locking)'''
+		- paused = ! (active & locking)
+		inCurrentPeakGroup is a bit controlled by the UI to avoid overlapping between active peaks. If there's 
+		no overlap, this flag is always active'''
 	enablingBit = peakActivatingBitSelector()
 	active = activatePeakProperty()
 	enabled = peakEnablingProperty()
@@ -631,3 +633,10 @@ class ScanningCavity(AcquisitionModule):
 		self._running_state = 'stopped'
 		s._free_up_resources()
 		return s.data_avg
+	
+	def save_curve(self):
+		"""
+		Saves the curve(s) that is (are) currently displayed in the gui in
+		the db_system. Also, returns the list [curve_ch1, curve_ch2]...
+		"""
+		return self.mainPitaya.scope.save_curve()
