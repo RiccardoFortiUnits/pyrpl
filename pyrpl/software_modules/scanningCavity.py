@@ -498,6 +498,8 @@ class ScanningCavity(AcquisitionModule):
 		self.secondaryPitayas.append(secondaryPitaya(pitaya, self))
 		for i in range(nOfSecondaryPeaks):
 			self.addSecondaryPeak(peak(pitaya, i + 2, self, f"{pitaya.name}_secondary{i}"))
+		#the peak detectors require the trigger to be "armed". Let's arm it
+		pitaya.scope._start_trace_acquisition()
 		pitaya.hk.input1 = "alltriggers"
 
 	def addSecondaryPeak(self, newPeak):

@@ -426,6 +426,8 @@ class ScanCavity_widget(AcquisitionModuleWidget):
             list(self.attribute_widgets.keys()).index("trigger_source"),
             self.rolling_group)
         self.rolling_group.setVisible(False)
+        aws["threshold"].setVisible(False)
+        aws["hysteresis"].setVisible(False)
         self.checkbox_normal.clicked.connect(self.rolling_mode_toggled)
         self.checkbox_untrigged.clicked.connect(self.rolling_mode_toggled)
         #self.update_rolling_mode_visibility()

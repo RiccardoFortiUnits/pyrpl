@@ -150,7 +150,6 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
             self._drag_edge = 'right'
         else:
             self._drag_edge = None
-        print(self._drag_edge)
         self._distanceBetweenClickAndTop = self.line().x1() - event.pos().x(), self.line().y1() - event.pos().y()
         self._width = self.line().x2() - self.line().x1()
         super().mousePressEvent(event)

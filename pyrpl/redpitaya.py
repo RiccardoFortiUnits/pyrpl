@@ -214,58 +214,63 @@ class RedPitaya(object):
                          '%s.'%self.ssh.hostname)
         self.parent = self
 
-    def start_ssh(self, attempt=0):
-        """
-        Extablishes an ssh connection to the RedPitaya board
+    def start_ssh(self, failAfter_n_attempts = 3):
+        attempt = 1
+        while True:
+            """
+            Extablishes an ssh connection to the RedPitaya board
 
-        returns True if a successful connection has been established
-        """
-        try:
-            # close pre-existing connection if necessary
-            self.end_ssh()
-        except:
-            pass
-        if self.parameters['hostname'] == "_FAKE_REDPITAYA_":
-            # simulation mode - start without connecting
-            self.logger.warning("(Re-)starting client in dummy mode...")
-            self.startdummyclient()
-            return True
-        else:  # normal mode - establish ssh connection and
+            returns True if a successful connection has been established
+            """
             try:
-                # start ssh connection
-                self.ssh = SshShell(hostname=self.parameters['hostname'],
-                                    sshport=self.parameters['sshport'],
-                                    user=self.parameters['user'],
-                                    password=self.parameters['password'],
-                                    delay=self.parameters['delay'],
-                                    timeout=self.parameters['timeout'])
-                # test ssh connection for exceptions
-                self.ssh.ask()
-            except BaseException as e:  # connection problem
-                if attempt < 3:
-                    # try to connect up to 3 times
-                    return self.start_ssh(attempt=attempt+1)
-                else:  # even multiple attempts did not work
-                    raise ExpectedPyrplError(
-                        "\nCould not connect to the Red Pitaya device with "
-                        "the following parameters: \n\n"
-                        "\thostname: %s\n"
-                        "\tssh port: %s\n"
-                        "\tusername: %s\n"
-                        "\tpassword: ****\n\n"
-                        "Please confirm that the device is reachable by typing "
-                        "its hostname/ip address into a web browser and "
-                        "checking that a page is displayed. \n\n"
-                        "Error message: %s" % (self.parameters["hostname"],
-                                               self.parameters["sshport"],
-                                               self.parameters["user"],
-                                               e))
-            else:
-                # everything went well, connection is established
-                # also establish scp connection
-                self.ssh.startscp()
+                # close pre-existing connection if necessary
+                self.end_ssh()
+            except:
+                pass
+            if self.parameters['hostname'] == "_FAKE_REDPITAYA_":
+                # simulation mode - start without connecting
+                self.logger.warning("(Re-)starting client in dummy mode...")
+                self.startdummyclient()
                 return True
-
+            else:  # normal mode - establish ssh connection and
+                try:
+                    # start ssh connection
+                    self.ssh = SshShell(hostname=self.parameters['hostname'],
+                                        sshport=self.parameters['sshport'],
+                                        user=self.parameters['user'],
+                                        password=self.parameters['password'],
+                                        delay=self.parameters['delay'],
+                                        timeout=self.parameters['timeout'])
+                    # test ssh connection for exceptions
+                    self.ssh.ask()
+                except BaseException as e:  # connection problem
+                    print(f"connection attempt {attempt} failed")
+                    if attempt < failAfter_n_attempts or failAfter_n_attempts == -1:
+                        # try to connect up to 3 times
+                        print(e)
+                        print("_________________________________________________")
+                        attempt += 1
+                        continue
+                    else:  # even multiple attempts did not work
+                        raise ExpectedPyrplError(
+                            "\nCould not connect to the Red Pitaya device with "
+                            "the following parameters: \n\n"
+                            "\thostname: %s\n"
+                            "\tssh port: %s\n"
+                            "\tusername: %s\n"
+                            "\tpassword: ****\n\n"
+                            "Please confirm that the device is reachable by typing "
+                            "its hostname/ip address into a web browser and "
+                            "checking that a page is displayed. \n\n"
+                            "Error message: %s" % (self.parameters["hostname"],
+                                                self.parameters["sshport"],
+                                                self.parameters["user"],
+                                                e))
+                else:
+                    # everything went well, connection is established
+                    # also establish scp connection
+                    self.ssh.startscp()
+                    return True
     def switch_led(self, gpiopin=0, state=False):
         self.ssh.ask("echo " + str(gpiopin) + " > /sys/class/gpio/export")
         sleep(self.parameters['delay'])
@@ -415,13 +420,33 @@ class RedPitaya(object):
     def endserver(self):
         try:
             self.ssh.ask('\x03') #exit running server application
-        except:
-            self.logger.exception("Server not responding...")
-        if 'pitaya' in self.ssh.ask():
+        except (OSError, SSHException, AttributeError) as e:
+            self.logger.exception("Server not responding (exception: %s); attempting to restart SSH connection...", e)
+            try:
+                self.start_ssh(failAfter_n_attempts = -1)
+            except Exception:
+                self.logger.exception("Could not restart SSH connection while trying to end server.")
+                return
+        except Exception as e:
+            self.logger.exception("Unexpected error when sending interrupt to server: %s", e)
+        try:
+            result = self.ssh.ask()
+        except Exception as e:
+            self.logger.debug("ssh.ask() failed after interrupt: %s", e)
+            result = ''
+        if 'pitaya' in result:
             self.logger.debug('>') # formerly 'console ready'
         sleep(self.parameters['delay'])
         # make sure no other monitor_server blocks the port
-        self.ssh.ask('killall ' + self.parameters['monitor_server_name'])
+        try:
+            self.ssh.ask('killall ' + self.parameters['monitor_server_name'])
+        except Exception as e:
+            self.logger.exception("Failed to kill monitor_server: %s. Trying to restart SSH and retry...", e)
+            try:
+                self.start_ssh()
+                self.ssh.ask('killall ' + self.parameters['monitor_server_name'])
+            except Exception as e2:
+                self.logger.exception("Could not kill monitor_server after restarting SSH: %s", e2)
         self._serverrunning = False
 
     def endclient(self):
