@@ -251,7 +251,7 @@ class peak_widget(ModuleWidget):
         if self.module.active:
             self.curve.setVisible(True)
         else:
-            self.curve.setVisible(self.module not in self.line.scanCavityWidget.unusablePeaks)
+            self.curve.setVisible(self.enabled and self.module not in self.line.scanCavityWidget.unusablePeaks)
         self.line.updateSizes()
     def setpointToCurrentValue(self):
         #get the last acquisition from the scope and put its average as the new setpoint

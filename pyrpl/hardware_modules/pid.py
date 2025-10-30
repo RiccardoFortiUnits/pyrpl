@@ -141,6 +141,7 @@ do what they are supposed to.
 import numpy as np
 from qtpy import QtCore
 from ..attributes import FloatProperty, BoolRegister, FloatRegister, GainRegister, SelectRegister, digitalPinRegister, IntRegister
+from ..widgets.attribute_widgets import ResettableFloatAttributeWidget
 from .dsp import PauseRegister
 from ..modules import SignalLauncher
 from . import FilterModule
@@ -155,6 +156,7 @@ class IValAttribute(FloatProperty):
 	"""
 	Attribute for integrator value
 	"""
+	_widget_class = ResettableFloatAttributeWidget
 	def get_value(self, obj):
 		return float(obj._to_pyint(obj._read(0x100), bitlength=16))\
 			   / 2 ** 13
@@ -166,6 +168,7 @@ class IValAttribute(FloatProperty):
 		"""set the value of the register holding the integrator's sum [volts]"""
 		return obj._write(0x100, obj._from_pyint(
 			int(round(value * 2 ** 13)), bitlength=16))
+	
 
 
 class SignalLauncherPid(SignalLauncher):

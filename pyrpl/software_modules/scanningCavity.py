@@ -272,6 +272,7 @@ class peak(Module):
 					"height",
 					"p",
 					"i",
+					"ival",
 					"input",
 					"output_direct",
 					"enablingBit",
@@ -317,6 +318,7 @@ class peak(Module):
 	p = DynamicInstanceProperty(Pid.p, lambda peak : peak.pid)
 	i = DynamicInstanceProperty(Pid.i, lambda peak : peak.pid)
 	paused = DynamicInstanceProperty(Pid.paused, lambda peak : peak.pid)
+	ival = DynamicInstanceProperty(Pid.ival, lambda peak : peak.pid)
 	min_voltage = DynamicInstanceProperty(Pid.min_voltage, lambda peak : peak.pid)
 	max_voltage = DynamicInstanceProperty(Pid.max_voltage, lambda peak : peak.pid)
 	output_direct = DynamicInstanceProperty(Pid.output_direct, lambda peak : peak.pid)

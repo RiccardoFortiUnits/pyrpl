@@ -81,11 +81,14 @@ class BaseAttributeWidget(QtWidgets.QWidget):
     @widget_value.setter
     def widget_value(self, v):
         if not self.widget.hasFocus():
+            # Prefer an explicit signal-block target (e.g. inner spinbox) if provided,
+            # otherwise fall back to the public widget container.
+            target = getattr(self, '_signal_widget', None) or self.widget
             try:
-                self.widget.blockSignals(True)
+                target.blockSignals(True)
                 self._set_widget_value(v)
             finally:
-                self.widget.blockSignals(False)
+                target.blockSignals(False)
 
     def write_widget_value_to_attribute(self):
         self.attribute_value = self.widget_value
@@ -339,6 +342,63 @@ class NumberAttributeWidget(BaseAttributeWidget):
         return self.widget.keyReleaseEvent(event)
 
 
+class ResettableNumberAttributeWidget(NumberAttributeWidget):
+    def _make_widget(self):
+        # Let parent create and configure the SpinBox (it will set self.widget)
+        super(ResettableNumberAttributeWidget, self)._make_widget()
+        # keep reference to the actual spinbox
+        self.spinbox = self.widget
+        # ensure updates/blocks target the inner spinbox (not the wrapper container)
+        self._signal_widget = self.spinbox
+
+        # create a small container with spinbox + reset button
+        container = QtWidgets.QWidget()
+        lay = QtWidgets.QHBoxLayout()
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+        lay.addWidget(self.spinbox)
+
+        btn = QtWidgets.QToolButton()
+        btn.setText("0")
+        btn.setToolTip("Reset to 0")
+        btn.setFixedWidth(24)
+        btn.clicked.connect(self._reset_to_zero)
+        lay.addWidget(btn)
+
+        container.setLayout(lay)
+
+        # replace self.widget with the container so BaseAttributeWidget layout stays correct
+        self._reset_button = btn
+        self.widget = container
+        self._set_widget_value(1)
+
+    def _reset_to_zero(self):
+        # set spinbox to zero and notify attribute
+        self.spinbox.setValue(0)
+        self.write_widget_value_to_attribute()
+
+    def _get_widget_value(self):
+        return self.spinbox.value()
+
+    def _set_widget_value(self, new_value):
+        self.spinbox.setValue(new_value)
+
+    def editing(self):
+        return self.spinbox.line.hasFocus()
+
+    def set_per_second(self, val):
+        self.spinbox.set_per_second(val)
+
+    def set_log_increment(self):
+        self.spinbox.set_log_increment()
+
+    def keyPressEvent(self, event):
+        return self.spinbox.keyPressEvent(event)
+
+    def keyReleaseEvent(self, event):
+        return self.spinbox.keyReleaseEvent(event)
+
+
 class IntAttributeWidget(NumberAttributeWidget):
     """
     Widget for integer values.
@@ -350,6 +410,8 @@ class FloatAttributeWidget(NumberAttributeWidget):
     """
     Widget for float values
     """
+    SpinBox = FloatSpinBox
+class ResettableFloatAttributeWidget(ResettableNumberAttributeWidget):
     SpinBox = FloatSpinBox
 
 

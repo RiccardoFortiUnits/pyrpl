@@ -221,7 +221,6 @@ class SamplingTimeProperty(SelectProperty):
         value is shorter or equal to the set value"""
         instance.decimation = float(value) / 8e-9
 
-
 class Scope(HardwareModule, AcquisitionModule):
     MIN_DELAY_CONTINUOUS_ROLLING_MS = 20
     addr_base = 0x40100000
@@ -252,18 +251,18 @@ class Scope(HardwareModule, AcquisitionModule):
                     #    "pid0_p",
                     #    "pid0_i",
                     #    "ival",
-                       "minTime1",
-                       "maxTime1",
-                       "minTime2",
-                       "maxTime2",
-                       "minTime3",
-                       "maxTime3",
-                       "peak_refL_input",
-                       "peak_refR_input",
-                       "peak_ctrl0_input",
-                       "peak_refL_minValue",
-                       "peak_refR_minValue",
-                       "peak_ctrl0_minValue",
+                    #    "minTime1",
+                    #    "maxTime1",
+                    #    "minTime2",
+                    #    "maxTime2",
+                    #    "minTime3",
+                    #    "maxTime3",
+                    #    "peak_refL_input",
+                    #    "peak_refR_input",
+                    #    "peak_ctrl0_input",
+                    #    "peak_refL_minValue",
+                    #    "peak_refR_minValue",
+                    #    "peak_ctrl0_minValue",
                        ]
     
     lastInputs = [None, None]
