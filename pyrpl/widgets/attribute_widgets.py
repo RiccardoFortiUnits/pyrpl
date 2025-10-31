@@ -371,10 +371,12 @@ class ResettableNumberAttributeWidget(NumberAttributeWidget):
         self._reset_button = btn
         self.widget = container
         self._set_widget_value(1)
-
+    def defaultValue(self):
+        '''you can override this method to give different default values, even dynamic values'''
+        return 0
     def _reset_to_zero(self):
         # set spinbox to zero and notify attribute
-        self.spinbox.setValue(0)
+        self.spinbox.setValue(self.defaultValue())
         self.write_widget_value_to_attribute()
 
     def _get_widget_value(self):

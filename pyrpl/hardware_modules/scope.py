@@ -135,7 +135,7 @@ import asyncio
 
 logger = logging.getLogger(name=__name__)
 
-data_length = 2**14
+DATA_LENGTH = 2**14
 
 
 # ==========================================
@@ -175,7 +175,7 @@ class peakIndexRegister(FloatRegister):
 
 class DurationProperty(SelectProperty):
     def get_value(self, obj):
-        return obj.sampling_time * float(obj.data_length)
+        return obj.sampling_time * float(DATA_LENGTH)
 
     def validate_and_normalize(self, obj, value):
         # gets next-higher value
@@ -194,7 +194,58 @@ class DurationProperty(SelectProperty):
     def set_value(self, obj, value):
         """sets returns the duration of a full scope sequence the rounding
         makes sure that the actual value is longer or equal to the set value"""
-        obj.sampling_time = float(value) / obj.data_length
+        obj.sampling_time = float(value) / DATA_LENGTH
+        
+class usedAcquisitionRatioProperty(FloatProperty):
+    '''to be used in tandem with extendableDurationProperty, it tells how much of the acquired data to save'''
+    def __init__(self, **kwargs):
+        super().__init__(min=0, max=1, **kwargs)
+        self.default = 1
+class extendableDurationProperty(DurationProperty):
+    '''a duration property that can set the duration lower than the lowest allowable duration:
+    The minimum duration is limited by the sampling frequency and the number of points per acquisition, 
+    but we can still reduce the number of points. Usually it would never be useful, but for scanning at 
+    very high frequencies we would like the peaks to trigger at a frequency higher than the acquisition 
+    limit (which they can always do), and we want to only see one scan, to avoid confusions.
+    
+    With a set duration lower than the specified lowerEffectiveDuration, an acquisition with duration 
+    lowerEffectiveDuration is done, and only a fraction of the acquired data is shown'''
+    def __init__(self, options, lowerEffectiveDuration, **kwargs):
+        '''Warning! returns itself and an usedAcquisitionRatioProperty'''
+        super().__init__(options, **kwargs)
+        self.lowerEffectiveDuration = lowerEffectiveDuration
+        self.usedAcquisitionRatio = usedAcquisitionRatioProperty()
+
+    def get_value(self, obj):
+        return super().get_value(obj) * self.usedAcquisitionRatio.get_value(obj)
+
+    def set_value(self, obj, value):
+        obj.trigger_debounce = np.minimum(
+            value * .75,#let's set it slighlty shorter than the lower acquisition period
+            5e-4#default debounce value
+        )
+        oldUsedAcquisitionRatio = self.usedAcquisitionRatio.get_value(obj)
+        if value < self.lowerEffectiveDuration:
+            self.usedAcquisitionRatio.set_value(obj, value / self.lowerEffectiveDuration)
+            value = self.lowerEffectiveDuration
+        else:
+            self.usedAcquisitionRatio.set_value(obj, 1)
+        newUsedAcquisitionRatio = self.usedAcquisitionRatio.get_value(obj)
+        if oldUsedAcquisitionRatio != newUsedAcquisitionRatio:
+            # let's re-shape the peak ranges, if the usedAcquisitionRatio has changed. 
+            # Since the peak indexes follow the decimation, they automatically scale 
+            # with the new duration. But if the go lower than the lower decimation, 
+            # we have to manually scale them
+            regList = list(obj.peakRangeRegisters.values())
+            if newUsedAcquisitionRatio < oldUsedAcquisitionRatio:#let's update the values in the opposite order. 
+                                                    # Since we're incrementing the values of the ranges, and since there's 
+                                                    # the limitation that the right value must always be bigger than the left 
+                                                    # value, let's first move the right value
+                regList = regList[::-1]
+            for reg in obj.peakRangeRegisters.values():
+                reg.set_value(obj, reg.get_value(obj) * newUsedAcquisitionRatio / oldUsedAcquisitionRatio)
+
+        return super().set_value(obj, value)
 
 
 class SamplingTimeProperty(SelectProperty):
@@ -289,8 +340,9 @@ class Scope(HardwareModule, AcquisitionModule):
     # running_state last for proper acquisition setup
     _setup_attributes = _gui_attributes + ["rolling_mode"]
     # changing these resets the acquisition and autoscale (calls setup())
-
-    data_length = data_length  # to use it in a list comprehension
+    @property
+    def data_length(self):
+        return int(DATA_LENGTH * self.usedAcquisitionRatio)  # to use it in a list comprehension
 
     rolling_mode = BoolProperty(default=True,
                                 doc="In rolling mode, the curve is "
@@ -462,6 +514,7 @@ class Scope(HardwareModule, AcquisitionModule):
                                sort_by_values=True)
 
     decimations = _decimations.keys()  # help for the user
+    extraDecimations = [2 ** n for n in range(-5, 0)]
 
     # decimation is the basic register, sampling_time and duration are slaves of it
     decimation = DecimationRegister(0x14, doc="decimation factor",
@@ -472,7 +525,7 @@ class Scope(HardwareModule, AcquisitionModule):
                                     call_setup=True)
 
     sampling_times = [8e-9 * dec for dec in decimations]
-
+    extraSamplingTimes = [8e-9 * dec for dec in extraDecimations]
     sampling_time = SamplingTimeProperty(options=sampling_times)
 
     minTime1 = peakIndexRegister(0x94, default = 0x0, doc = "time after the trigger from which the peak on channel 1 is checked (the peak is searched only between minTime1 and maxTime1)")
@@ -520,10 +573,13 @@ class Scope(HardwareModule, AcquisitionModule):
 
     # list comprehension workaround for python 3 compatibility
     # cf. http://stackoverflow.com/questions/13905741
-    durations = [st * data_length for st in sampling_times]
+    durations = [st * DATA_LENGTH for st in sampling_times]
+    extraDurations = [st * DATA_LENGTH for st in extraSamplingTimes]
 
-    duration = DurationProperty(options=durations)
-
+    duration = extendableDurationProperty(options=extraDurations + durations, lowerEffectiveDuration = durations[0])
+    #in some cases we need the duration that is actually implemented
+    effectiveDuration : extendableDurationProperty = duration
+    usedAcquisitionRatio = duration.usedAcquisitionRatio
     _write_pointer_current = IntRegister(0x18,
                                          doc="current write pointer "
                                              "position [samples]")
@@ -592,7 +648,7 @@ class Scope(HardwareModule, AcquisitionModule):
         """raw data from ch1"""
         # return np.array([self.to_pyint(v) for v in self._reads(0x10000,
         # self.data_length)],dtype=np.int32)
-        x = np.array(self._reads(0x10000, self.data_length), dtype=np.int16)
+        x = np.array(self._reads(0x10000, DATA_LENGTH), dtype=np.int16)
         x[x >= 2 ** 13] -= 2 ** 14
         return x
 
@@ -601,25 +657,29 @@ class Scope(HardwareModule, AcquisitionModule):
         """raw data from ch2"""
         # return np.array([self.to_pyint(v) for v in self._reads(0x20000,
         # self.data_length)],dtype=np.int32)
-        x = np.array(self._reads(0x20000, self.data_length), dtype=np.int16)
+        x = np.array(self._reads(0x20000, DATA_LENGTH), dtype=np.int16)
         x[x >= 2 ** 13] -= 2 ** 14
         return x
 
     @property
     def _data_ch1(self):
         """ acquired (normalized) data from ch1"""
-        return np.array(
+        totalAcquisition = np.array(
             np.roll(self._rawdata_ch1, - (self._write_pointer_trigger +
                                           self._trigger_delay_register + 1)),
             dtype=float) / 2 ** 13
+        totalAcquisition = totalAcquisition[:self.data_length]
+        return totalAcquisition
 
     @property
     def _data_ch2(self):
         """ acquired (normalized) data from ch2"""
-        return np.array(
+        totalAcquisition = np.array(
             np.roll(self._rawdata_ch2, - (self._write_pointer_trigger +
                                           self._trigger_delay_register + 1)),
             dtype=float) / 2 ** 13
+        totalAcquisition = totalAcquisition[:self.data_length]
+        return totalAcquisition
 
     @property
     def _data_ch1_current(self):

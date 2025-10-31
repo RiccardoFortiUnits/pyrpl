@@ -117,7 +117,7 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
     @property
     def strokeWidth(self):
         left, bottom, right, top = self.parent.viewRect().getCoords()
-        return (top - bottom) * 0.05
+        return (top - bottom) * 0.025
     @property
     def barWidths(self):
         left, bottom, right, top = self.parent.viewRect().getCoords()
@@ -210,14 +210,20 @@ class peak_widget(ModuleWidget):
         # self.button_activatePID.clicked.connect(self._togglePID)
         # self.main_layout.addWidget(self.button_activatePID)
         self.enabled = aws["enabled"]
+        self.ival = aws["ival"]
         self.locking = aws["locking"]
         self.normalizeIndex = aws["normalizeIndex"]
+        if self.module.peakType != "secondary":
+            self.normalizeIndex.setVisible(False)
+        if self.module.peakType == "main_R":
+            self.ival.defaultValue = lambda : self.line.scanCavityWidget.module.asg.amplitude
         
         self.color = aws["peakColor"]
         self.color.value_changed.connect(self.updateCurve)
         self.enabled.value_changed.connect(self.updateCurve)
         self.normalizeIndex.value_changed.connect(self.updateCurve)
         self.enabled.value_changed.connect(lambda : self.line.scanCavityWidget.setPeakGroups())
+        
         # self.enabled.value_changed.connect(self._enableLocking)
         # self._enableLocking()
 
@@ -349,6 +355,12 @@ class ScanCavity_widget(AcquisitionModuleWidget):
             for p in self.peakList:
                 p.line.updateFromPeakRanges()
                 p.line.updateBarPositions()
+        self.disableAllLocks = QtWidgets.QPushButton("pause all locks")
+        def pauseAllPeaks():
+            for p in self.peakList:
+                p.module.locking = False
+        self.disableAllLocks.clicked.connect(pauseAllPeaks)
+        self.attribute_layout.addWidget(self.disableAllLocks)
 
         self.curves = [self.plot_item.plot(pen=(QtGui.QColor(color).red(),
                                                 QtGui.QColor(color).green(),
@@ -633,17 +645,21 @@ class ScanCavity_widget(AcquisitionModuleWidget):
         
         # check for unacceptable intersections (normalized with mains, main with main if there are normalized peaks)
         inaccessiblePeaks = np.zeros_like(peakList, dtype = bool)
-        if len(normalizedPeaks) > 0 and intersections[mainPeaks[0], mainPeaks[1]]:
-            print("main peaks overlapping, the normalized peaks cannot be enabled")
-            inaccessiblePeaks[normalizedPeaks] = True
-        elif len(normalizedPeaks) > 0:
-            intersectionWithMains = intersections[mainPeaks]
-            intersectionWithMains = np.logical_or(intersectionWithMains[0], intersectionWithMains[1])
-            intersectionMain_Normalized = intersectionWithMains[normalizedPeaks]
-            inaccessiblePeaks[normalizedPeaks[intersectionMain_Normalized]] = True
-            normalizedPeaks = normalizedPeaks[~intersectionMain_Normalized]
-            intersections[normalizedPeaks,:] = np.logical_or(intersections[normalizedPeaks,:], intersectionWithMains)
-            intersections = np.logical_or(intersections, intersections.T)
+        if len(normalizedPeaks) > 0:
+            if len(mainPeaks) < 2:
+                print("The main peaks are not both active, cannot enable the normalized peaks")
+                inaccessiblePeaks[normalizedPeaks] = True
+            elif intersections[mainPeaks[0], mainPeaks[1]]:
+                print("main peaks overlapping, the normalized peaks cannot be enabled")
+                inaccessiblePeaks[normalizedPeaks] = True
+            else:
+                intersectionWithMains = intersections[mainPeaks]
+                intersectionWithMains = np.logical_or(intersectionWithMains[0], intersectionWithMains[1])
+                intersectionMain_Normalized = intersectionWithMains[normalizedPeaks]
+                inaccessiblePeaks[normalizedPeaks[intersectionMain_Normalized]] = True
+                normalizedPeaks = normalizedPeaks[~intersectionMain_Normalized]
+                intersections[normalizedPeaks,:] = np.logical_or(intersections[normalizedPeaks,:], intersectionWithMains)
+                intersections = np.logical_or(intersections, intersections.T)
         intersections = intersections[~inaccessiblePeaks][:,~inaccessiblePeaks]
         indexToPeak = indexToPeak[~inaccessiblePeaks]
         graphEdges = np.array(np.where(~intersections)).T

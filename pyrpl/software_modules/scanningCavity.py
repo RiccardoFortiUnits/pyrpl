@@ -21,7 +21,7 @@ from ..pyrpl_utils import time
 from ..widgets.module_widgets import ScopeWidget
 import asyncio
 
-from ..hardware_modules.scope import Scope, peakIndexRegister
+from ..hardware_modules.scope import Scope, DurationProperty
 from ..hardware_modules.asg import Asg0
 from ..hardware_modules.pid import Pid
 from ..hardware_modules.hk import HK
@@ -260,6 +260,7 @@ class peakLockingProperty(BoolProperty):
 		ret = super().set_value(obj, val)
 		obj.setActiveAndPaused()
 		return ret
+	
 class peak(Module):
 	'''submodule for the handling of a peak detection and lockin. it can be used for both the main peaks and secondary peaks. 
 	The peak is specified with the parent redPitaya and the peak index. Index 0 is for the left main peak, 1 for the right 
@@ -352,7 +353,7 @@ class peak(Module):
 				areIntersecting(self, self.scanningCavity.mainR)
 
 	def setupPid(self):
-		self.pid.ival=0
+		# self.pid.ival=0
 		self.pid.setpoint_source="from memory"
 		self.pid.pause_gains="pi"
 		self.pid.input = f"peak_idx{self.index+1}"
@@ -431,8 +432,6 @@ class peak(Module):
 	# 		stillFree = np.delete(stillFree, addedIndexes)
 	# 		allGroups.append(run)
 	# 	return allGroups
-	
-	
 
 class secondaryPitaya(Module):
 	'''submodule for the handling of a secondary peak, to set some parameters that involve all the peaks of that same redpitaya'''
@@ -534,6 +533,7 @@ class ScanningCavity(AcquisitionModule):
 
 	main_acquisitionTrigger = mainTriggerSelector()
 	_usableTriggers = {key : val for key,val in Scope._trigger_sources.items() if "asg" in key}
+
 	usedAsg = asgSelector(_usableTriggers)
 	lowValue, highValue = rampVoltageEdge.makeLowerAndUpperEdges(min = -1, max = 1)
 	trigger_source = DynamicInstanceProperty(Asg0.trigger_source, lambda scanCavity : scanCavity.asg)
@@ -562,7 +562,7 @@ class ScanningCavity(AcquisitionModule):
 	def updateRamp(self, oldValues = None):
 		asg = self.asg
 		asg.waveform = "ramp"
-		asg.frequency = 0.5 / self.duration
+		asg.frequency = 0.5 / self.duration * .99#let's make the ramp slightly slower, so we are sure that the sope triggers at every period
 		if oldValues is not None:
 			self.output_direct = oldValues[0]
 			self.trigger_source = oldValues[1]
