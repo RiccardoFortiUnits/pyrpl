@@ -14,6 +14,7 @@ from ..curvedb import CurveDB
 from qtpy import QtCore, QtGui, QtWidgets
 
 import sys
+from .setCustomStyle import *
 
 # TODO: try to remove widget_name from here (again)
 class BaseAttributeWidget(QtWidgets.QWidget):
@@ -312,8 +313,10 @@ class NumberAttributeWidget(BaseAttributeWidget):
     SpinBox = NumberSpinBox
 
     def _make_widget(self):
-        super(NumberAttributeWidget, self)._make_widget()
+        super(NumberAttributeWidget, self)._make_widget() 
         self.widget = self.SpinBox(None)
+        # Set maximum width to reduce spinbox size
+        # self.widget.labeltext.setMaximumWidth(150)
         self.widget.value_changed.connect(self.write_widget_value_to_attribute)
         self.widget.setSingleStep(self.attribute_descriptor.increment)
         self.widget.setMaximum(self.attribute_descriptor.max)
