@@ -12,7 +12,7 @@ from . import LockboxLoop, LockboxPlotLoop
 from ..widgets.module_widgets.lockbox_widget import LockboxSequenceWidget
 from pyrpl.async_utils import wait, sleep_async, sleep, ensure_future, Event
 import time
-from ..acquisition_module import AcquisitionModule
+from ..acquisition_module import AcquisitionModule, SignalLauncherAcquisitionModule
 from ..async_utils import wait, ensure_future, sleep_async
 from ..pyrpl_utils import sorted_dict
 from ..attributes import *
@@ -30,6 +30,29 @@ from ..widgets.module_widgets.scanCavity_widget import ScanCavity_widget, peak_w
 
 
 nOfSecondaryPeaks = 2
+
+class SignalLauncherPeak(SignalLauncherAcquisitionModule):
+	'''combination of the signal launchers for acquisition and pid 
+	(to have the ival widget update automatically). It's the same 
+	script as the pid signal launcher, but the parent class is 
+	SignalLauncherAcquisitionModule instead of SignalLauncher'''
+	update_ival = QtCore.Signal()
+	# the widget decides at the other hand if it has to be done or not
+	# depending on the visibility
+	def __init__(self, module):
+		super(SignalLauncherPeak, self).__init__(module)
+		self.timer_ival = QtCore.QTimer()
+		self.timer_ival.setInterval(1000)  # max. refresh rate: 1 Hz
+		self.timer_ival.timeout.connect(self.update_ival)
+		self.timer_ival.setSingleShot(False)
+		self.timer_ival.start()
+
+	def _clear(self):
+		"""
+		kill all timers
+		"""
+		self.timer_ival.stop()
+		super(SignalLauncherPeak, self)._clear()
 
 class peakValue(FloatProperty):
 	'''property to access a specific numeric property of a peak (min time, max time...).'''
@@ -167,9 +190,11 @@ class peakActivatingBitSelector(nullableDigitalPinProperty):
 		obj.active = oldEnabled
 		return ret
 
-class activatePeakProperty(BoolProperty):
+class activatePeakProperty(SelectProperty):
 	'''this property allows to set the enabling of the AOM responsible for shutting down the laser 
 	when it is not its turn'''
+	def __init__(self, **kwargs):
+		super().__init__({True: True, False: False, "always_active":"always_active"}, **kwargs)
 	def set_value(self, obj, val):
 		if obj.isOverlappingWithMainPeaks():
 			return False
@@ -178,8 +203,13 @@ class activatePeakProperty(BoolProperty):
 		if index is None:
 			return super().set_value(obj, val)
 		hk = obj.redpitaya.hk
-		setattr(hk, f"pinState_{index}", "dsp" if val else "memory")
-		setattr(hk, f"expansion_{index}", 0)
+		if isinstance(val, bool):
+			setattr(hk, f"pinState_{index}", "dsp" if val else "memory")
+			setattr(hk, f"expansion_{index}", 0)
+		else:
+			setattr(hk, f"pinState_{index}", "memory")
+			setattr(hk, f"expansion_{index}", 1)
+
 		# obj.paused = not (obj.locking & val)
 		return super().set_value(obj, val)
 		
@@ -189,8 +219,11 @@ class rampVoltageEdge(FloatProperty):
 	value higher than the current edge will not be permitted)'''
 	@staticmethod
 	def makeLowerAndUpperEdges(**kwargs):
-		low = rampVoltageEdge(None, True, **kwargs)
-		high = rampVoltageEdge(low, False, **kwargs)
+		return rampVoltageEdge._classGeneric_makeLowerAndUpperEdges(rampVoltageEdge, **kwargs)
+	@staticmethod
+	def _classGeneric_makeLowerAndUpperEdges(cls, **kwargs):
+		low = cls(None, True, **kwargs)
+		high = cls(low, False, **kwargs)
 		low.otherEdge = high
 		return low, high
 	def __init__(self, otherEdge = None, isLowerEdge = True, min=-np.inf, max=np.inf, increment=0, log_increment=False, **kwargs):
@@ -225,7 +258,27 @@ class rampVoltageEdge(FloatProperty):
 		offs = asg.offset
 		low, high = rampVoltageEdge.getLowHigFromAmpOffs(amp, offs)
 		return low if self.isLowerEdge else high
-
+class autoScaleRampVoltageEdge(rampVoltageEdge):
+	
+	@staticmethod
+	def makeLowerAndUpperEdges(**kwargs):
+		return rampVoltageEdge._classGeneric_makeLowerAndUpperEdges(autoScaleRampVoltageEdge, **kwargs)
+	def set_value(self, obj, val):
+		if obj.autoscale_peaks:
+			obj:ScanningCavity=obj
+			currentValue = self.get_value(obj)
+			otherValue = self.otherEdge.get_value(obj)
+			low, high = (currentValue, otherValue) if self.isLowerEdge else (otherValue, currentValue)
+			peakRanges = np.array([[p.left, p.right] for p in obj.usedPeaks])
+			d = obj.duration
+			peakRanges_voltages = low + (high - low) * peakRanges / d
+			newLow, newHigh = (val, otherValue) if self.isLowerEdge else (otherValue, val)
+			peakRanges_newRatios = (peakRanges_voltages - newLow) / (newHigh - newLow)
+			peakRanges_newTimings = np.clip(peakRanges_newRatios,0,1) * d
+			for i, p in enumerate(obj.usedPeaks):
+				p.setLeftAndRight(*peakRanges_newTimings[i])
+		return super().set_value(obj, val)
+	
 class normalizeIndexProperty(BoolProperty):
 	'''this property sets if the selected secondary peak has a normalized setpoint or not. 
 	Enable the normalization when the peak should move accordingly to the main peaks (for example 
@@ -266,6 +319,11 @@ class peak(Module):
 	The peak is specified with the parent redPitaya and the peak index. Index 0 is for the left main peak, 1 for the right 
 	main peak, and 2 and above are for the normalizable peaks'''
 	_gui_attributes = [
+					"enablingBit",
+					"alwaysActive",
+					"enabled",
+					"locking",
+					"normalizeIndex",#can be removed by manually by peak_widget, it stays only for the normalizable peaks
 					"min_voltage",
 					"max_voltage",
 					"timeSetpoint","left",
@@ -277,6 +335,7 @@ class peak(Module):
 					"input",
 					"output_direct",
 					"enablingBit",
+					"alwaysActive",
 					"enabled",
 					"locking",
 					"normalizeIndex",#can be removed by manually by peak_widget, it stays only for the normalizable peaks
@@ -285,6 +344,7 @@ class peak(Module):
 	_setup_attributes = _gui_attributes
 	_widget_class = peak_widget
 
+	_signal_launcher = SignalLauncherPeak
 	def __init__(self, redpitaya, index, scanningCavity, name=None):
 		super().__init__(redpitaya, name)
 		self.scanningCavity = scanningCavity
@@ -298,7 +358,8 @@ class peak(Module):
 	height = peakValue(lambda peak: f"{peak.redpitaya.scope.peakNames[peak.index]}_minValue")
 	input = peakInput()
 	normalizeIndex = normalizeIndexProperty()
-	'''let's talk about "enabling" a peak. There are 2 levels of enabling:
+	'''let's talk about "enabling" a peak. There are 3 levels of enabling:
+		- always_active: the the pin specified by self.enablingBit is always on (as if the range of the peak was the entire scan)
 		- active: the pin specified by self.enablingBit toggles when the peak is in its range of the scan
 		- locking: the PI control is running (not paused), so if the parameters are correct, the peak should 	
 			follow the setpoint (center of the range). When it's toggled, the PI module should be reset
@@ -313,6 +374,7 @@ class peak(Module):
 	enablingBit = peakActivatingBitSelector()
 	active = activatePeakProperty()
 	enabled = peakEnablingProperty()
+	alwaysActive = peakEnablingProperty()
 	inCurrentPeakGroup = peakEnablingProperty()
 	locking = peakLockingProperty()
 
@@ -337,9 +399,17 @@ class peak(Module):
 
 	peakColor = ColorProperty()
 
+	def setLeftAndRight(self, left, right):
+		if self.right < left:
+			self.right = right
+			self.left = left
+		else:
+			self.left = left
+			self.right = right
 	def setActiveAndPaused(self):
-		self.active = self.enabled and self.inCurrentPeakGroup
-		self.paused = not (self.active & self.locking)
+		self.active = "always_active" if self.alwaysActive else (self.enabled and self.inCurrentPeakGroup)
+		active_boolean = self.active if isinstance(self.active, bool) else True
+		self.paused = not (active_boolean & self.locking)
 	def isOverlappingWithMainPeaks(self, checkIfPeakIsCurrentlyNormalized = True):
 		#checkIfPeakIsCurrentlyNormalized is only used when we are checking if we can set self.normalizeIndex 
 		# to True (and so self.normalizeIndex would likely be False at the moment)
@@ -458,6 +528,7 @@ class ScanningCavity(AcquisitionModule):
 					"usedAsg",
 					"lowValue", 
 					"highValue",
+					"autoscale_peaks",
 					"trigger_source",
 					"output_direct",
 					"main_acquisitionTrigger",
@@ -467,6 +538,7 @@ class ScanningCavity(AcquisitionModule):
 	_gui_attributes = _setup_attributes
 	_widget_class = ScanCavity_widget
 	_module_attributes = ["mainL","mainR"]
+	
 
 
 	def __init__(self, parent, name=None):
@@ -535,7 +607,10 @@ class ScanningCavity(AcquisitionModule):
 	_usableTriggers = {key : val for key,val in Scope._trigger_sources.items() if "asg" in key}
 
 	usedAsg = asgSelector(_usableTriggers)
-	lowValue, highValue = rampVoltageEdge.makeLowerAndUpperEdges(min = -1, max = 1)
+	lowValue, highValue = autoScaleRampVoltageEdge.makeLowerAndUpperEdges(min = -1, max = 1)
+	autoscale_peaks = BoolProperty(default=True, doc="If true, modifying the lowValue " \
+		"and highValue parameters will also modify the peak ranges, so that their position " \
+		"remains constant compared to the previous scan")
 	trigger_source = DynamicInstanceProperty(Asg0.trigger_source, lambda scanCavity : scanCavity.asg)
 	output_direct = DynamicInstanceProperty(Asg0.output_direct, lambda scanCavity : scanCavity.asg)
 

@@ -193,11 +193,39 @@ class peak_widget(ModuleWidget):
 		#self.main_layout = QtWidgets.QVBoxLayout()
 		#self.setLayout(self.main_layout)
 		self.init_attribute_layout()
+		self.valueLayout = QtWidgets.QHBoxLayout()
+		self.main_layout.addLayout(self.valueLayout)
+		def newLayoutWithWidgets(widgets, layoutType = QtWidgets.QHBoxLayout):
+			newLayout = layoutType()
+			self.valueLayout.addLayout(newLayout)
+			for widget in widgets:
+				self.attribute_layout.removeWidget(widget)
+				newLayout.addWidget(widget)
 		aws = self.attribute_widgets
+		self.p = aws["p"]
+		self.i = aws["i"]
+		self.min_voltage = aws["min_voltage"]
+		self.max_voltage = aws["max_voltage"]
+		self.ival = aws["ival"]
+		self.input_widget = aws["input"]
+		self.output_direct = aws["output_direct"]
+		self.enablingBit = aws["enablingBit"]
+		self.alwaysActive = aws["alwaysActive"]
+		self.enabled = aws["enabled"]
+		self.locking = aws["locking"]
+		self.normalizeIndex = aws["normalizeIndex"]
 		self.minTime = aws["left"]
 		self.maxTime = aws["right"]
 		self.minValue = aws["height"]
+		self.color = aws["peakColor"]
+		self.activationLayout = newLayoutWithWidgets([self.alwaysActive, self.enabled, self.locking, self.normalizeIndex])
+		self.pidParametersLayout = newLayoutWithWidgets([self.p, self.i, self.ival])
+		self.pidConfigsLayout = newLayoutWithWidgets([self.min_voltage, self.max_voltage])
+		self.signalLayout = newLayoutWithWidgets([self.input_widget, self.output_direct, self.enablingBit])
+		self.rangeLayout = newLayoutWithWidgets([self.minTime, self.maxTime, self.minValue, self.color])
+
 		self.setpoint = aws["timeSetpoint"]
+		self.setpoint.setVisible(False)
 		# if(self.module.peakType != "secondary"):
 		#     self.attribute_layout.removeWidget(aws["normalizeIndex"])
 
@@ -209,16 +237,12 @@ class peak_widget(ModuleWidget):
 		# self.button_activatePID = QtWidgets.QPushButton("lock peak")
 		# self.button_activatePID.clicked.connect(self._togglePID)
 		# self.main_layout.addWidget(self.button_activatePID)
-		self.enabled = aws["enabled"]
-		self.ival = aws["ival"]
-		self.locking = aws["locking"]
-		self.normalizeIndex = aws["normalizeIndex"]
+
 		if self.module.peakType != "secondary":
 			self.normalizeIndex.setVisible(False)
 		if self.module.peakType == "main_R":
 			self.ival.defaultValue = lambda : self.line.scanCavityWidget.module.asg.amplitude
 		
-		self.color = aws["peakColor"]
 		self.color.value_changed.connect(self.updateCurve)
 		self.enabled.value_changed.connect(self.updateCurve)
 		self.normalizeIndex.value_changed.connect(self.updateCurve)
@@ -257,13 +281,16 @@ class peak_widget(ModuleWidget):
 		if self.module.active:
 			self.curve.setVisible(True)
 		else:
-			self.curve.setVisible(self.enabled and self.module not in self.line.scanCavityWidget.unusablePeaks)
+			self.curve.setVisible(self.enabled.attribute_value and self.module not in self.line.scanCavityWidget.unusablePeaks)
 		self.line.updateSizes()
 	def setpointToCurrentValue(self):
 		#get the last acquisition from the scope and put its average as the new setpoint
 		acquisition = self.module.parent.scope.getLastAcquisition(self.inputSignal_widget.attribute_value)
 		self.setpoint_widget.attribute_value = np.mean(acquisition)
-
+	def update_ival(self):
+		widget = self.ival
+		if self.isVisible() and not widget.editing():
+			widget.write_attribute_value_to_widget()
 
 
 class secondaryPitaya_widget(ModuleWidget):
@@ -321,6 +348,10 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		self.layout_duration.addWidget(self.duration)
 		self.attribute_layout.addLayout(self.layout_duration)
 		self.duration.value_changed.connect(self.scalePeaksWithNewDuration)
+		self.lowValue = aws["lowValue"]
+		self.highValue = aws["highValue"]
+		self.lowValue.value_changed.connect(self.updateAllPeaklines)
+		self.highValue.value_changed.connect(self.updateAllPeaklines)
 
 		#self.attribute_layout.removeWidget(aws['curve_name'])
 
@@ -467,6 +498,10 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		
 		
 		
+	def updateAllPeaklines(self):
+		for p in self.peakList:
+			p:peak_widget=p
+			p.line.updateFromPeakRanges()
 	def scalePeaksWithNewDuration(self):
 		pass
 	@property
@@ -635,6 +670,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		#'pyrpl.software_modules.scanningCavity' (most likely due to a circular import))
 
 		#get all the peaks, and check which ones are normalized
+		disabledPeaks = [p for p in peakList if not p.enabled]
 		peakList = [p for p in peakList if p.enabled]
 		indexToPeak = np.arange(len(peakList))
 		if len(peakList) == 0:
@@ -666,6 +702,9 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 				intersectionWithMains = np.logical_or(intersectionWithMains[0], intersectionWithMains[1])
 				intersectionMain_Normalized = intersectionWithMains[normalizedPeaks]
 				inaccessiblePeaks[normalizedPeaks[intersectionMain_Normalized]] = True
+				#for the group partition, the normalized peaks should always be in a group 
+				# containing both main peaks, let's modify the intersection array so that 
+				# they also "intersect" with any range that intersects with the main ones
 				normalizedPeaks = normalizedPeaks[~intersectionMain_Normalized]
 				intersections[normalizedPeaks,:] = np.logical_or(intersections[normalizedPeaks,:], intersectionWithMains)
 				intersections = np.logical_or(intersections, intersections.T)
@@ -675,7 +714,8 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		graphEdges = [(row[0],row[1]) for row in graphEdges]
 		G = nx.Graph(graphEdges)
 		groups = greedy_clique_partition(G)
-		return [[peakList[indexToPeak[i]] for i in group] for group in groups], [p for i,p in enumerate(peakList) if inaccessiblePeaks[i]]
+		unusableGroups = disabledPeaks + [p for i,p in enumerate(peakList) if inaccessiblePeaks[i]]
+		return [[peakList[indexToPeak[i]] for i in group] for group in groups], unusableGroups
 	
 	def setPeakGroups(self):
 		# sc : ScanningCavity = self.module
@@ -702,7 +742,6 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 			p.inCurrentPeakGroup = True
 
 		self.currentGroupIndex = newIndex
-
 
 
 class scanSwitcher:
