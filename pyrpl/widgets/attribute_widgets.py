@@ -373,7 +373,7 @@ class ResettableNumberAttributeWidget(NumberAttributeWidget):
         # replace self.widget with the container so BaseAttributeWidget layout stays correct
         self._reset_button = btn
         self.widget = container
-        self._set_widget_value(1)
+        # self._set_widget_value(1)
     def defaultValue(self):
         '''you can override this method to give different default values, even dynamic values'''
         return 0

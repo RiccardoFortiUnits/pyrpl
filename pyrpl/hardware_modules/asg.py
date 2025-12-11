@@ -69,6 +69,21 @@ class WaveformAttribute(SelectProperty):
                 y[x <= 1] = np.pi - np.arccos(x[x <= 1])
                 y[x > 1] = np.arccos(x[x > 1] - 2)
                 y = y/np.pi*2 -1
+            # elif waveform == 'sinc':
+            #     n = instance.data_length
+            #     # create a band-limited (low-frequency-only) waveform by constructing
+            #     # a spectrum with energy only in the lowest bins and inverse-transforming
+            #     cut = max(1, n // 16)  # adjust cutoff fraction as desired (smaller -> lower bandwidth)
+            #     # use rfft/irfft for real signal construction
+            #     spec = np.zeros(n // 2 + 1, dtype=complex)
+            #     # give the low-frequency bins unit magnitude with random phases
+            #     phases = np.exp(1j * 2 * np.pi * np.random.rand(cut + 1))
+            #     spec[:cut + 1] = phases
+            #     y = np.fft.irfft(spec, n)
+            #     # normalize to full-scale [-1, 1]
+            #     y = y - np.mean(y)
+            #     maxval = np.max(np.abs(y)) + 1e-20
+            #     y = y / maxval
             elif waveform == 'ramp':
                 y = np.linspace(-1.0, 3.0, instance.data_length,
                                 endpoint=False)
@@ -234,7 +249,7 @@ def make_asg(channel=0):
         amplitude = AsgAmplitudeAttribute(0x4 + _VALUE_OFFSET, bits=14, bitmask=0x3FFF,
                                   norm=2.**13, signed=True,
                                   max=1.0,
-                                  min=-1.0,
+                                  min=0.0,
                                   doc="amplitude of output waveform [volts]")
         amplitude_source = SelectRegister(0x4 + _VALUE_OFFSET, startBit=14, bits=1, options = {"from signal" : 0, "from memory" : 1}, default = "from memory", doc = "select if the the amplitude should be given with the Amplitude value, or if it should follow the value of the selected signal")
         

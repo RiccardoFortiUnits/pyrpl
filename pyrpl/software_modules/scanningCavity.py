@@ -73,7 +73,11 @@ class peakInput(SelectProperty):
 	def inputName(self, obj):
 		return f"{obj.redpitaya.scope.peakNames[obj.index]}_input"
 	def set_value(self, obj, val):
-		setattr(obj.redpitaya.scope, self.inputName(obj), val)
+		if obj.peakType == "secondary":
+			setattr(obj.redpitaya.scope, self.inputName(obj), val)
+		else:
+			for pitaya in obj.scanningCavity.usedPitayas:
+				setattr(pitaya.scope, self.inputName(obj), val)
 		return super().set_value(obj, val)
 	def get_value(self, obj):
 		return getattr(obj.redpitaya.scope, self.inputName(obj))
@@ -146,6 +150,7 @@ class mainTriggerSelector(nullableDigitalPinProperty):
 		setattr(hk, f"expansion_{val}_output", 1)
 		setattr(hk, f"pinState_{val}", "dsp")
 		setattr(hk, f"external_{val}_dspBitSelector", DSP_TRIGGERS[f"{selectedAsg}_trigger"])
+		obj.updateAomRamp()
 
 		return super().set_value(obj, val)
 
@@ -218,18 +223,19 @@ class rampVoltageEdge(FloatProperty):
 	connected edges, which will not cross each other (for example, trying to set on the lower edge a 
 	value higher than the current edge will not be permitted)'''
 	@staticmethod
-	def makeLowerAndUpperEdges(**kwargs):
-		return rampVoltageEdge._classGeneric_makeLowerAndUpperEdges(rampVoltageEdge, **kwargs)
+	def makeLowerAndUpperEdges(asgObject, **kwargs):
+		return rampVoltageEdge._classGeneric_makeLowerAndUpperEdges(rampVoltageEdge, asgObject, **kwargs)
 	@staticmethod
-	def _classGeneric_makeLowerAndUpperEdges(cls, **kwargs):
-		low = cls(None, True, **kwargs)
-		high = cls(low, False, **kwargs)
+	def _classGeneric_makeLowerAndUpperEdges(cls, asgObject, **kwargs):
+		low = cls(asgObject, None, True, **kwargs)
+		high = cls(asgObject, low, False, **kwargs)
 		low.otherEdge = high
 		return low, high
-	def __init__(self, otherEdge = None, isLowerEdge = True, min=-np.inf, max=np.inf, increment=0, log_increment=False, **kwargs):
+	def __init__(self, asgObject, otherEdge = None, isLowerEdge = True, min=-np.inf, max=np.inf, increment=0, log_increment=False, **kwargs):
 		super().__init__(min, max, increment, log_increment, **kwargs)
 		self.otherEdge = otherEdge
 		self.isLowerEdge = isLowerEdge
+		self.asgObject = asgObject
 
 	def validate_and_normalize(self, obj, value):
 		if self.isLowerEdge:
@@ -248,12 +254,12 @@ class rampVoltageEdge(FloatProperty):
 		otherValue = self.otherEdge.get_value(obj)
 		lowHigh = (val, otherValue) if self.isLowerEdge else (otherValue, val)
 		amp, offs = rampVoltageEdge.getAmpOffsFromLowHigh(*lowHigh)
-		asg = obj.asg
+		asg = getattr(obj, self.asgObject)
 		asg.amplitude = amp
 		asg.offset = offs
 		return super().set_value(obj, val)
 	def get_value(self, obj):		
-		asg = obj.asg
+		asg = getattr(obj, self.asgObject)
 		amp = asg.amplitude
 		offs = asg.offset
 		low, high = rampVoltageEdge.getLowHigFromAmpOffs(amp, offs)
@@ -261,8 +267,8 @@ class rampVoltageEdge(FloatProperty):
 class autoScaleRampVoltageEdge(rampVoltageEdge):
 	
 	@staticmethod
-	def makeLowerAndUpperEdges(**kwargs):
-		return rampVoltageEdge._classGeneric_makeLowerAndUpperEdges(autoScaleRampVoltageEdge, **kwargs)
+	def makeLowerAndUpperEdges(asgObject, **kwargs):
+		return rampVoltageEdge._classGeneric_makeLowerAndUpperEdges(autoScaleRampVoltageEdge, asgObject, **kwargs)
 	def set_value(self, obj, val):
 		if obj.autoscale_peaks:
 			obj:ScanningCavity=obj
@@ -534,6 +540,8 @@ class ScanningCavity(AcquisitionModule):
 					"main_acquisitionTrigger",
 					"threshold",
 					"hysteresis",
+					"aom_lowValue",
+					"aom_highValue",
 					]
 	_gui_attributes = _setup_attributes
 	_widget_class = ScanCavity_widget
@@ -607,12 +615,13 @@ class ScanningCavity(AcquisitionModule):
 	_usableTriggers = {key : val for key,val in Scope._trigger_sources.items() if "asg" in key}
 
 	usedAsg = asgSelector(_usableTriggers)
-	lowValue, highValue = autoScaleRampVoltageEdge.makeLowerAndUpperEdges(min = -1, max = 1)
+	lowValue, highValue = rampVoltageEdge.makeLowerAndUpperEdges("piezoAsg", min = -1, max = 1)
+	aom_lowValue, aom_highValue = rampVoltageEdge.makeLowerAndUpperEdges("aomAsg", min = -1, max = 1)
 	autoscale_peaks = BoolProperty(default=True, doc="If true, modifying the lowValue " \
 		"and highValue parameters will also modify the peak ranges, so that their position " \
 		"remains constant compared to the previous scan")
-	trigger_source = DynamicInstanceProperty(Asg0.trigger_source, lambda scanCavity : scanCavity.asg)
-	output_direct = DynamicInstanceProperty(Asg0.output_direct, lambda scanCavity : scanCavity.asg)
+	trigger_source = DynamicInstanceProperty(Asg0.trigger_source, lambda scanCavity : scanCavity.piezoAsg)
+	output_direct = DynamicInstanceProperty(Asg0.output_direct, lambda scanCavity : scanCavity.piezoAsg)
 
 	def updateScope(self):
 		'''
@@ -632,10 +641,13 @@ class ScanningCavity(AcquisitionModule):
 	def scopes(self):
 		return [pitaya.scope for pitaya in self.usedPitayas]
 	@property
-	def asg(self):
+	def piezoAsg(self):
 		return self.mainPitaya.asg0 if self.usedAsg == "asg0" else self.mainPitaya.asg1
+	@property
+	def aomAsg(self):
+		return self.mainPitaya.asg1 if self.usedAsg == "asg0" else self.mainPitaya.asg0
 	def updateRamp(self, oldValues = None):
-		asg = self.asg
+		asg = self.piezoAsg
 		asg.waveform = "ramp"
 		asg.frequency = 0.5 / self.duration * .99#let's make the ramp slightly slower, so we are sure that the sope triggers at every period
 		if oldValues is not None:
@@ -646,6 +658,18 @@ class ScanningCavity(AcquisitionModule):
 		ScanningCavity.highValue.value_updated(self)
 		ScanningCavity.trigger_source.value_updated(self)
 		ScanningCavity.output_direct.value_updated(self)
+		self.updateAomRamp(oldValues)
+	def updateAomRamp(self, oldValues = None):
+		asg = self.aomAsg
+		asg.waveform = "halframp"
+		asg.offset = -.5
+		asg.frequency = 1 / self.duration * .99#let's make the ramp slightly slower, so we are sure that the sope triggers at every period
+		if oldValues is not None and len(oldValues) > 2:
+			self.output_direct = oldValues[2]
+		asg.trigger_source = 'ext_positive_edge'
+		asg.external_trigger_pin = self.main_acquisitionTrigger
+	
+
 			
 	def _rolling_mode_allowed(self):
 		return False
