@@ -293,7 +293,7 @@ def make_asg(channel=0):
         external_trigger_pin = DynamicInstanceProperty(HK.asgExternalTrigger, lambda asg : asg.redpitaya.hk)
         # external_trigger_pin = digitalPinRegister(- addr_base + HK.addr_base + 0x28, startBit=4)
 
-        repetitions = IntRegister(0x18, doc = 'number of repetitions of the curve. If 0, the curve is repeated indefinetly')
+        repetitions = IntRegister(0x18 + _VALUE_OFFSET, doc = 'number of repetitions of the curve. If 0, the curve is repeated indefinetly')
 
         def _noise_distribution(self):
             """

@@ -145,14 +145,14 @@ class mainTriggerSelector(nullableDigitalPinProperty):
 		val = nullableDigitalPinProperty.pinIndexToString(val)
 		if val is None:
 			return super().set_value(obj, val)
+		ret = super().set_value(obj, val)
 		hk : HK = obj.mainPitaya.hk
 		selectedAsg = obj.usedAsg
 		setattr(hk, f"expansion_{val}_output", 1)
 		setattr(hk, f"pinState_{val}", "dsp")
 		setattr(hk, f"external_{val}_dspBitSelector", DSP_TRIGGERS[f"{selectedAsg}_trigger"])
 		obj.updateAomRamp()
-
-		return super().set_value(obj, val)
+		return ret 
 
 class scopeTriggerSelector(nullableDigitalPinProperty):
 	'''this property sets the digital pin that trigger the scope acquisition. Can also be used for the main pitaya, if the ramp trigger is external'''
@@ -270,17 +270,32 @@ class autoScaleRampVoltageEdge(rampVoltageEdge):
 	def makeLowerAndUpperEdges(asgObject, **kwargs):
 		return rampVoltageEdge._classGeneric_makeLowerAndUpperEdges(autoScaleRampVoltageEdge, asgObject, **kwargs)
 	def set_value(self, obj, val):
+		'''
+			we have this correlation between the peak range timings and voltages
+
+			time		0		aT	bT		T
+			voltage		v0		va	vb		v1
+
+			we can calculate va as va = v0 + a * (v1-v0)
+			
+			if now we change the span of the scan, we will have new voltages associated with time 0 and T, namely v2 and v3. but the voltages of the peak range shouldn't change. So we have
+			
+			time		0		a'T	b'T		T
+			voltage		v2		va	vb		v3
+
+			From which we obtain that a' = (v0 - v2 + a * (v1-v0)) / (v3-v2)
+		'''
 		if obj.autoscale_peaks:
 			obj:ScanningCavity=obj
 			currentValue = self.get_value(obj)
 			otherValue = self.otherEdge.get_value(obj)
-			low, high = (currentValue, otherValue) if self.isLowerEdge else (otherValue, currentValue)
+			v0, v1 = (currentValue, otherValue) if self.isLowerEdge else (otherValue, currentValue)
+			v2, v3 = (val, otherValue) if self.isLowerEdge else (otherValue, val)
 			peakRanges = np.array([[p.left, p.right] for p in obj.usedPeaks])
-			d = obj.duration
-			peakRanges_voltages = low + (high - low) * peakRanges / d
-			newLow, newHigh = (val, otherValue) if self.isLowerEdge else (otherValue, val)
-			peakRanges_newRatios = (peakRanges_voltages - newLow) / (newHigh - newLow)
-			peakRanges_newTimings = np.clip(peakRanges_newRatios,0,1) * d
+			T = obj.duration
+			peakRatios = peakRanges / T#normalize to respect to T
+			newPeakRatios = (v0 - v2 + peakRatios * (v1-v0)) / (v3-v2)
+			peakRanges_newTimings = np.clip(newPeakRatios,0,1) * T
 			for i, p in enumerate(obj.usedPeaks):
 				p.setLeftAndRight(*peakRanges_newTimings[i])
 		return super().set_value(obj, val)
@@ -615,7 +630,7 @@ class ScanningCavity(AcquisitionModule):
 	_usableTriggers = {key : val for key,val in Scope._trigger_sources.items() if "asg" in key}
 
 	usedAsg = asgSelector(_usableTriggers)
-	lowValue, highValue = rampVoltageEdge.makeLowerAndUpperEdges("piezoAsg", min = -1, max = 1)
+	lowValue, highValue = autoScaleRampVoltageEdge.makeLowerAndUpperEdges("piezoAsg", min = -1, max = 1)
 	aom_lowValue, aom_highValue = rampVoltageEdge.makeLowerAndUpperEdges("aomAsg", min = -1, max = 1)
 	autoscale_peaks = BoolProperty(default=True, doc="If true, modifying the lowValue " \
 		"and highValue parameters will also modify the peak ranges, so that their position " \
@@ -653,6 +668,7 @@ class ScanningCavity(AcquisitionModule):
 		if oldValues is not None:
 			self.output_direct = oldValues[0]
 			self.trigger_source = oldValues[1]
+		asg.advanced_trigger_delay = self.duration / 8e-9#let's reduce the asg trigger delay (so that we can keep the synchronization even at high frequencies)
 
 		ScanningCavity.lowValue.value_updated(self)
 		ScanningCavity.highValue.value_updated(self)
@@ -663,7 +679,8 @@ class ScanningCavity(AcquisitionModule):
 		asg = self.aomAsg
 		asg.waveform = "halframp"
 		asg.offset = -.5
-		asg.frequency = 1 / self.duration * .99#let's make the ramp slightly slower, so we are sure that the sope triggers at every period
+		asg.frequency = 1 / self.duration
+		asg.advanced_trigger_delay = self.duration / 2 / 8e-9
 		if oldValues is not None and len(oldValues) > 2:
 			self.output_direct = oldValues[2]
 		asg.trigger_source = 'ext_positive_edge'
