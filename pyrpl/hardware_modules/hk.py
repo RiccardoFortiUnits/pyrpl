@@ -29,8 +29,14 @@ class HK(HardwareModule):
 						['external_N' + str(i) + "_dspBitSelector" for i in range(8)] + \
 						['fastSwitch_activeTime'] + \
 						['fastSwitch_inactiveTime'] + \
-						['fastSwitch_triggerPin'] + \
 						['fastSwitch_channelsDelay'] + \
+						['fastSwitch_triggerPin'] + \
+						['pi_blast_inactive_TweezerPi'] + \
+						['pi_blast_pi'] + \
+						['pi_blast_inactive_PiBlast'] + \
+						['pi_blast_blast'] + \
+						['pi_blast_inactive_BlastTweezer'] + \
+						['piBlast_triggerPin'] + \
 						['input1'] + \
 						['input2'] +\
 						['genericModuleTrigger']
@@ -107,11 +113,12 @@ class HK(HardwareModule):
 	for i in range(8):
 		for (sign, j) in [('P', 1), ('N', 0)]:
 			#todo: I messed up the order in the fpga. We should put it back in a proper manner 
-			locals()[f'pinState_{sign}{i}'] = SelectRegister(0x38 - j*4, startBit = i*2, doc=f"chooses the origin of value set into expansion_{sign}{i}", options={
+			locals()[f'pinState_{sign}{i}'] = SelectRegister(0x38 - j*4, startBit = i*3, doc=f"chooses the origin of value set into expansion_{sign}{i}", options={
 										"memory": 0,
 										"otherPin": 1,
 										"dsp": 2,
-										"fastSwitch": 3
+										"fastSwitch": 3,
+										"tweezer_πpulse" : 4
 										})
 			
 			locals()[f'external_{sign}{i}_otherPinSelector'] = digitalPinRegister(0x50 + 4*i, startBit = 0 + (4+5)*j, doc=f"if pinState_{sign}{i} == otherPin, the output of this pin will follow the output of the selected pin")
@@ -140,30 +147,10 @@ class HK(HardwareModule):
 		self.fastSwitch_activeTime = activeTime
 		self.fastSwitch_inactiveTime = inactiveTime
 		self.fastSwitch_channelsDelay = channelsDelay
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
+
+	piBlast_triggerPin = digitalPinRegister(0x3C, startBit=20)
+	pi_blast_inactive_TweezerPi = 		GainRegister(0x48, bits=32, startBit=0, norm=125e6, signed = False)	
+	pi_blast_pi = 						GainRegister(0x44, bits=8, startBit=24, norm=125e6, signed = False)
+	pi_blast_inactive_PiBlast = 		GainRegister(0x44, bits=8, startBit=16, norm=125e6, signed = False)
+	pi_blast_blast = 					GainRegister(0x44, bits=8, startBit=8, norm=125e6, signed = False)
+	pi_blast_inactive_BlastTweezer = 	GainRegister(0x44, bits=8, startBit=0, norm=125e6, signed = False)

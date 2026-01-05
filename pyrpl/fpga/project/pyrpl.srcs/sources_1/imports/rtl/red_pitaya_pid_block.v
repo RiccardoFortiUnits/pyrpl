@@ -140,7 +140,9 @@ always @(posedge clk_i) begin
       kp_reg  <= {15+GAINBITS-PSR{1'b0}};
    end
    else begin
-      kp_reg <= kp_mult[15+GAINBITS-1:PSR] ;
+      if(!pause_p)begin
+         kp_reg <= kp_mult[15+GAINBITS-1:PSR] ;
+      end
    end
 end
 

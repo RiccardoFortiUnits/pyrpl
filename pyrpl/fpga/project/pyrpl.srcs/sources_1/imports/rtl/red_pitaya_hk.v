@@ -78,9 +78,10 @@ wire [DWD*2-1:0] allDspInputs = {dsp_input1, dsp_input0};
 localparam  s_fromMemory 		= 0,
 			s_fromOtherPin 		= 1,
 			s_fromDsp 			= 2,
-			s_fromFastSwitch 	= 3;
-reg [DWE*2 -1:0] pinState_p, pinState_n;
-wire [1:0] pinStates [DWE*2 -1:0];
+			s_fromFastSwitch 	= 3,
+			s_fromTweezerPiMode = 4;
+reg [DWE*3 -1:0] pinState_p, pinState_n;
+wire [2:0] pinStates [DWE*2 -1:0];
 
 reg  [DLE -1:0] otherPinSelectorBit_p [DWE -1:0], otherPinSelectorBit_n [DWE -1:0];
 wire [DLE -1:0] otherPinSelectorBit [DWE*2 -1:0];
@@ -91,8 +92,8 @@ wire [DLD -1:0] dspSelectorBit [DWE*2 -1:0];
 generate
 	genvar gi;
 	for(gi=0;gi<DWE;gi=gi+1)begin
-		assign pinStates			[gi]     =			pinState_n				[gi*2	+ 2	  -1-:2  ];
-		assign pinStates			[gi+DWE] =			pinState_p				[gi*2	+ 2	  -1-:2  ];
+		assign pinStates			[gi]     =			pinState_n				[gi*3	+ 3	  -1-:3  ];
+		assign pinStates			[gi+DWE] =			pinState_p				[gi*3	+ 3	  -1-:3  ];
 		assign otherPinSelectorBit	[gi]     =			otherPinSelectorBit_n	[gi];
 		assign otherPinSelectorBit	[gi+DWE] =			otherPinSelectorBit_p	[gi];
 		assign dspSelectorBit		[gi]     =			dspSelectorBit_n		[gi];
@@ -101,8 +102,14 @@ generate
 endgenerate
 
 wire [1:0] fastSwitchOutputs;
+wire tweezer, pi, blast;
 reg[7:0] nOfActivePeriods, nOfInactivePeriods, switchPhase;
-reg[DLE -1:0] fastSwitch_triggerPin;
+reg [31:0] nOfPeriods_inactive_TweezerPi;
+reg[7:0] nOfPeriods_pi, nOfPeriods_inactive_PiBlast, nOfPeriods_blast, nOfPeriods_inactive_BlastTweezer;
+reg[DLE -1:0] fastSwitch_triggerPin, piBlast_triggerPin;
+wire fastSwitch_trigger, piBlast_trigger;
+assign fastSwitch_trigger = allInputPins[fastSwitch_triggerPin] ;//& !piBlast_trigger;
+assign piBlast_trigger    = allInputPins[piBlast_triggerPin]    ;//& !fastSwitch_trigger; (sadly, it creates a loop)
 
 reg [DWE*2-1:0] allOutputPins;
 assign {exp_p_dat_o, exp_n_dat_o} = allOutputPins;
@@ -113,10 +120,11 @@ if (rstn_i == 1'b0) begin
 end else begin
 	for(i=0;i<DWE*2;i=i+1)begin
 		case (pinStates[i])
-			s_fromMemory:		begin allOutputPins[i] <= allMemoryPins[i]; end
-			s_fromOtherPin:		begin allOutputPins[i] <= allInputPins[otherPinSelectorBit[i]]; end
-			s_fromDsp:			begin allOutputPins[i] <= allDspInputs[dspSelectorBit[i]]; end
-			s_fromFastSwitch:	begin allOutputPins[i] <= i < DWE ? fastSwitchOutputs[1] : fastSwitchOutputs[0]; end
+			s_fromMemory:			begin allOutputPins[i] <= allMemoryPins[i]; end
+			s_fromOtherPin:			begin allOutputPins[i] <= allInputPins[otherPinSelectorBit[i]]; end
+			s_fromDsp:				begin allOutputPins[i] <= allDspInputs[dspSelectorBit[i]]; end
+			s_fromFastSwitch:		begin allOutputPins[i] <= i < DWE ? fastSwitchOutputs[1] : (fastSwitchOutputs[0] | blast); end
+			s_fromTweezerPiMode:	begin allOutputPins[i] <= i < DWE ? tweezer : pi; end
 			default : /* default */;
 		endcase
 	end
@@ -127,12 +135,31 @@ doubleFastSwitcher_HalfStart#(
 )fs(
 		.clk(clk_i),
 		.reset(!rstn_i),
-		.trigger(allInputPins[fastSwitch_triggerPin]),
+		.trigger(fastSwitch_trigger),
 		.nOfPeriodsActive(nOfActivePeriods),
 		.nOfPeriodsInactive(nOfInactivePeriods),
 		.phase(switchPhase),
 		.out1(fastSwitchOutputs[0]),
 		.out2(fastSwitchOutputs[1])
+);
+tweezer_pi_blast#(
+    .maxSmallTimes(255),
+    .maxLongTimes(1<<31)
+)tpb(
+	.clk								(clk_i),
+	.reset								(!rstn_i),
+	.trigger							(piBlast_trigger),
+	.nOfPeriods_inactive_TweezerPi		(nOfPeriods_inactive_TweezerPi),
+	.nOfPeriods_pi						(nOfPeriods_pi),
+	.nOfPeriods_inactive_PiBlast		(nOfPeriods_inactive_PiBlast),
+	.nOfPeriods_blast					(nOfPeriods_blast),
+	.nOfPeriods_inactive_BlastTweezer	(nOfPeriods_inactive_BlastTweezer),
+	.tweezer							(tweezer),
+	.pi									(pi),
+	.blast								(blast)
+	//.running							(running) 	it's not necessary, assuming that the triggers for the 
+													// fastSwitch and the tweezerPiBlast won't ever arrive in the same time frame. In case, you'll have to 
+													// get a signal "running" out of the fastSwitch too, and each module can start only if the other is not running
 );
 
 //triggers for external modules
@@ -223,8 +250,14 @@ if (rstn_i == 1'b0) begin
 
 	nOfActivePeriods <= 0;
 	nOfInactivePeriods <= 0;
-	fastSwitch_triggerPin <= 0;
 	switchPhase <= 0;
+	fastSwitch_triggerPin <= 0;
+	nOfPeriods_inactive_TweezerPi <= 0;
+	nOfPeriods_pi <= 0;
+	nOfPeriods_inactive_PiBlast <= 0;
+	nOfPeriods_blast <= 0;
+	nOfPeriods_inactive_BlastTweezer <= 0;
+	piBlast_triggerPin <= 0;
 end else if (sys_wen) begin
 	if (sys_addr[19:0]==20'h0c)   digital_loop <= sys_wdata[0];
 
@@ -238,8 +271,10 @@ end else if (sys_wen) begin
 	if (sys_addr[19:0]==20'h30)   led_o        <= sys_wdata[DWL-1:0];
 	if (sys_addr[19:0]==20'h34)   {pinState_p} <= sys_wdata;
 	if (sys_addr[19:0]==20'h38)   {pinState_n} <= sys_wdata;
-	if (sys_addr[19:0]==20'h3c)   {fastSwitch_triggerPin, nOfInactivePeriods, nOfActivePeriods} <= sys_wdata;
+	if (sys_addr[19:0]==20'h3c)   {piBlast_triggerPin, fastSwitch_triggerPin, nOfInactivePeriods, nOfActivePeriods} <= sys_wdata;
 	if (sys_addr[19:0]==20'h40)   {switchPhase} <= sys_wdata;
+	if (sys_addr[19:0]==20'h44)   {nOfPeriods_pi, nOfPeriods_inactive_PiBlast, nOfPeriods_blast, nOfPeriods_inactive_BlastTweezer} <= sys_wdata;
+	if (sys_addr[19:0]==20'h48)   {nOfPeriods_inactive_TweezerPi} <= sys_wdata;
 			
 	if (sys_addr[19:0]==20'h50)  {dspSelectorBit_p[0], otherPinSelectorBit_p[0], dspSelectorBit_n[0], otherPinSelectorBit_n[0]} <= sys_wdata;
 	if (sys_addr[19:0]==20'h54)  {dspSelectorBit_p[1], otherPinSelectorBit_p[1], dspSelectorBit_n[1], otherPinSelectorBit_n[1]} <= sys_wdata;
@@ -279,8 +314,10 @@ end else begin
 		20'h00030: begin sys_ack <= sys_en;  sys_rdata <= {{32-DWL{1'b0}}, led_o}             ; end
 		20'h00034: begin sys_ack <= sys_en;  sys_rdata <= {pinState_p}             ; end
 		20'h00038: begin sys_ack <= sys_en;  sys_rdata <= {pinState_n}             ; end
-		20'h0003c: begin sys_ack <= sys_en;  sys_rdata <= { fastSwitch_triggerPin, nOfInactivePeriods, nOfActivePeriods}             ; end
+		20'h0003c: begin sys_ack <= sys_en;  sys_rdata <= { piBlast_triggerPin, fastSwitch_triggerPin, nOfInactivePeriods, nOfActivePeriods}             ; end
 		20'h00040: begin sys_ack <= sys_en;  sys_rdata <= { switchPhase}             ; end
+		20'h00044: begin sys_ack <= sys_en;  sys_rdata <= {nOfPeriods_pi, nOfPeriods_inactive_PiBlast, nOfPeriods_blast, nOfPeriods_inactive_BlastTweezer}             ; end
+		20'h00048: begin sys_ack <= sys_en;  sys_rdata <= {nOfPeriods_inactive_TweezerPi}             ; end
 
 		20'h00050: begin sys_ack <= sys_en;  sys_rdata <= { dspSelectorBit_p[0], otherPinSelectorBit_p[0], dspSelectorBit_n[0], otherPinSelectorBit_n[0]}             ; end
 		20'h00054: begin sys_ack <= sys_en;  sys_rdata <= { dspSelectorBit_p[1], otherPinSelectorBit_p[1], dspSelectorBit_n[1], otherPinSelectorBit_n[1]}             ; end

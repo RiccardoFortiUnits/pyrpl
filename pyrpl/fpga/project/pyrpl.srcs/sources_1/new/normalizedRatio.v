@@ -9,7 +9,8 @@ module normalizedRatio#(
 	input [inputSize -1:0] min,
 	input [inputSize -1:0] max,
 	input [inputSize -1:0] middle,
-	output [ratioSize -1:0] ratio
+	output [ratioSize -1:0] ratio,
+	output [inputSize -1:0] difference
 );
 
 wire [inputSize -1:0] middle_minus_min, max_minus_min;
@@ -39,7 +40,7 @@ fractionalDivider #(
 	.b			(max_minus_min),
 	.result		(ratio)
 );
-
+assign difference = middle_minus_min;
 endmodule
 /*
 

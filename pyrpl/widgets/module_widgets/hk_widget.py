@@ -64,7 +64,8 @@ class HkWidget(ModuleWidget):
 
         self.lay_h2 = QtWidgets.QHBoxLayout()
         self.main_lay.addLayout(self.lay_h2)
-        for el in  ['fastSwitch_activeTime', 'fastSwitch_inactiveTime', 'fastSwitch_triggerPin', 'fastSwitch_channelsDelay']:
+        for el in  ['fastSwitch_activeTime', 'fastSwitch_inactiveTime', 'fastSwitch_channelsDelay', 'fastSwitch_triggerPin',
+                    'pi_blast_inactive_TweezerPi', 'pi_blast_pi', 'pi_blast_inactive_PiBlast', 'pi_blast_blast', 'pi_blast_inactive_BlastTweezer', 'piBlast_triggerPin']:
             widget = self.attribute_widgets[el]
             self.attribute_layout.removeWidget(widget)
             self.lay_h2.addWidget(widget)
