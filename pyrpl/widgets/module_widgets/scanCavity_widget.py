@@ -99,6 +99,11 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
 			self.setLine(newLeft, self.line().y1(), right, self.line().y1())
 			self.updateBarPositions()
 			self.scanCavityWidget.setPeakGroups()
+	def updateGeneric(self):
+		self.updateFromPeakRanges()
+		self.updateSetpoint()
+		self.updateBarPositions()
+		self.scanCavityWidget.setPeakGroups()
 		
 	def updateRightValue(self, newRight):
 		left = self.line().x1()
@@ -216,13 +221,17 @@ class peak_widget(ModuleWidget):
 		self.normalizeIndex = aws["normalizeIndex"]
 		self.minTime = aws["left"]
 		self.maxTime = aws["right"]
+		self.minTime.setVisible(False)
+		self.maxTime.setVisible(False)
+		self.center = aws["center"]
+		self.rangeSize = aws["size"]
 		self.minValue = aws["height"]
 		self.color = aws["peakColor"]
 		self.activationLayout = newLayoutWithWidgets([self.alwaysActive, self.enabled, self.locking, self.normalizeIndex])
 		self.pidParametersLayout = newLayoutWithWidgets([self.p, self.i, self.ival])
 		self.pidConfigsLayout = newLayoutWithWidgets([self.min_voltage, self.max_voltage])
 		self.signalLayout = newLayoutWithWidgets([self.input_widget, self.output_direct, self.enablingBit])
-		self.rangeLayout = newLayoutWithWidgets([self.minTime, self.maxTime, self.minValue, self.color])
+		self.rangeLayout = newLayoutWithWidgets([self.minTime, self.maxTime, self.center, self.rangeSize, self.minValue, self.color])
 
 		self.setpoint = aws["timeSetpoint"]
 		self.setpoint.setVisible(False)
@@ -230,8 +239,10 @@ class peak_widget(ModuleWidget):
 		#     self.attribute_layout.removeWidget(aws["normalizeIndex"])
 
 		# self.attribute_layout.removeWidget(self.setpoint)
-		self.minTime.value_changed.connect(lambda : self.line.updateLeftValue(self.minTime.attribute_value))
-		self.maxTime.value_changed.connect(lambda : self.line.updateRightValue(self.maxTime.attribute_value))
+		# self.minTime.value_changed.connect(lambda : self.line.updateLeftValue(self.minTime.attribute_value))
+		# self.maxTime.value_changed.connect(lambda : self.line.updateRightValue(self.maxTime.attribute_value))
+		self.center.value_changed.connect(lambda : self.line.updateGeneric())
+		self.rangeSize.value_changed.connect(lambda : self.line.updateGeneric())
 		self.minValue.value_changed.connect(lambda : self.line.updateHeight(self.minValue.attribute_value))
 		
 		# self.button_activatePID = QtWidgets.QPushButton("lock peak")
@@ -329,29 +340,32 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		self.init_attribute_layout()
 		aws = self.attribute_widgets
 
-		self.layout_channels = QtWidgets.QVBoxLayout()
-		self.layout_ch1 = QtWidgets.QHBoxLayout()
-		self.layout_math = QtWidgets.QHBoxLayout()
-		self.layout_channels.addLayout(self.layout_ch1)
-		self.layout_channels.addLayout(self.layout_math)
+		self.asg_layout = QtWidgets.QHBoxLayout()
+		self.scope_layout = QtWidgets.QHBoxLayout()
+		self.attribute_layout.addLayout(self.asg_layout)
+		self.attribute_layout.addLayout(self.scope_layout)
 
-		self.attribute_layout.removeWidget(aws['input1'])
+		for value in aws.values():
+			self.attribute_layout.removeWidget(value)
+		def fillLayoutFromAws(layout, widgetNames):
+			widgets = [aws[s] for s in widgetNames]
+			for widget in widgets:
+				layout.addWidget(widget)
+			return widgets
+		
+		(self.usedAsg, self.scan_ampl, self.scan_offs,
+		self.trigger_source, self.output_direct, self.main_acquisitionTrigger)= fillLayoutFromAws(self.asg_layout, [ 
+		"usedAsg", "scan_ampl", "scan_offs",
+		"trigger_source", "output_direct", "main_acquisitionTrigger"])
+		
+		(self.input, self.duration, self.ch1_invert, )= fillLayoutFromAws(self.scope_layout, [ 
+		"input1", "duration", "ch1_invert", ])
 
-		self.layout_ch1.addWidget(aws['input1'])
-
-
-		self.attribute_layout.addLayout(self.layout_channels)
-
-		self.attribute_layout.removeWidget(aws['duration'])
-		self.layout_duration = QtWidgets.QVBoxLayout()
-		self.duration = aws['duration']
-		self.layout_duration.addWidget(self.duration)
-		self.attribute_layout.addLayout(self.layout_duration)
 		self.duration.value_changed.connect(self.scalePeaksWithNewDuration)
-		self.lowValue = aws["lowValue"]
-		self.highValue = aws["highValue"]
-		self.lowValue.value_changed.connect(self.updateAllPeaklines)
-		self.highValue.value_changed.connect(self.updateAllPeaklines)
+		# self.lowValue.value_changed.connect(self.updateAllPeaklines)
+		# self.highValue.value_changed.connect(self.updateAllPeaklines)
+		self.scan_ampl.value_changed.connect(self.updateAllPeaklines)
+		self.scan_offs.value_changed.connect(self.updateAllPeaklines)
 
 		#self.attribute_layout.removeWidget(aws['curve_name'])
 

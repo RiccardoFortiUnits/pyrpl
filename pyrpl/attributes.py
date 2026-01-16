@@ -32,7 +32,8 @@ from .widgets.attribute_widgets import BoolAttributeWidget, \
 									   PlotAttributeWidget, \
 									   BasePropertyListPropertyWidget, \
 									   ComplexAttributeWidget, \
-									   ColorAttributeWidget
+									   ColorAttributeWidget, \
+									   GroupedAttributeWidget
 
 from .curvedb import CurveDB
 from collections import OrderedDict
@@ -44,6 +45,7 @@ import ast
 from typing import Type, List, Any, TypeVar
 import weakref
 from qtpy import QtGui
+from typing import Literal
 
 logger = logging.getLogger(name=__name__)
 
@@ -208,13 +210,13 @@ class BaseProperty(BaseAttribute):
 class propertyWrapper(BaseAttribute):
 	def __getattr__(self, name):
 		# Avoid recursion by directly accessing internal attributes
-		if name in ('_prop', '_forcedInstanceName', 'dynamicAccessor', 'extraFunctionToDoAfterSettingValue', 'value_updated'):
+		if name in ('_prop', '_forcedInstanceName', 'dynamicAccessor', 'extraFunctionToDoAfterSettingValue', 'extraFunctionToDoBeforeSettingValue', 'value_updated', 'canISetTheNewValue'):
 			return object.__getattribute__(self, name)
 		return getattr(object.__getattribute__(self, '_prop'), name)
 
 	def __setattr__(self, name, value):
 		# Avoid recursion by directly setting internal attributes
-		if name in ('_prop', '_forcedInstanceName', 'dynamicAccessor', 'extraFunctionToDoAfterSettingValue', 'value_updated'):
+		if name in ('_prop', '_forcedInstanceName', 'dynamicAccessor', 'extraFunctionToDoAfterSettingValue', 'extraFunctionToDoBeforeSettingValue', 'value_updated', 'canISetTheNewValue'):
 			object.__setattr__(self, name, value)
 		else:
 			setattr(object.__getattribute__(self, '_prop'), name, value)
@@ -289,6 +291,34 @@ class MultipleDynamicInstanceProperty(propertyWrapper):
 	
 	def value_updated(self, module, value = None, appendix = []):
 		return self._prop.value_updated(self.dynamicAccessor(module), value, appendix)
+
+
+class ExpandableProperty(propertyWrapper):
+	'''wrapper for properties. It allows to execute extra functions before and after the normal __set__ function'''
+	def __init__(self, prop, extraFunctionToDoAfterSettingValue = None,
+			  extraFunctionToDoBeforeSettingValue = None, canISetTheNewValue = None):# all the extra functions are of the type f(self, instance, value)
+		self._prop = prop
+		self.extraFunctionToDoAfterSettingValue = extraFunctionToDoAfterSettingValue
+		self.extraFunctionToDoBeforeSettingValue = extraFunctionToDoBeforeSettingValue
+		self.canISetTheNewValue = canISetTheNewValue
+
+	def __get__(self, instance, owner):
+		# Ignore the passed instance, use the forced one
+		if instance is None:
+			return self
+		return self._prop.__get__(instance, owner)
+
+	def __set__(self, instance, value):
+		if self.canISetTheNewValue is not None and not self.canISetTheNewValue():
+			return
+		if self.extraFunctionToDoBeforeSettingValue is not None:
+			self.extraFunctionToDoBeforeSettingValue(self, instance, value)
+		self._prop.__set__(instance, value)
+		if self.extraFunctionToDoAfterSettingValue is not None:
+			self.extraFunctionToDoAfterSettingValue(self, instance, value)
+	
+	def value_updated(self, module, value = None, appendix = []):
+		return self._prop.value_updated(module, value, appendix)
 
 
 
@@ -1339,6 +1369,7 @@ class StringProperty(BaseProperty):
 	"""
 	_widget_class = StringAttributeWidget
 	default = ""
+	widgetLength = 200
 
 	def validate_and_normalize(self, obj, value):
 		"""
@@ -1779,6 +1810,7 @@ class digitalPinProperty(StringProperty):
 	"""
 	_widget_class = StringAttributeWidget
 	default = "N0"
+	widgetLength = 20
 
 	def validate_and_normalize(self, obj, value):
 		"""
@@ -1904,3 +1936,43 @@ class ColorProperty(BaseProperty):
 		Converts a hex string '#RRGGBB' or 'RRGGBB' to an integer.
 		"""
 		return self.validate_and_normalize(None, hex_str)
+	
+
+class rangeProperty(BaseProperty):
+	_widget_class = GroupedAttributeWidget
+	def __init__(self, realSelectors, realSelectorsType: Literal["left+right", "center+ampl"], **kwargs):
+		super().__init__(**kwargs) 
+		if realSelectorsType == "center+ampl":
+			self.center = ExpandableProperty(realSelectors[0], 	extraFunctionToDoAfterSettingValue=self.updateOtherSelector)
+			self.ampl = ExpandableProperty(realSelectors[1], 	extraFunctionToDoAfterSettingValue=self.updateOtherSelector)
+			self.left = ExpandableProperty(FloatProperty(), 	extraFunctionToDoAfterSettingValue=self.updateOtherSelector)
+			self.right = ExpandableProperty(FloatProperty(), 	extraFunctionToDoAfterSettingValue=self.updateOtherSelector)
+		else:
+			self.left = ExpandableProperty(realSelectors[0], 	extraFunctionToDoAfterSettingValue=self.updateOtherSelector)
+			self.right = ExpandableProperty(realSelectors[1], 	extraFunctionToDoAfterSettingValue=self.updateOtherSelector)
+			self.center = ExpandableProperty(FloatProperty(), 	extraFunctionToDoAfterSettingValue=self.updateOtherSelector)
+			self.ampl = ExpandableProperty(FloatProperty(), 	extraFunctionToDoAfterSettingValue=self.updateOtherSelector)
+		self.alreadyUpdated = False
+
+		self.subProperties = {
+			"left+right" : [self.left, self.right], 
+			"center+ampl" : [self.center, self.ampl]
+		}
+
+	def updateOtherSelector(self, currentProperty, instance, value):
+		if not self.alreadyUpdated:
+			try:
+				self.alreadyUpdated = True
+				if currentProperty in [self.left, self.right]:
+					#let's update the center and amplitude properties
+					right = self.right.__get__(instance, self)
+					left = self.left.__get__(instance, self)
+					self.center.__set__(instance, (right + left) / 2)
+					self.ampl.__set__(instance, (right - left) / 2)
+				elif currentProperty in [self.center, self.ampl]:
+					center = self.center.__get__(instance, self)
+					ampl = self.ampl.__get__(instance, self)
+					self.left.__set__(instance, center - ampl)
+					self.right.__set__(instance, center + ampl)
+			finally:
+				self.alreadyUpdated = False

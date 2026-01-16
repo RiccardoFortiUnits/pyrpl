@@ -186,7 +186,7 @@ class StringAttributeWidget(BaseAttributeWidget):
     """
     def _make_widget(self):
         self.widget = QtWidgets.QLineEdit()
-        self.widget.setMaximumWidth(200)
+        self.widget.setMaximumWidth(self.attribute_descriptor.widgetLength)
         self.widget.textChanged.connect(self.write_widget_value_to_attribute)
 
     def _get_widget_value(self):
@@ -1111,3 +1111,61 @@ class CurveSelectAttributeWidget(SelectAttributeWidget):
                                         self.attribute_name, self.new_value, self.options)
             index = 0
         self.widget.setCurrentRow(index)
+class GroupedAttributeWidget(BaseAttributeWidget):
+	"""
+	Widget that organizes child widgets into groups with a list selector.
+	
+	attribute_descriptor.subWidgets should be a dict mapping group names to lists of widgets.
+	"""
+	
+	def _make_widget(self):
+		# Create main container
+		self.widget = QtWidgets.QWidget()
+		self.main_layout = QtWidgets.QHBoxLayout()
+		self.widget.setLayout(self.main_layout)
+		
+		# Create group selector list
+		self.group_list = QtWidgets.QListWidget()
+		self.group_list.itemSelectionChanged.connect(self._on_group_selected)
+		
+		# Create stacked widget to hold groups
+		self.stacked_widget = QtWidgets.QStackedWidget()
+		
+		# Build groups from attribute descriptor
+		self.sub_properties = self.attribute_descriptor.subProperties
+		self.group_names = list(self.sub_properties.keys())
+		
+		for group_name in self.group_names:
+			# Create group container
+			group_container = QtWidgets.QWidget()
+			group_layout = QtWidgets.QVBoxLayout()
+			group_container.setLayout(group_layout)
+			
+			# Add widgets for this group
+			for property in self.sub_properties[group_name]:
+				widget = property._create_widget(self.module)
+				group_layout.addWidget(widget)
+			group_layout.addStretch()
+			
+			# Add to stacked widget
+			self.stacked_widget.addWidget(group_container)
+		
+		# Add group list to selector
+		self.group_list.addItems(self.group_names)
+		self.group_list.setCurrentRow(0)
+		
+		# Layout main widget
+		self.main_layout.addWidget(self.group_list)
+		self.main_layout.addWidget(self.stacked_widget)
+	
+	def _on_group_selected(self):
+		"""Switch to selected group"""
+		index = self.group_list.currentRow()
+		if index >= 0:
+			self.stacked_widget.setCurrentIndex(index)
+	
+	def _get_widget_value(self):
+		return self.group_list.currentRow()
+	
+	def _set_widget_value(self, new_value):
+		self.group_list.setCurrentRow(int(new_value))

@@ -300,6 +300,28 @@ class autoScaleRampVoltageEdge(rampVoltageEdge):
 				p.setLeftAndRight(*peakRanges_newTimings[i])
 		return super().set_value(obj, val)
 	
+class asgAmplitudeSelector(FloatProperty):
+	#since the asg can either be the first or second asg, and since they are treated as different classes, we have to make a custom wrapper to choose the correct asg 
+	def __init__(self, **kwargs):
+		baseProperty = Asg0.amplitude
+		super().__init__(min=baseProperty.min, max=baseProperty.max, increment=baseProperty.increment, log_increment=baseProperty.log_increment, **kwargs)
+	def set_value(self, obj, val):
+		obj : ScanningCavity = obj
+		asg=obj.piezoAsg
+		asg.amplitude = val
+		return super().set_value(obj, val)
+class asgOffsetSelector(FloatProperty):
+	#since the asg can either be the first or second asg, and since they are treated as different classes, we have to make a custom wrapper to choose the correct asg 
+	def __init__(self, **kwargs):
+		baseProperty = Asg0.offset
+		super().__init__(min=baseProperty.min, max=baseProperty.max, increment=baseProperty.increment, log_increment=baseProperty.log_increment, **kwargs)
+	def set_value(self, obj, val):
+		obj : ScanningCavity = obj
+		asg=obj.piezoAsg
+		asg.offset = val
+		return super().set_value(obj, val)
+
+
 class normalizeIndexProperty(BoolProperty):
 	'''this property sets if the selected secondary peak has a normalized setpoint or not. 
 	Enable the normalization when the peak should move accordingly to the main peaks (for example 
@@ -347,8 +369,12 @@ class peak(Module):
 					"normalizeIndex",#can be removed by manually by peak_widget, it stays only for the normalizable peaks
 					"min_voltage",
 					"max_voltage",
-					"timeSetpoint","left",
+					"timeSetpoint",
+					"left",
 					"right",
+					"center",
+					"size",
+					# "rangeSelector",
 					"height",
 					"p",
 					"i",
@@ -376,6 +402,9 @@ class peak(Module):
 	 
 	left = peakValue(lambda peak: f"minTime{peak.index+1}", min = 0)
 	right = peakValue(lambda peak: f"maxTime{peak.index+1}")
+	rangeSelector = rangeProperty([left, right], 'left+right')
+	left, right, center, size = (rangeSelector.left, rangeSelector.right, rangeSelector.center, rangeSelector.ampl)
+	
 	height = peakValue(lambda peak: f"{peak.redpitaya.scope.peakNames[peak.index]}_minValue")
 	input = peakInput()
 	normalizeIndex = normalizeIndexProperty()
@@ -547,16 +576,21 @@ class ScanningCavity(AcquisitionModule):
 					"input1",
 					"ch1_invert",
 					"usedAsg",
-					"lowValue", 
-					"highValue",
-					"autoscale_peaks",
+
+					# "lowValue", 
+					# "highValue",
+					# "asgRange",
+					# "autoscale_peaks",
+					"scan_ampl",
+					"scan_offs",
+
 					"trigger_source",
 					"output_direct",
 					"main_acquisitionTrigger",
 					"threshold",
 					"hysteresis",
-					"aom_lowValue",
-					"aom_highValue",
+					# "aom_lowValue",
+					# "aom_highValue",
 					]
 	_gui_attributes = _setup_attributes
 	_widget_class = ScanCavity_widget
@@ -630,11 +664,22 @@ class ScanningCavity(AcquisitionModule):
 	_usableTriggers = {key : val for key,val in Scope._trigger_sources.items() if "asg" in key}
 
 	usedAsg = asgSelector(_usableTriggers)
-	lowValue, highValue = autoScaleRampVoltageEdge.makeLowerAndUpperEdges("piezoAsg", min = -1, max = 1)
-	aom_lowValue, aom_highValue = rampVoltageEdge.makeLowerAndUpperEdges("aomAsg", min = -1, max = 1)
-	autoscale_peaks = BoolProperty(default=True, doc="If true, modifying the lowValue " \
-		"and highValue parameters will also modify the peak ranges, so that their position " \
-		"remains constant compared to the previous scan")
+
+	# offset = DynamicInstanceProperty(Asg0.offset, lambda scanCavity : scanCavity.piezoAsg)
+	# amplitude = DynamicInstanceProperty(Asg0.amplitude, lambda scanCavity : scanCavity.piezoAsg)
+	# asgRange = rangeProperty([offset, amplitude], 'center+ampl')
+	# lowValue, highValue = autoScaleRampVoltageEdge.makeLowerAndUpperEdges("piezoAsg", min = -1, max = 1)
+	# asgRange = rangeProperty([lowValue, highValue], 'left+right')
+	# lowValue, highValue, center, size = (asgRange.left, asgRange.right, asgRange.center, asgRange.ampl)
+
+	# aom_lowValue, aom_highValue = rampVoltageEdge.makeLowerAndUpperEdges("aomAsg", min = -1, max = 1)
+	# autoscale_peaks = BoolProperty(default=True, doc="If true, modifying the lowValue " \
+# 		"and highValue parameters will also modify the peak ranges, so that their position " \
+# 		"remains constant compared to the previous scan")
+	
+	scan_ampl = asgAmplitudeSelector()
+	scan_offs = asgOffsetSelector()
+	
 	trigger_source = DynamicInstanceProperty(Asg0.trigger_source, lambda scanCavity : scanCavity.piezoAsg)
 	output_direct = DynamicInstanceProperty(Asg0.output_direct, lambda scanCavity : scanCavity.piezoAsg)
 
@@ -670,8 +715,10 @@ class ScanningCavity(AcquisitionModule):
 			self.trigger_source = oldValues[1]
 		asg.advanced_trigger_delay = self.duration / 8e-9#let's reduce the asg trigger delay (so that we can keep the synchronization even at high frequencies)
 
-		ScanningCavity.lowValue.value_updated(self)
-		ScanningCavity.highValue.value_updated(self)
+		# ScanningCavity.lowValue.value_updated(self)
+		# ScanningCavity.highValue.value_updated(self)
+		ScanningCavity.scan_ampl.value_updated(self)
+		ScanningCavity.scan_offs.value_updated(self)
 		ScanningCavity.trigger_source.value_updated(self)
 		ScanningCavity.output_direct.value_updated(self)
 		self.updateAomRamp(oldValues)
