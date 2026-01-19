@@ -31,11 +31,11 @@ class HK(HardwareModule):
 						['fastSwitch_inactiveTime'] + \
 						['fastSwitch_channelsDelay'] + \
 						['fastSwitch_triggerPin'] + \
-						['pi_blast_inactive_TweezerPi'] + \
-						['pi_blast_pi'] + \
-						['pi_blast_inactive_PiBlast'] + \
-						['pi_blast_blast'] + \
-						['pi_blast_inactive_BlastTweezer'] + \
+						['superRadiance_inactive_TweezerPi'] + \
+						['superRadiance_pi'] + \
+						['superRadiance_inactive_PiBlast'] + \
+						['superRadiance_blast'] + \
+						['superRadiance_inactive_BlastTweezer'] + \
 						['piBlast_triggerPin'] + \
 						['input1'] + \
 						['input2'] +\
@@ -130,27 +130,50 @@ class HK(HardwareModule):
 	#                                                   doc="if 0, the ouput will follow expansion_N"+str(i)+"_output, otherwise, it will follow the value of fastSwitch_triggerPin")
 	#     locals()['expansion_P' + str(i) + "_followTrigger"] = BoolRegister(0x34, bit=i+8,
 	#                                                   doc="if 0, the ouput will follow expansion_P"+str(i)+"_output, otherwise, it will follow the value of fastSwitch_triggerPin")
-	#     locals()['useFastSwitch' + str(i)] = BoolRegister(0x34,  bit=i+16,
+	#     locals()['usefastSwitch' + str(i)] = BoolRegister(0x34,  bit=i+16,
 	#                                                   doc=f"if 1, pins N{i} and P{i} will execute an alternate switch")
 	
 	fastSwitch_activeTime = GainRegister(0x3C, bits=8, startBit=0, norm=125e6, signed = False)
 	fastSwitch_inactiveTime = GainRegister(0x3C, bits=8, startBit=8, norm=125e6, signed = False)
 	fastSwitch_triggerPin = digitalPinRegister(0x3C, startBit=16)
 	fastSwitch_channelsDelay = GainRegister(0x40, bits=8, startBit=0, norm=125e6, signed = True)
-	
-	def setFastSwitch(self, pin = 0, triggerPin = '1p', activeTime = 1e-6, inactiveTime = 40e-9, channelsDelay = 0):
+	def resetAllPins(self):
+		for i in range(8):
+			for (sign, j) in [('P', 1), ('N', 0)]:
+				setattr(self, f'expansion_{sign}{i}', 0)
+				setattr(self, f'expansion_{sign}{i}_output', 0)
+				setattr(self, f'pinState_{sign}{i}', "memory")
+				setattr(self, f'external_{sign}{i}_otherPinSelector', 0)
+				setattr(self, f'external_{sign}{i}_dspBitSelector', 0)
+				
+	def setfastSwitch(self, pin = 0, triggerPin = '1p', activeTime = 1e-6, inactiveTime = 40e-9, channelsDelay = 0):
 		self.fastSwitch_triggerPin = triggerPin
-		setattr(self, 'useFastSwitch' + str(pin), True)
+		setattr(self, f"pinState_P{pin}", "fastSwitch")
+		setattr(self, f"pinState_N{pin}", "fastSwitch")
 		setattr(self, 'expansion_P' + str(pin) + "_output", True)
 		setattr(self, 'expansion_N' + str(pin) + "_output", True)
 		
 		self.fastSwitch_activeTime = activeTime
 		self.fastSwitch_inactiveTime = inactiveTime
 		self.fastSwitch_channelsDelay = channelsDelay
+		
 
 	piBlast_triggerPin = digitalPinRegister(0x3C, startBit=20)
-	pi_blast_inactive_TweezerPi = 		GainRegister(0x48, bits=32, startBit=0, norm=125e6, signed = False)	
-	pi_blast_pi = 						GainRegister(0x44, bits=8, startBit=24, norm=125e6, signed = False)
-	pi_blast_inactive_PiBlast = 		GainRegister(0x44, bits=8, startBit=16, norm=125e6, signed = False)
-	pi_blast_blast = 					GainRegister(0x44, bits=8, startBit=8, norm=125e6, signed = False)
-	pi_blast_inactive_BlastTweezer = 	GainRegister(0x44, bits=8, startBit=0, norm=125e6, signed = False)
+	superRadiance_inactive_TweezerPi = 		GainRegister(0x48, bits=32, startBit=0, norm=125e6, signed = False)	
+	superRadiance_pi = 						GainRegister(0x44, bits=8, startBit=24, norm=125e6, signed = False)
+	superRadiance_inactive_PiBlast = 		GainRegister(0x44, bits=8, startBit=16, norm=125e6, signed = False)
+	superRadiance_blast = 					GainRegister(0x44, bits=8, startBit=8, norm=125e6, signed = False)
+	superRadiance_inactive_BlastTweezer = 	GainRegister(0x44, bits=8, startBit=0, norm=125e6, signed = False)
+
+	def setPiBlast(self, pin = 0, triggerPin = '1p', inactive_TweezerPi = 1e-7, pi = 1e-6, inactive_PiBlast = 1e-7, blast = 5e-7, inactive_BlastTweezer = 1e-7):
+		self.piBlast_triggerPin = triggerPin
+		setattr(self, f"pinState_P{pin}", "tweezer_πpulse")
+		setattr(self, f"pinState_N{pin}", "tweezer_πpulse")
+		setattr(self, 'expansion_P' + str(pin) + "_output", True)
+		setattr(self, 'expansion_N' + str(pin) + "_output", True)
+		
+		self.superRadiance_inactive_TweezerPi = inactive_TweezerPi
+		self.superRadiance_pi = pi
+		self.superRadiance_inactive_PiBlast = inactive_PiBlast
+		self.superRadiance_blast = blast
+		self.superRadiance_inactive_BlastTweezer = inactive_BlastTweezer
