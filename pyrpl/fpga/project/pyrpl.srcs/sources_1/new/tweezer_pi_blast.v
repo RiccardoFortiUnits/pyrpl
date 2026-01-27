@@ -26,7 +26,7 @@ optical tweezer turned off (by default its always on)
 delay
 PI pulse, to move the atoms to the excited state
 delay
-blast pulse, to push away the atoms that decayed to the ground state. The blast laser is one the fastImaging ones, which is used for both processes
+blast pulse, to push away the atoms that decayed to the ground state. The blast laser is one the fastSwitch ones, which is used for both processes
 delay
 tweezers turned on again
 */
@@ -48,6 +48,17 @@ module tweezer_pi_blast#(
     output reg blast,
     output reg running
 );
+
+wire cleanTrigger;
+triggerCleaner_hold_n_release#(
+    .nOfInhibitionCycles(125)//1e-6s
+)tc(
+    .clk	(clk),
+    .reset	(reset),
+    .in		(trigger),
+    .out	(cleanTrigger)
+);
+
     localparam  s_idle = 0,
                 s_inactive_TweezerPi = 1,
                 s_pi = 2,
@@ -96,7 +107,7 @@ module tweezer_pi_blast#(
             case(state)
                 s_idle: begin
                     `resetAllOutputs
-                    if(trigger)begin
+                    if(cleanTrigger)begin
                         state <= s_inactive_TweezerPi;
                     end
                 end

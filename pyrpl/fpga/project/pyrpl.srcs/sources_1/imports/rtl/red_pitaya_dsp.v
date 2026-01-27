@@ -105,32 +105,37 @@ genvar j;
 
 /*			arrivingFrom						goingTo						*/
 /*§§#§§*/
-localparam	PID0					= 0;			/*modules use both input and outpt ;*/
-localparam	PID1					= 1;			/*modules use both input and outpt ;*/
-localparam	PID2					= 2;			/*modules use both input and outpt ;*/
-localparam	LINEARIZER				= 3;			/*modules use both input and outpt ;*/
-localparam	RAMP0					= 4;			/*modules use both input and outpt ;*/
-localparam	RAMP1					= 5;			/*modules use both input and outpt ;*/
-localparam	ASG0					= 6;		localparam	SCOPE0 					= 6;
-localparam	ASG1					= 7;		localparam	SCOPE1 					= 7;
-localparam	IN1						= 8;		localparam	DIG0					= 8;
-localparam	IN2						= 9;		localparam	DIG1					= 9;
-localparam	OUT1					= 10;		localparam	ASG_AMPL0				= 10;
-localparam	OUT2					= 11;		localparam	ASG_AMPL1				= 11;
-localparam	PEAK1					= 12;		localparam	PID0_SETPOINT_SIGNAL	= 12;
-localparam	PEAK2					= 13;		localparam	PID1_SETPOINT_SIGNAL	= 13;
-localparam	PEAK3					= 14;		localparam	PID2_SETPOINT_SIGNAL	= 14;
-localparam	PEAK4					= 15;											/*;*///let's allocate the space for all the possible peaks, even if they are not implemented
-localparam	PEAK_IDX1				= 16;											/*;*/
-localparam	PEAK_IDX2				= 17;											/*;*/
-localparam	PEAK_IDX3				= 18;											/*;*/
-localparam	PEAK_IDX4				= 19;											/*;*/
-localparam	ALLTRIGGERS				= 20;											/*;*/
+localparam	PID0					= 0;		/*modules use both input and output ;*/
+localparam	PID1					= 1;		/*modules use both input and output ;*/
+localparam	PID2					= 2;		/*modules use both input and output ;*/
+localparam	PID3					= 3;		/*modules use both input and output ;*/
+localparam	LINEARIZER				= 4;		/*modules use both input and output ;*/
+localparam	RAMP0					= 5;		/*modules use both input and output ;*/
+localparam	RAMP1					= 6;		/*modules use both input and output ;*/
+localparam	ASG0					= 7;		localparam	SCOPE0 					= 7;
+localparam	ASG1					= 8;		localparam	SCOPE1 					= 8;
+localparam	IN1						= 9;		localparam	DIG0					= 9;
+localparam	IN2						= 10;		localparam	DIG1					= 10;
+localparam	OUT1					= 11;		localparam	PWM0					= 11;
+localparam	OUT2					= 12;		localparam	PWM1					= 12;
+localparam	PEAK1					= 13;		localparam	ASG_AMPL0				= 13;
+localparam	PEAK2					= 14;		localparam	ASG_AMPL1				= 14;
+localparam	PEAK3					= 15;		localparam	PID0_SETPOINT_SIGNAL	= 15;
+localparam	PEAK4					= 16;		localparam	PID1_SETPOINT_SIGNAL	= 16;
+localparam	PEAK5					= 17;		localparam	PID2_SETPOINT_SIGNAL	= 17;
+localparam	PEAK6					= 18;											/*;*/
+localparam	PEAK_IDX1				= 19;											/*;*/
+localparam	PEAK_IDX2				= 20;											/*;*/
+localparam	PEAK_IDX3				= 21;											/*;*/
+localparam	PEAK_IDX4				= 22;											/*;*/
+localparam	PEAK_IDX5				= 23;											/*;*/
+localparam	PEAK_IDX6				= 24;											/*;*/
+localparam	ALLTRIGGERS				= 25;											/*;*/
 /*§§#§§*/
 
-localparam nOfDSP_arrivingFrom = 21, 			nOfDSP_goingTo = 15;
-localparam MODULES = 8;
-localparam nOfDSP_directOutputs = 10;//directOutputs are the outputs tha can be outputed to the DACs
+localparam nOfDSP_arrivingFrom = 26, 			nOfDSP_goingTo = 18;
+localparam MODULES = 7;
+localparam nOfDSP_directOutputs = 11;//directOutputs are the outputs tha can be outputed to the DACs
 
 localparam LOG_INPUT_MODULES = $clog2(nOfDSP_arrivingFrom);
 localparam LOG_OUTPUT_MODULES = $clog2(nOfDSP_goingTo);
@@ -186,6 +191,8 @@ assign asg_a_amp_o = signal_goingTo[ASG_AMPL0];
 assign asg_b_amp_o = signal_goingTo[ASG_AMPL1];
 assign extDigital0 = signal_goingTo[DIG0];
 assign extDigital1 = signal_goingTo[DIG1];
+assign pwm0 = signal_goingTo[PWM0];
+assign pwm1 = signal_goingTo[PWM1];
 wire asg0_trigger = asg_triggers[0];
 wire asg1_trigger = asg_triggers[1];
 
@@ -343,7 +350,7 @@ endgenerate
 
 // segmented function, for linearizations
 generate 
-	if(version == "ramp&lin")begin
+	if(1)begin
 		for (j = LINEARIZER; j < RAMP0; j = j+1) begin
 
 			segmentedFunction#(
@@ -373,7 +380,7 @@ endgenerate
 
 // sequence of ramp functions, for arbitrary functions with strict timings (useful to make sequences of ramps with very different time frames, if you tried to do this with the normal asg, the very fast ramps would not be that precise)
 generate
-	if(version == "ramp&lin")begin
+	if(1)begin
 		for (j = RAMP0; j < ASG0; j = j+1) begin
 
 			ramp#(

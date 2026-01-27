@@ -29,7 +29,7 @@ from ..hardware_modules.dsp import DSP_TRIGGERS
 from ..widgets.module_widgets.scanCavity_widget import ScanCavity_widget, peak_widget, secondaryPitaya_widget
 
 
-nOfSecondaryPeaks = 2
+nOfSecondaryPeaks = 4
 
 class SignalLauncherPeak(SignalLauncherAcquisitionModule):
 	'''combination of the signal launchers for acquisition and pid 
@@ -396,7 +396,7 @@ class peak(Module):
 		super().__init__(redpitaya, name)
 		self.scanningCavity = scanningCavity
 		self.index = index
-		self.pid = redpitaya.pids.all_modules[index - 1 if index >= 2 else index]
+		self.pid = redpitaya.pids.all_modules[index % len(redpitaya.pids.all_modules)]
 		self.input
 		self.addToSubmodules()
 	 

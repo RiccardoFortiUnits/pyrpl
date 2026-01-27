@@ -362,6 +362,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		"input1", "duration", "ch1_invert", ])
 
 		self.duration.value_changed.connect(self.scalePeaksWithNewDuration)
+		self.duration.value_changed.connect(lambda *x : self.module._setup())
 		# self.lowValue.value_changed.connect(self.updateAllPeaklines)
 		# self.highValue.value_changed.connect(self.updateAllPeaklines)
 		self.scan_ampl.value_changed.connect(self.updateAllPeaklines)

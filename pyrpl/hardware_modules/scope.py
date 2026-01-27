@@ -528,14 +528,18 @@ class Scope(HardwareModule, AcquisitionModule):
     extraSamplingTimes = [8e-9 * dec for dec in extraDecimations]
     sampling_time = SamplingTimeProperty(options=sampling_times)
 
-    minTime1 = peakIndexRegister(0x94, default = 0x0, doc = "time after the trigger from which the peak on channel 1 is checked (the peak is searched only between minTime1 and maxTime1)")
-    maxTime1 = peakIndexRegister(0x98, default = 0x2000, doc = "time after the trigger at which the peak on channel 1 is no longer checked")
-    minTime2 = peakIndexRegister(0x9C, default = 0x0, doc = "time after the trigger from which the peak on channel 2 is checked (the peak is searched only between minTime2 and maxTime2)")
-    maxTime2 = peakIndexRegister(0xA0, default = 0x2000, doc = "time after the trigger at which the peak on channel 2 is no longer checked")
-    minTime3 = peakIndexRegister(0xBC, default = 0x0, doc = "time after the trigger from which the peak on channel 3 is checked (the peak is searched only between minTime3 and maxTime3)")
-    maxTime3 = peakIndexRegister(0xC0, default = 0x2000, doc = "time after the trigger at which the peak on channel 3 is no longer checked")
-    minTime4 = peakIndexRegister(0xD0, default = 0x0, doc = "time after the trigger from which the peak on channel 4 is checked (the peak is searched only between minTime4 and maxTime4)")
-    maxTime4 = peakIndexRegister(0xD4, default = 0x2000, doc = "time after the trigger at which the peak on channel 4 is no longer checked")
+    minTime1 = peakIndexRegister(0x094, default = 0x0, doc = "time after the trigger from which the peak on channel 1 is checked (the peak is searched only between minTime1 and maxTime1)")
+    maxTime1 = peakIndexRegister(0x098, default = 0x2000, doc = "time after the trigger at which the peak on channel 1 is no longer checked")
+    minTime2 = peakIndexRegister(0x09C, default = 0x0, doc = "time after the trigger from which the peak on channel 2 is checked (the peak is searched only between minTime2 and maxTime2)")
+    maxTime2 = peakIndexRegister(0x0A0, default = 0x2000, doc = "time after the trigger at which the peak on channel 2 is no longer checked")
+    minTime3 = peakIndexRegister(0x0BC, default = 0x0, doc = "time after the trigger from which the peak on channel 3 is checked (the peak is searched only between minTime3 and maxTime3)")
+    maxTime3 = peakIndexRegister(0x0C0, default = 0x2000, doc = "time after the trigger at which the peak on channel 3 is no longer checked")
+    minTime4 = peakIndexRegister(0x0D0, default = 0x0, doc = "time after the trigger from which the peak on channel 4 is checked (the peak is searched only between minTime4 and maxTime4)")
+    maxTime4 = peakIndexRegister(0x0D4, default = 0x2000, doc = "time after the trigger at which the peak on channel 4 is no longer checked")
+    minTime5 = peakIndexRegister(0x0E4, default = 0x0, doc = "time after the trigger from which the peak on channel 5 is checked (the peak is searched only between minTime5 and maxTime5)")
+    maxTime5 = peakIndexRegister(0x0E8, default = 0x2000, doc = "time after the trigger at which the peak on channel 5 is no longer checked")
+    minTime6 = peakIndexRegister(0x0F8, default = 0x0, doc = "time after the trigger from which the peak on channel 6 is checked (the peak is searched only between minTime6 and maxTime6)")
+    maxTime6 = peakIndexRegister(0x0FC, default = 0x2000, doc = "time after the trigger at which the peak on channel 6 is no longer checked")
 
     peakInputsList = {"adc1" : 0, "adc2" : 1, "ch1" : 2, "ch2" : 3}
     peak_refL_input =  SelectRegister(0xB0, startBit=0, doc="input used for the first peak search",
@@ -546,6 +550,10 @@ class Scope(HardwareModule, AcquisitionModule):
                                               options=peakInputsList, default = peakInputsList["ch1"])
     peak_ctrl1_input =  SelectRegister(0xB0, startBit=6, doc="input used for the fourth peak search",
                                               options=peakInputsList, default = peakInputsList["ch1"])
+    peak_ctrl2_input =  SelectRegister(0xB0, startBit=8, doc="input used for the third peak search",
+                                              options=peakInputsList, default = peakInputsList["ch1"])
+    peak_ctrl3_input =  SelectRegister(0xB0, startBit=10, doc="input used for the fourth peak search",
+                                              options=peakInputsList, default = peakInputsList["ch1"])
 
     peak_refL_minValue = FloatRegister(0xB4, startBit= 0, bits=14, norm=2 ** 13,
                                 doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
@@ -555,9 +563,15 @@ class Scope(HardwareModule, AcquisitionModule):
                                 doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
     peak_ctrl1_minValue = FloatRegister(0xE0, startBit= 0, bits=14, norm=2 ** 13,
                                 doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
+    peak_ctrl2_minValue = FloatRegister(0xF4, startBit= 0, bits=14, norm=2 ** 13,
+                                doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
+    peak_ctrl3_minValue = FloatRegister(0x108, startBit= 0, bits=14, norm=2 ** 13,
+                                doc="minimum value for the peak detection. If no value is seen above this, the peak will not be updated, and its valid flag will be set to 0")
 
     peak_ctrl0_normalizeIndex = BoolRegister(0xB8, bit = 0, doc="if set, the index value of this peak will be normalized to respect to the indexes of the peaks refL and refR")
     peak_ctrl1_normalizeIndex = BoolRegister(0xB8, bit = 1, doc="if set, the index value of this peak will be normalized to respect to the indexes of the peaks refL and refR")
+    peak_ctrl2_normalizeIndex = BoolRegister(0xB8, bit = 2, doc="if set, the index value of this peak will be normalized to respect to the indexes of the peaks refL and refR")
+    peak_ctrl3_normalizeIndex = BoolRegister(0xB8, bit = 3, doc="if set, the index value of this peak will be normalized to respect to the indexes of the peaks refL and refR")
 
     peakRangeRegisters = dict(
         minTime1 = minTime1,
@@ -568,8 +582,12 @@ class Scope(HardwareModule, AcquisitionModule):
         maxTime3 = maxTime3,
         minTime4 = minTime4,
         maxTime4 = maxTime4,
+        minTime5 = minTime5,
+        maxTime5 = maxTime5,
+        minTime6 = minTime6,
+        maxTime6 = maxTime6,
     )
-    peakNames = ["peak_refL","peak_refR","peak_ctrl0","peak_ctrl1",]
+    peakNames = ["peak_refL","peak_refR","peak_ctrl0","peak_ctrl1","peak_ctrl2","peak_ctrl3",]
 
     # list comprehension workaround for python 3 compatibility
     # cf. http://stackoverflow.com/questions/13905741

@@ -243,16 +243,6 @@ wire  [8* 1-1: 0] sys_err   ;
 wire  [8* 1-1: 0] sys_ack   ;
 wire  [8   -1: 0] sys_cs    ;
 
-assign sys_cs = 8'h01 << sys_addr[22:20];
-always @(posedge adc_clk) begin		
-	sys_wen <= sys_cs & {8{ps_sys_wen}};
-	sys_ren <= sys_cs & {8{ps_sys_ren}};
-end
-
-assign ps_sys_rdata = sys_rdata[sys_addr[22:20]*32+:32];
-
-assign ps_sys_err   = |(sys_cs & sys_err);
-assign ps_sys_ack   = |(sys_cs & sys_ack);
 
 // unused system bus slave ports
 
@@ -297,6 +287,17 @@ wire  signed [14-1:0] asg_a    , asg_b    ;
 
 // configuration
 wire                  digital_loop;
+
+assign sys_cs = 8'h01 << sys_addr[22:20];
+always @(posedge adc_clk) begin		
+	sys_wen <= sys_cs & {8{ps_sys_wen}};
+	sys_ren <= sys_cs & {8{ps_sys_ren}};
+end
+
+assign ps_sys_rdata = sys_rdata[sys_addr[22:20]*32+:32];
+
+assign ps_sys_err   = |(sys_cs & sys_err);
+assign ps_sys_ack   = |(sys_cs & sys_ack);
 
 ////////////////////////////////////////////////////////////////////////////////
 // PLL (clock and reaset)
@@ -437,7 +438,7 @@ wire    [14-1: 0] to_scope_a;
 wire    [14-1: 0] to_scope_b;
 wire dsp_trigger;
 
-parameter nOfNormalizable_peaks = 2;
+parameter nOfNormalizable_peaks = 4;
 wire [14 -1:0] peak_a, peak_b;
 wire peak_a_valid, peak_b_valid;
 wire [14 -1:0] peak_a_index, peak_b_index;
@@ -449,7 +450,7 @@ wire [nOfNormalizable_peaks * 14 -1:0]	peaks_extra_index;
 wire [nOfNormalizable_peaks -1:0]		inPeakRange_extra;
 
 
-red_pitaya_scope #(.version(version)) i_scope (
+red_pitaya_scope #(.version(version), .nOfNormalizable_peaks(nOfNormalizable_peaks)) i_scope (
   // ADC
   .adc_a_i         (  to_scope_a /*adc_a*/       ),  // CH 1
   .adc_b_i         (  to_scope_b /*adc_a*/       ),  // CH 2
@@ -633,16 +634,23 @@ red_pitaya_ams i_ams (
 
 
 
-red_pitaya_pwm pwm [4-1:0] (
-  // system signals
-  .clk   (pwm_clk ),
-  .rstn  (pwm_rstn),
-  // configuration
-  .cfg   ({pwm_cfg_d, pwm_cfg_c, pwm_cfg_b, pwm_cfg_a}),
-  //.signal_i ({pwm_signals[3],pwm_signals[2],pwm_signals[1],pwm_signals[0]}),
-  // PWM outputs
-  .pwm_o (dac_pwm_o),
-  .pwm_s ()
+// red_pitaya_pwm pwm [4-1:0] (
+//   // system signals
+//   .clk   (pwm_clk ),
+//   .rstn  (pwm_rstn),
+//   // configuration
+//   .cfg   ({pwm_cfg_d, pwm_cfg_c, pwm_cfg_b, pwm_cfg_a}),
+//   //.signal_i ({pwm_signals[3],pwm_signals[2],pwm_signals[1],pwm_signals[0]}),
+//   // PWM outputs
+//   .pwm_o (dac_pwm_o),
+//   .pwm_s ()
+// );
+
+newPWM pwm[4 -1:0] (
+	.clk	(adc_clk),
+	.rst	(!adc_rstn),
+	.in		({pwm_signals[3],pwm_signals[2],pwm_signals[1],pwm_signals[0]}),
+	.out	(dac_pwm_o)
 );
 
 //---------------------------------------------------------------------------------

@@ -88,3 +88,75 @@ end
 assign pwm_s = (bcnt == 4'hF) && (vcnt == (FULL-1)) ; // latch one before
 
 endmodule: red_pitaya_pwm
+
+module newPWM#(
+	parameter bitResolution = 14,
+	parameter isInputSignalSigned = 1
+)(
+  // system signals
+  input             clk ,
+  input             rst,
+
+  input	[bitResolution -1:0]			in,
+  output reg		out
+);
+localparam maxVal = {(bitResolution){1'b1}};
+wire [bitResolution -1:0] incrementer = maxVal >> 2;
+reg [bitResolution -1:0] counter;
+wire [bitResolution -1:0] reversedCounter;
+wire isInputLowerThanHalf;
+generate
+	genvar i;
+	for (i = 0; i < bitResolution; i++) begin
+		assign reversedCounter[i] = counter[bitResolution - 1 - i];
+	end
+	if (isInputSignalSigned)begin
+		assign isInputLowerThanHalf = $signed(in) < $signed(0);
+	end else begin
+		assign isInputLowerThanHalf = $unsigned(in) < $unsigned(1 << (bitResolution - 1));
+	end
+endgenerate
+always @(posedge clk) begin
+	if(rst)begin
+		counter <= 0;
+		out <= 0;
+	end else begin
+		counter <= counter + 1;
+		if(isInputSignalSigned) begin
+			if(isInputLowerThanHalf)begin
+				out <= $signed(-reversedCounter) < $signed(in);
+			end else begin
+				out <= $signed(reversedCounter) < $signed(in);
+			end
+		end else begin
+			if(isInputLowerThanHalf)begin
+				out <= $unsigned(~reversedCounter) < $unsigned(in);
+			end else begin
+				out <= $unsigned(reversedCounter) < $unsigned(in);
+			end
+		end
+	end
+end
+
+endmodule
+
+
+/*
+
+add wave -position insertpoint sim:/newPWM/*
+force -freeze sim:/newPWM/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/newPWM/rst z1 0
+force -freeze sim:/newPWM/in 0134 0
+run
+force -freeze sim:/newPWM/rst 10 0
+run
+run
+run
+run
+run
+run
+run
+run
+
+
+*/
