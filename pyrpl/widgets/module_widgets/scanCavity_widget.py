@@ -14,6 +14,8 @@ from .base_module_widget import ModuleWidget
 from .acquisition_module_widget import AcquisitionModuleWidget
 import networkx as nx
 from ...graphCalculator import greedy_clique_partition
+import time
+import threading
 class PeakBorderLine(QtWidgets.QGraphicsLineItem):
 	def __init__(self, parent, peakLine):
 		super().__init__(0.0, 0, 0.001, 0, parent = parent)
@@ -510,6 +512,11 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		self.rolling_mode = self.module.rolling_mode
 		self.attribute_layout.addStretch(1)
 		self.setPeakGroups()
+
+		self.longTimeMeasure = QtWidgets.QPushButton("acquire ivals")
+		self.alreadyAcquiringIval = False
+		self.longTimeMeasure.clicked.connect(self.startIvalAcquisition)
+		self.main_layout.addWidget(self.longTimeMeasure)
 		
 		
 		
@@ -757,6 +764,36 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 			p.inCurrentPeakGroup = True
 
 		self.currentGroupIndex = newIndex
+	
+	def startIvalAcquisition(self):
+		signalWidgets = [peak.ival for peak in self.peakList]
+		if self.alreadyAcquiringIval:
+			self.alreadyAcquiringIval = False
+			return
+		self.alreadyAcquiringIval = True
+		
+		def read_values():
+			values_array = np.zeros((10*60*60, len(signalWidgets)))
+			samplingTime = 1#seconds
+			print(f"starting acquisition. f_s = {samplingTime}, duration = {samplingTime * values_array.shape[0]}")
+			iii = 0
+			for iii in range(values_array.shape[0]):
+				if not self.alreadyAcquiringIval:
+					break
+				time.sleep(samplingTime)
+				for i, widget in enumerate(signalWidgets):
+					value = widget.attribute_value
+					values_array[iii, i] = value
+			if iii < values_array.shape[0] - 1:
+				values_array = values_array[:iii, :]
+			# Save to .dat file
+			fileName = 'ival_measurements.dat'
+			
+			for i in range(len(signalWidgets)):
+				self.module.save_curve(np.arange(values_array.shape[0]) * samplingTime, values_array[:,i])
+			print(f"acquisition ended. data saved in {fileName}")
+		thread = threading.Thread(target=read_values, daemon=True)
+		thread.start()
 
 
 class scanSwitcher:
@@ -831,4 +868,5 @@ class scanSwitcher:
 		self.button.clicked.connect(self.enable_point_selection)
 		self.scanCavity : ScanCavity_widget = scanCavity
 		
+
 	

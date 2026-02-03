@@ -618,7 +618,7 @@ class ScanningCavity(AcquisitionModule):
 		self.usedPitayas = [pitaya]
 		#we won't be able to use 2 secondary peaks on the first pitaya (not enough outputs), so let's just use one, 
 		# and let's keep the 2nd pid free for the mainR peak, which does not require a pid, but it can still be useful
-		for i in range(1, nOfSecondaryPeaks):
+		for i in range(0, nOfSecondaryPeaks-2):
 			self.addSecondaryPeak(peak(pitaya, i + 2, self, f"{pitaya.name}_secondary{i}"))
 		self.mainPitaya.hk.input1 = "alltriggers"
 	def addPitaya(self, pitaya):
@@ -801,9 +801,11 @@ class ScanningCavity(AcquisitionModule):
 		s._free_up_resources()
 		return s.data_avg
 	
-	def save_curve(self):
+	def save_curve(self, *args):
 		"""
 		Saves the curve(s) that is (are) currently displayed in the gui in
 		the db_system. Also, returns the list [curve_ch1, curve_ch2]...
 		"""
-		return self.mainPitaya.scope.save_curve()
+		if len(args) == 0:
+			return self.mainPitaya.scope.save_curve()	
+		return self._save_curve(*args)
