@@ -159,11 +159,11 @@ class HK(HardwareModule):
 		
 
 	piBlast_triggerPin = digitalPinRegister(0x3C, startBit=20)
-	superRadiance_inactive_TweezerPi = 		GainRegister(0x48, bits=32, startBit=0, norm=125e6, signed = False)	
-	superRadiance_pi = 						GainRegister(0x44, bits=8, startBit=24, norm=125e6, signed = False)
-	superRadiance_inactive_PiBlast = 		GainRegister(0x44, bits=8, startBit=16, norm=125e6, signed = False)
-	superRadiance_blast = 					GainRegister(0x44, bits=8, startBit=8, norm=125e6, signed = False)
-	superRadiance_inactive_BlastTweezer = 	GainRegister(0x44, bits=8, startBit=0, norm=125e6, signed = False)
+	superRadiance_inactive_TweezerPi = 		GainRegister(0x4C, bits=21, startBit=0, norm=125e6, signed = False)	
+	superRadiance_pi = 						GainRegister(0x44, bits=12, startBit=12, norm=125e6, signed = False)
+	superRadiance_inactive_PiBlast = 		GainRegister(0x44, bits=12, startBit=0, norm=125e6, signed = False)
+	superRadiance_blast = 					GainRegister(0x48, bits=12, startBit=12, norm=125e6, signed = False)
+	superRadiance_inactive_BlastTweezer = 	GainRegister(0x48, bits=12, startBit=0, norm=125e6, signed = False)
 
 	def setPiBlast(self, pin = 0, triggerPin = '1p', inactive_TweezerPi = 1e-7, pi = 1e-6, inactive_PiBlast = 1e-7, blast = 5e-7, inactive_BlastTweezer = 1e-7):
 		self.piBlast_triggerPin = triggerPin
