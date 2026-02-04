@@ -28,6 +28,14 @@ module triggerCleaner#(
     input in,
     output out
 );
+
+/*
+cleans the input trigger signal, so that the output trigger is an ideal trigger (always toggles for only one clock cycle)
+	when in becomes 1, out will be 1 for one clock cycle, and then it will go back to 0
+	after turning on, the output will stay off for at least nOfInhibitionCycles cycles, even if the input toggles, to avoid repeated switchings that the input could have
+	you should set nOfInhibitionCycles slightly smaller than the minimum expexted number of cycles between different trigger impulses
+*/
+
 reg [$clog2(nOfInhibitionCycles+1)-1:0] inhibitionCounter;
 
 localparam  s_idle = 0,
@@ -85,6 +93,14 @@ module triggerCleaner_hold_n_release#(
     input in,
     output reg out
 );
+
+/*
+cleans the input hold_n_release trigger signal. An ideal hold_n_release trigger is a signal that switches between turning on and off, 
+	and these switches are not expected to be close to each other (when the signal toggles, it won't toggle for a while).
+	when in toggles, out will toggle accordingly, and it will keep that value for the next nOfInhibitionCycles cycles, even if the input toggles again.
+	you should set nOfInhibitionCycles slightly smaller than the minimum expexted number of cycles between different trigger toggles
+*/
+
 reg [$clog2(nOfInhibitionCycles+1)-1:0] inhibitionCounter;
 
 localparam  s_idle_0 = 0,

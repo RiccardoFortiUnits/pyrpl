@@ -50,7 +50,8 @@ module tweezer_pi_blast#(
 );
 
 wire cleanTrigger;
-triggerCleaner_hold_n_release#(
+
+triggerCleaner#(
     .nOfInhibitionCycles(125)//1e-6s
 )tc(
     .clk	(clk),
