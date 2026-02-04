@@ -1,4 +1,4 @@
-from ..attributes import IntRegister, SelectRegister, IORegister, BoolProperty, BoolRegister, GainRegister, digitalPinRegister
+from ..attributes import IntRegister, SelectRegister, IORegister, BoolProperty, BaseProperty, GainRegister, digitalPinRegister, inputPinRegister
 from ..modules import HardwareModule
 from ..widgets.module_widgets.hk_widget import HkWidget
 import numpy as np
@@ -12,6 +12,18 @@ class ExpansionDirection(BoolProperty):
 	def get_value(self, obj):
 		return obj._get_expansion_direction(self.name.strip('_output'))
 
+class digitalOutputPinCoupleProperty(BaseProperty):
+	'''
+	the values are both the pins indexes and the output selector (memory, otherPin...)'''
+	def __init__(self, outputSelector, **kwargs):
+		super().__init__(**kwargs)
+		self.outputSelector = outputSelector
+	def set_value(self, obj, val):
+		setattr(obj, f'expansion_P{val}_output', True)
+		setattr(obj, f'expansion_N{val}_output', True)
+		setattr(obj, f'pinState_P{val}', self.outputSelector)
+		setattr(obj, f'pinState_N{val}', self.outputSelector)
+		return super().set_value(obj, val)
 
 class HK(HardwareModule):
 	_widget_class = HkWidget
@@ -27,16 +39,16 @@ class HK(HardwareModule):
 						['pinState_N' + str(i) for i in range(8)] + \
 						['external_N' + str(i) + "_otherPinSelector" for i in range(8)] + \
 						['external_N' + str(i) + "_dspBitSelector" for i in range(8)] + \
-						['fastSwitch_activeTime'] + \
-						['fastSwitch_inactiveTime'] + \
-						['fastSwitch_channelsDelay'] + \
-						['fastSwitch_triggerPin'] + \
+						['fastImaging_activeTime'] + \
+						['fastImaging_inactiveTime'] + \
+						['fastImaging_channelsDelay'] + \
+						['fastImaging_triggerPin'] + \
 						['superRadiance_inactive_TweezerPi'] + \
 						['superRadiance_pi'] + \
 						['superRadiance_inactive_PiBlast'] + \
 						['superRadiance_blast'] + \
 						['superRadiance_inactive_BlastTweezer'] + \
-						['piBlast_triggerPin'] + \
+						['superRadiance_triggerPin'] + \
 						['input1'] + \
 						['input2'] +\
 						['genericModuleTrigger']
@@ -117,7 +129,7 @@ class HK(HardwareModule):
 										"memory": 0,
 										"otherPin": 1,
 										"dsp": 2,
-										"fastSwitch": 3,
+										"fastImaging": 3,
 										"tweezer_πpulse" : 4
 										})
 			
@@ -127,16 +139,17 @@ class HK(HardwareModule):
 
 		
 	#     locals()['expansion_N' + str(i) + "_followTrigger"] = BoolRegister(0x34, bit=i,
-	#                                                   doc="if 0, the ouput will follow expansion_N"+str(i)+"_output, otherwise, it will follow the value of fastSwitch_triggerPin")
+	#                                                   doc="if 0, the ouput will follow expansion_N"+str(i)+"_output, otherwise, it will follow the value of fastImaging_triggerPin")
 	#     locals()['expansion_P' + str(i) + "_followTrigger"] = BoolRegister(0x34, bit=i+8,
-	#                                                   doc="if 0, the ouput will follow expansion_P"+str(i)+"_output, otherwise, it will follow the value of fastSwitch_triggerPin")
-	#     locals()['usefastSwitch' + str(i)] = BoolRegister(0x34,  bit=i+16,
+	#                                                   doc="if 0, the ouput will follow expansion_P"+str(i)+"_output, otherwise, it will follow the value of fastImaging_triggerPin")
+	#     locals()['usefastImaging' + str(i)] = BoolRegister(0x34,  bit=i+16,
 	#                                                   doc=f"if 1, pins N{i} and P{i} will execute an alternate switch")
 	
-	fastSwitch_activeTime = GainRegister(0x3C, bits=8, startBit=0, norm=125e6, signed = False)
-	fastSwitch_inactiveTime = GainRegister(0x3C, bits=8, startBit=8, norm=125e6, signed = False)
-	fastSwitch_triggerPin = digitalPinRegister(0x3C, startBit=16)
-	fastSwitch_channelsDelay = GainRegister(0x40, bits=8, startBit=0, norm=125e6, signed = True)
+	fastImaging_activeTime = 		GainRegister(0x3C, bits=8, startBit=0, norm=125e6, signed = False)
+	fastImaging_inactiveTime = 		GainRegister(0x3C, bits=8, startBit=8, norm=125e6, signed = False)
+	fastImaging_triggerPin = 		inputPinRegister(0x3C, startBit=16)
+	fastImaging_channelsDelay = 		GainRegister(0x40, bits=8, startBit=0, norm=125e6, signed = True)
+	fastImaging_outputPinsIndex = 	digitalOutputPinCoupleProperty("fastImaging")
 	def resetAllPins(self):
 		for i in range(8):
 			for (sign, j) in [('P', 1), ('N', 0)]:
@@ -146,32 +159,27 @@ class HK(HardwareModule):
 				setattr(self, f'external_{sign}{i}_otherPinSelector', 0)
 				setattr(self, f'external_{sign}{i}_dspBitSelector', 0)
 				
-	def setfastSwitch(self, pin = 0, triggerPin = '1p', activeTime = 1e-6, inactiveTime = 40e-9, channelsDelay = 0):
-		self.fastSwitch_triggerPin = triggerPin
-		setattr(self, f"pinState_P{pin}", "fastSwitch")
-		setattr(self, f"pinState_N{pin}", "fastSwitch")
-		setattr(self, 'expansion_P' + str(pin) + "_output", True)
-		setattr(self, 'expansion_N' + str(pin) + "_output", True)
+	def setfastImaging(self, pin = 0, triggerPin = '1p', activeTime = 1e-6, inactiveTime = 40e-9, channelsDelay = 0):
+		self.fastImaging_triggerPin = triggerPin
+		self.fastImaging_outputPinsIndex = pin
 		
-		self.fastSwitch_activeTime = activeTime
-		self.fastSwitch_inactiveTime = inactiveTime
-		self.fastSwitch_channelsDelay = channelsDelay
+		self.fastImaging_activeTime = activeTime
+		self.fastImaging_inactiveTime = inactiveTime
+		self.fastImaging_channelsDelay = channelsDelay
 		
 
-	piBlast_triggerPin = digitalPinRegister(0x3C, startBit=20)
+	superRadiance_triggerPin = inputPinRegister(0x3C, startBit=20)
 	superRadiance_inactive_TweezerPi = 		GainRegister(0x4C, bits=21, startBit=0, norm=125e6, signed = False)	
 	superRadiance_pi = 						GainRegister(0x44, bits=12, startBit=12, norm=125e6, signed = False)
 	superRadiance_inactive_PiBlast = 		GainRegister(0x44, bits=12, startBit=0, norm=125e6, signed = False)
 	superRadiance_blast = 					GainRegister(0x48, bits=12, startBit=12, norm=125e6, signed = False)
 	superRadiance_inactive_BlastTweezer = 	GainRegister(0x48, bits=12, startBit=0, norm=125e6, signed = False)
+	superRadiance_outputPinsIndex = 		digitalOutputPinCoupleProperty("tweezer_πpulse")
 
 	def setPiBlast(self, pin = 0, triggerPin = '1p', inactive_TweezerPi = 1e-7, pi = 1e-6, inactive_PiBlast = 1e-7, blast = 5e-7, inactive_BlastTweezer = 1e-7):
-		self.piBlast_triggerPin = triggerPin
-		setattr(self, f"pinState_P{pin}", "tweezer_πpulse")
-		setattr(self, f"pinState_N{pin}", "tweezer_πpulse")
-		setattr(self, 'expansion_P' + str(pin) + "_output", True)
-		setattr(self, 'expansion_N' + str(pin) + "_output", True)
-		
+		self.superRadiance_triggerPin = triggerPin
+		self.superRadiance_outputPinsIndex = pin
+
 		self.superRadiance_inactive_TweezerPi = inactive_TweezerPi
 		self.superRadiance_pi = pi
 		self.superRadiance_inactive_PiBlast = inactive_PiBlast

@@ -1893,9 +1893,18 @@ class digitalPinRegister(BaseRegister, digitalPinProperty):
 	def to_python(self, obj, value):
 		return digitalPinProperty.pinIndexToString(value)
 
-
 	def from_python(self, obj, value):
 		return self.validate_and_normalize(obj, value)
+class outputPinRegister(digitalPinRegister):
+	def set_value(self, obj, val):
+		val = digitalPinProperty.pinIndexToString(val)
+		setattr(obj, f'expansion_{val}_output', True)
+		return super().set_value(obj, val)
+class inputPinRegister(digitalPinRegister):
+	def set_value(self, obj, val):
+		val = digitalPinProperty.pinIndexToString(val)
+		setattr(obj, f'expansion_{val}_output', False)
+		return super().set_value(obj, val)
 
 class ColorProperty(BaseProperty):
 	"""
