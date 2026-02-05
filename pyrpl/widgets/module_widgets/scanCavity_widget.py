@@ -355,9 +355,9 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 				layout.addWidget(widget)
 			return widgets
 		
-		(self.usedAsg, self.scan_ampl, self.scan_offs,
+		(self.usedAsg, self.scan_ampl, self.scan_offs, self.usedScanAmplitude,
 		self.trigger_source, self.output_direct, self.main_acquisitionTrigger)= fillLayoutFromAws(self.asg_layout, [ 
-		"usedAsg", "scan_ampl", "scan_offs",
+		"usedAsg", "scan_ampl", "scan_offs", 'usedScanAmplitude',
 		"trigger_source", "output_direct", "main_acquisitionTrigger"])
 		
 		(self.input, self.duration, self.ch1_invert, )= fillLayoutFromAws(self.scope_layout, [ 
@@ -367,8 +367,9 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		self.duration.value_changed.connect(lambda *x : self.module._setup())
 		# self.lowValue.value_changed.connect(self.updateAllPeaklines)
 		# self.highValue.value_changed.connect(self.updateAllPeaklines)
-		self.scan_ampl.value_changed.connect(self.updateAllPeaklines)
-		self.scan_offs.value_changed.connect(self.updateAllPeaklines)
+		# self.scan_ampl.value_changed.connect(self.updateAllPeaklines)
+		# self.scan_offs.value_changed.connect(self.updateAllPeaklines)
+		self.usedScanAmplitude.value_changed.connect(self.updateScanAmplitudeSource)
 
 		#self.attribute_layout.removeWidget(aws['curve_name'])
 
@@ -526,6 +527,8 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 			p.line.updateFromPeakRanges()
 	def scalePeaksWithNewDuration(self):
 		pass
+	def updateScanAmplitudeSource(self):
+		self.scan_ampl.setVisible(self.usedScanAmplitude.attribute_value == "constant")
 	@property
 	def mainL(self):
 		return self.module.mainL

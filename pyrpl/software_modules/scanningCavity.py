@@ -356,7 +356,26 @@ class peakLockingProperty(BoolProperty):
 		ret = super().set_value(obj, val)
 		obj.setActiveAndPaused()
 		return ret
-	
+
+class scanAmplitudeSelectorProperty(SelectProperty):
+	def __init__(self, **kwargs):
+		super().__init__(options = ["constant", "from mainR control"], **kwargs)
+	def set_value(self, obj, value):
+		obj : ScanningCavity = obj
+		if value == self.get_value(obj):
+			return super().set_value(obj, value)
+		if value == "constant":
+			obj.mainR.locking = False
+			obj.scan_ampl = obj.mainR.ival
+			obj.piezoAsg.amplitude_source = "from memory"
+		else:
+			obj.mainR.ival = obj.scan_ampl
+			obj.mainR.locking = True
+			obj.piezoAsg.amplitude_signal = obj.mainR.pid.name
+			obj.piezoAsg.amplitude_source = "from signal"
+
+		return super().set_value(obj, value)
+
 class peak(Module):
 	'''submodule for the handling of a peak detection and lockin. it can be used for both the main peaks and secondary peaks. 
 	The peak is specified with the parent redPitaya and the peak index. Index 0 is for the left main peak, 1 for the right 
@@ -576,7 +595,7 @@ class ScanningCavity(AcquisitionModule):
 					"input1",
 					"ch1_invert",
 					"usedAsg",
-
+					"usedScanAmplitude",
 					# "lowValue", 
 					# "highValue",
 					# "asgRange",
@@ -664,6 +683,7 @@ class ScanningCavity(AcquisitionModule):
 	_usableTriggers = {key : val for key,val in Scope._trigger_sources.items() if "asg" in key}
 
 	usedAsg = asgSelector(_usableTriggers)
+	usedScanAmplitude = scanAmplitudeSelectorProperty()
 
 	# offset = DynamicInstanceProperty(Asg0.offset, lambda scanCavity : scanCavity.piezoAsg)
 	# amplitude = DynamicInstanceProperty(Asg0.amplitude, lambda scanCavity : scanCavity.piezoAsg)

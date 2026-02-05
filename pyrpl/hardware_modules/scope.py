@@ -162,7 +162,7 @@ class DecimationRegister(SelectRegister):
 
 class peakIndexRegister(FloatRegister):
     def __init__(self, address, norm=1, signed=True, invert=False, **kwargs):
-        super().__init__(address, 32, None, 0, norm, signed, invert, **kwargs, min = 0, max = 1, increment = 8e-9 * 0x200)
+        super().__init__(address, 32, None, 0, norm, signed, invert, **kwargs, min = 0, max = 1, increment = 8e-9)
 
     def set_value(self, obj, value):
         value = value / obj.decimation / 8e-9
