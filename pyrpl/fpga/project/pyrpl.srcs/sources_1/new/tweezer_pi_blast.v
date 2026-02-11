@@ -43,108 +43,64 @@ module tweezer_pi_blast#(
     input [$clog2(maxSmallTimes+1) -1:0] nOfPeriods_inactive_PiBlast,
     input [$clog2(maxSmallTimes+1) -1:0] nOfPeriods_blast,
     input [$clog2(maxSmallTimes+1) -1:0] nOfPeriods_inactive_BlastTweezer,
-    output reg tweezer,
-    output reg pi,
-    output reg blast,
-    output reg running
+    output tweezer,
+    output pi,
+    output blast
 );
 
-wire cleanTrigger;
+	wire cleanTrigger;
 
-triggerCleaner#(
-    .nOfInhibitionCycles(125)//1e-6s
-)tc(
-    .clk	(clk),
-    .reset	(reset),
-    .in		(trigger),
-    .out	(cleanTrigger)
-);
+	triggerCleaner#(
+		.nOfInhibitionCycles(125)//1e-6s
+	)tc(
+		.clk	(clk),
+		.reset	(reset),
+		.in		(trigger),
+		.out	(cleanTrigger)
+	);
+	localparam timingSize = $clog2(maxLongTimes+1);
+	wire [(timingSize * 5) -1:0] allTimings;
+	wire [3 * 5 -1:0] allValues;
+	`define setTimingAndValue(time, value, index)							\
+			assign allTimings[(index+1) * timingSize -1-:timingSize] = time;\
+			assign allValues [(index+1) * 3 -1-:3] = value;
+	`setTimingAndValue(nOfPeriods_inactive_TweezerPi, 	3'b000, 0)
+	`setTimingAndValue(nOfPeriods_pi, 					3'b010, 1)
+	`setTimingAndValue(nOfPeriods_inactive_PiBlast, 	3'b000, 2)
+	`setTimingAndValue(nOfPeriods_blast, 				3'b001, 3)
+	`setTimingAndValue(nOfPeriods_inactive_BlastTweezer,3'b000, 4)
 
-    localparam  s_idle = 0,
-                s_inactive_TweezerPi = 1,
-                s_pi = 2,
-                s_inactive_PiBlast = 3,
-                s_blast = 4,
-                s_inactive_BlastTweezer = 5;
-
-    reg [$clog2(maxSmallTimes+1) -1:0] prev_pi, prev_inactive_PiBlast, prev_blast, prev_inactive_BlastTweezer;
-    reg [$clog2(maxLongTimes+1) -1:0] prev_inactive_TweezerPi;
-    reg [2:0] state;
-        
-    reg [$clog2(maxLongTimes+1) -1:0] counter;
-    
-    `define resetAllOutputs \
-        tweezer <= 1;     \
-        pi <= 0;          \
-        blast <= 0;       \
-        running <= 0;     \
-        counter <= 0;
-    `define timedState(tweezerValue, piValue, blastValue, finalTime, nextState)\
-        tweezer <= tweezerValue;                \
-        pi <= piValue;                          \
-        blast <= blastValue;                    \
-        if(counter >= finalTime)begin            \
-            state <= nextState;                 \
-            counter <= 0;                       \
-        end
-
-    always @(posedge(clk))begin:main_state_machine
-        if(reset)begin
-            `resetAllOutputs
-            state <= s_idle;
-        end else begin
-            if(state != s_idle)begin
-                counter <= counter + 1;
-                running <= 1;
-            end else begin				
-				prev_inactive_TweezerPi <= nOfPeriods_inactive_TweezerPi - 1;
-				prev_pi <= nOfPeriods_pi - 1;
-				prev_inactive_PiBlast <= nOfPeriods_inactive_PiBlast - 1;
-				prev_blast <= nOfPeriods_blast - 1;
-				prev_inactive_BlastTweezer <= nOfPeriods_inactive_BlastTweezer - 1;
-                counter <= 0;
-                running <= 0;
-            end
-            case(state)
-                s_idle: begin
-                    `resetAllOutputs
-                    if(cleanTrigger)begin
-                        state <= s_inactive_TweezerPi;
-                    end
-                end
-                s_inactive_TweezerPi: begin
-                    `timedState(0,0,0,prev_inactive_TweezerPi, s_pi)
-                end
-                s_pi: begin
-                    `timedState(0,1,0,prev_pi, s_inactive_PiBlast)
-                end
-                s_inactive_PiBlast: begin
-                    `timedState(0,0,0,prev_inactive_PiBlast, s_blast)
-                end
-                s_blast: begin
-                    `timedState(0,0,1,prev_blast, s_inactive_BlastTweezer)
-                end
-                s_inactive_BlastTweezer: begin
-                    `timedState(0,0,0,prev_inactive_BlastTweezer, s_idle)
-                end
-                default : state <= s_idle;
-            endcase          
-        end
-    end
+	wire [2:0] defaultValue = 							3'b100;
+	multiTimingDoubleFreqCounter#(
+		.nOfTimings		(5),
+		.nofOutputs		(3),
+		.timingSizes	(timingSize)
+	)mtdfc(
+    	.clk					(clk),
+    	.reset					(reset),
+		.trigger				(cleanTrigger),
+		.timings				(allTimings),
+		.requestedOutputValues	(allValues),
+		.defaultOutputValue		(defaultValue),
+		.outputs				({tweezer, pi, blast})
+	);
     
 endmodule
 
 
 
 /*
+vsim work.tweezer_pi_blast
+add wave -position insertpoint sim:/tweezer_pi_blast/*
+add wave -position insertpoint sim:/tweezer_pi_blast/dfc/*
 force -freeze sim:/tweezer_pi_blast/clk 1 0, 0 {50 ps} -r 100
 force -freeze sim:/tweezer_pi_blast/reset z1 0
 force -freeze sim:/tweezer_pi_blast/trigger z0 0
-force -freeze sim:/tweezer_pi_blast/nOfPeriods_inactive_TweezerPi 4 0
-force -freeze sim:/tweezer_pi_blast/nOfPeriods_pi 2 0
-force -freeze sim:/tweezer_pi_blast/nOfPeriods_inactive_PiBlast 3 0
-force -freeze sim:/tweezer_pi_blast/nOfPeriods_blast 2 0
-force -freeze sim:/tweezer_pi_blast/nOfPeriods_inactive_BlastTweezer 5 0
+force -freeze sim:/tweezer_pi_blast/nOfPeriods_inactive_TweezerPi 8 0
+force -freeze sim:/tweezer_pi_blast/nOfPeriods_pi 4 0
+force -freeze sim:/tweezer_pi_blast/nOfPeriods_inactive_PiBlast 6 0
+force -freeze sim:/tweezer_pi_blast/nOfPeriods_blast 4 0
+force -freeze sim:/tweezer_pi_blast/nOfPeriods_inactive_BlastTweezer 7 0
 run
 run
 run
