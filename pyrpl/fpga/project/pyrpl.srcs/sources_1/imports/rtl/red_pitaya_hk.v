@@ -144,7 +144,7 @@ generate
 	end
 endgenerate
 
-doubleFastSwitcher_HalfStart#(
+doubleFastSwitcher_HalfStart_doubleFreqTimers#(
 		.maxPeriods(255)
 )fs(
 		.clk(clk_i),

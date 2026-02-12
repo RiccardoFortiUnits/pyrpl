@@ -192,7 +192,7 @@ module doubleFastSwitcher_HalfStart#(
     input [$clog2(maxPeriods+1) -1:0] nOfPeriodsActive,
     input [$clog2(maxPeriods+1) -1:0] nOfPeriodsInactive,
     input [$clog2(maxPeriods+1) -1:0] phase,//this value should be lower (in absolute 
-                //value) than nOfPeriodsActive, but it can be both positive and negative
+                //value) than half of nOfPeriodsActive, but it can be both positive and negative
     output out1,
     output out2
 );
@@ -244,10 +244,10 @@ module doubleFastSwitcher_HalfStart#(
                 end
                 s_running: begin
                     //reset the machine if:
-                    if( prevActive != nOfPeriodsActive || //use new values
+                    if( prevActive != nOfPeriodsActive || //the timings were updated
                         prevInactive != nOfPeriodsInactive || 
                         phase != prevPhase ||
-                        atHalfOf_o1 && !trigger //the trigger is low and the toggling can end right now
+                        (atHalfOf_o1 && !trigger) //the trigger is low and the toggling can end right now
                        )begin
                         //reset the machine to use the new values
                         state <= s_idle;
@@ -277,3 +277,96 @@ module doubleFastSwitcher_HalfStart#(
     end
     
 endmodule
+
+module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
+    parameter maxPeriods = 'h1ff
+)(
+    input clk,
+    input reset,
+    input trigger,
+    input [$clog2(maxPeriods+1) -1:0] nOfPeriodsActive,
+    input [$clog2(maxPeriods+1) -1:0] nOfPeriodsInactive,
+    input [$clog2(maxPeriods+1) -1:0] phase,//this value should be lower (in absolute 
+                //value) than half of nOfPeriodsActive, but it can be both positive and negative
+    output out1,
+    output out2
+);
+	localparam timingSize = $clog2(maxPeriods+1);
+	localparam valueSize = 1;
+	reg alreadyStarted;
+	// reg prevTrigger;
+
+	always @(posedge clk) begin
+		alreadyStarted <= trigger;
+	end
+
+	wire [timingSize -1:0] 	a = nOfPeriodsActive,
+										i = nOfPeriodsInactive,
+										d = phase,
+										a_2 = a >> 1,
+										a_2p = a_2 + (a & 1'b1),
+										i_2 = i >> 1,
+										i_2p = i_2 + (i & 1'b1);
+
+	`define setTimingAndValue(time, value, index, TimeArray, ValueArray)	\
+			assign TimeArray[(index+1) * timingSize -1-:timingSize] = time;\
+			assign ValueArray [(index+1) * valueSize -1-:valueSize] = value;
+	//first pin: Half active period, inactive period, other half of active period
+	wire [(timingSize * 3) -1:0] pin1_loopTimings;
+	wire [(valueSize * 3) -1:0] pin1_loopValues;
+	`setTimingAndValue(a_2,  2'b1, 0, pin1_loopTimings, pin1_loopValues)
+	`setTimingAndValue(i, 	 2'b0, 1, pin1_loopTimings, pin1_loopValues)
+	`setTimingAndValue(a_2p, 2'b1, 2, pin1_loopTimings, pin1_loopValues)
+	
+	multiTimingDoubleFreqCounter#(
+		.nOfTimings		(3),
+		.nofOutputs		(1),
+		.timingSizes	(timingSize)
+	)mtdfc_1(
+    	.clk					(clk),
+    	.reset					(reset),
+		.trigger				(trigger),
+		.timings				(pin1_loopTimings),
+		.requestedOutputValues	(pin1_loopValues),
+		.defaultOutputValue		(0),
+		.outputs				(out1)
+	);
+	//second pin: Half inactive period, active period, other half inactive period. The phase changes 
+		//slightly the length of the 2 inactive periods	
+	wire [(timingSize * 3) -1:0] pin2_loopTimings;
+	wire [(valueSize * 3) -1:0] pin2_loopValues;
+	`setTimingAndValue(i_2 + d	, 2'b0, 0, 	pin2_loopTimings, pin2_loopValues)
+	`setTimingAndValue(a		, 2'b1, 1, 	pin2_loopTimings, pin2_loopValues)
+	`setTimingAndValue(i_2p - d	, 2'b0, 2, 	pin2_loopTimings, pin2_loopValues)
+	
+	multiTimingDoubleFreqCounter#(
+		.nOfTimings		(3),
+		.nofOutputs		(1),
+		.timingSizes	(timingSize)
+	)mtdfc_2(
+    	.clk					(clk),
+    	.reset					(reset),
+		.trigger				(trigger),
+		.timings				(pin2_loopTimings),
+		.requestedOutputValues	(pin2_loopValues),
+		.defaultOutputValue		(0),
+		.outputs				(out2)
+	);
+
+endmodule
+
+
+/*
+vsim work.doubleFastSwitcher_HalfStart_doubleFreqTimers
+add wave -position insertpoint sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/*
+force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/reset z1 0
+force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/trigger z0 0
+force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/nOfPeriodsActive 08 0
+force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/nOfPeriodsInactive 04 0
+force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/phase 1 0
+run
+force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/reset 10 0
+run
+
+*/

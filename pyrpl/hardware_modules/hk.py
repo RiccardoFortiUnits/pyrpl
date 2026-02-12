@@ -145,10 +145,10 @@ class HK(HardwareModule):
 	#     locals()['usefastImaging' + str(i)] = BoolRegister(0x34,  bit=i+16,
 	#                                                   doc=f"if 1, pins N{i} and P{i} will execute an alternate switch")
 	
-	fastImaging_activeTime = 		GainRegister(0x3C, bits=8, startBit=0, norm=125e6, signed = False)
-	fastImaging_inactiveTime = 		GainRegister(0x3C, bits=8, startBit=8, norm=125e6, signed = False)
+	fastImaging_activeTime = 		GainRegister(0x3C, bits=8, startBit=0, norm=250e6, signed = False)
+	fastImaging_inactiveTime = 		GainRegister(0x3C, bits=8, startBit=8, norm=250e6, signed = False)
 	fastImaging_triggerPin = 		inputPinRegister(0x3C, startBit=16)
-	fastImaging_channelsDelay = 		GainRegister(0x40, bits=8, startBit=0, norm=125e6, signed = True)
+	fastImaging_channelsDelay = 		GainRegister(0x40, bits=8, startBit=0, norm=250e6, signed = True)
 	fastImaging_outputPinsIndex = 	digitalOutputPinCoupleProperty("fastImaging")
 	def resetAllPins(self):
 		for i in range(8):
