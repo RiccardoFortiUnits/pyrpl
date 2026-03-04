@@ -68,6 +68,15 @@ class peakValue(FloatProperty):
 		return super().set_value(obj, val)
 	def get_value(self, obj):
 		return getattr(obj.redpitaya.scope, self.propertyAccessor(obj))
+class peakEdgeValue(peakValue):
+	def set_value(self, obj, val):
+		ret = super().set_value(obj, val)
+		if obj.peakType != 'secondary':
+			# let's update all the setpoints of the normalized peaks, so that they 
+			# keep being in the center of their range
+			for p in obj.scanningCavity.allNormalizedSecondaryPeaks():
+				p.timeSetpoint = p.center
+		return ret
 class peakInput(SelectProperty):
 	'''property that specifies the input signal of a peak. It's similar to a peakValue, but it's a select property instead of a float property'''
 	def inputName(self, obj):
@@ -376,6 +385,29 @@ class scanAmplitudeSelectorProperty(SelectProperty):
 
 		return super().set_value(obj, value)
 
+class extendedOutputSelectorProperty(SelectProperty):
+	def __init__(self, **kwargs):
+		super().__init__(options = ["out1", "out2", "PWM1", "PWM2"], **kwargs)
+	def set_value(self, obj, value):
+		oldValue = self.get_value(obj)
+		if oldValue == "PWM1":
+			obj.parent.pwm0.input = "off"
+		elif oldValue == "PWM2":
+			obj.parent.pwm1.input = "off"
+		elif oldValue == "out1":
+			obj.pid.output_direct = "off"
+		elif oldValue == "out2":
+			obj.pid.output_direct = "off"
+
+		if value == "PWM1":
+			obj.parent.pwm0.input = obj.pid.name
+		elif value == "PWM2":
+			obj.parent.pwm1.input = obj.pid.name
+		elif value == "out1":
+			obj.pid.output_direct = "out1"
+		elif value == "out2":
+			obj.pid.output_direct = "out2"
+		return super().set_value(obj, value)
 class peak(Module):
 	'''submodule for the handling of a peak detection and lockin. it can be used for both the main peaks and secondary peaks. 
 	The peak is specified with the parent redPitaya and the peak index. Index 0 is for the left main peak, 1 for the right 
@@ -419,8 +451,8 @@ class peak(Module):
 		self.input
 		self.addToSubmodules()
 	 
-	left = peakValue(lambda peak: f"minTime{peak.index+1}", min = 0)
-	right = peakValue(lambda peak: f"maxTime{peak.index+1}")
+	left = peakEdgeValue(lambda peak: f"minTime{peak.index+1}", min = 0)
+	right = peakEdgeValue(lambda peak: f"maxTime{peak.index+1}")
 	rangeSelector = rangeProperty([left, right], 'left+right')
 	left, right, center, size = (rangeSelector.left, rangeSelector.right, rangeSelector.center, rangeSelector.ampl)
 	
@@ -453,7 +485,8 @@ class peak(Module):
 	ival = DynamicInstanceProperty(Pid.ival, lambda peak : peak.pid)
 	min_voltage = DynamicInstanceProperty(Pid.min_voltage, lambda peak : peak.pid)
 	max_voltage = DynamicInstanceProperty(Pid.max_voltage, lambda peak : peak.pid)
-	output_direct = DynamicInstanceProperty(Pid.output_direct, lambda peak : peak.pid)
+	# output_direct = DynamicInstanceProperty(Pid.output_direct, lambda peak : peak.pid)
+	output_direct = extendedOutputSelectorProperty()
 	'''setpoint is the actual value of the PID setpoint (value between -1 and 1, 
 	where -1 represents the lower timing for the peak, either
 		0 for the main peaks or non-normalized secondary peaks
@@ -521,12 +554,12 @@ class peak(Module):
 		self.locking = False
 		# self.paused = not (self.locking & self.active)
 
-	@staticmethod
-	def allUnusedSecondaryPeaks(scanCavity):
-		peaks = scanCavity.allAvailableSecondaryPeaks()
-		return [p for p in peaks if p not in scanCavity.usedPeaks]
+	# @staticmethod
+	# def allUnusedSecondaryPeaks(scanCavity):
+	# 	peaks = scanCavity.allAvailableSecondaryPeaks()
+	# 	return [p for p in peaks if p not in scanCavity.usedPeaks]
 		
-	pitaya_n_index = SelectProperty(allUnusedSecondaryPeaks)
+	# pitaya_n_index = SelectProperty(allUnusedSecondaryPeaks)
 
 	@property
 	def peakType(self):
@@ -660,15 +693,17 @@ class ScanningCavity(AcquisitionModule):
 		self.usedPeaks.remove(peakToRemove)
 		self.secondaryPeaks.remove(peakToRemove)
 
-	def allAvailableSecondaryPeaks(self):
-		peaks = []
-		for device in self.pyrpl.rps.keys():
-			for i in range(nOfSecondaryPeaks):
-				peaks.append(peak(device, i+2))
-		return peaks
-	def allUnusedSecondaryPeaks(self):
-		peaks = self.allAvailableSecondaryPeaks()
-		return [p for p in peaks if p not in self.usedPeaks]	
+	# def allAvailableSecondaryPeaks(self):
+	# 	peaks = []
+	# 	for device in self.pyrpl.rps.keys():
+	# 		for i in range(nOfSecondaryPeaks):
+	# 			peaks.append(peak(device, i+2))
+	# 	return peaks
+	# def allUnusedSecondaryPeaks(self):
+	# 	peaks = self.allAvailableSecondaryPeaks()
+	# 	return [p for p in peaks if p not in self.usedPeaks]
+	def allNormalizedSecondaryPeaks(self):	
+		return [p for p in self.usedPeaks if (p.index >= 2 and p.normalizeIndex)]
 
 	duration = MultipleDynamicInstanceProperty(Scope.duration, lambda scanCavity : scanCavity.scopes, lambda self, instance, value : instance.updateScope())
 	threshold = MultipleDynamicInstanceProperty(Scope.threshold, lambda scanCavity : scanCavity.scopes)
