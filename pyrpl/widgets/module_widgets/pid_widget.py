@@ -6,6 +6,7 @@ from .base_module_widget import ModuleWidget
 
 from qtpy import QtCore, QtWidgets
 import numpy as np
+from ..attribute_widgets import ResettableFloatAttributeWidget
 
 class PidWidget(ModuleWidget):
 	"""
@@ -30,6 +31,9 @@ class PidWidget(ModuleWidget):
 		self.inputSignal_widget = self.attribute_widgets["input"]
 		self.setpoint_signal_widget = self.attribute_widgets["setpoint_signal"]
 		self.setpoint_source_widget = self.attribute_widgets["setpoint_source"]
+
+		ivalWidget : ResettableFloatAttributeWidget = self.attribute_widgets["ival"]
+		ivalWidget.warningvalues = lambda *_ : (self.attribute_widgets["min_voltage"]._get_widget_value(), self.attribute_widgets["max_voltage"]._get_widget_value())
 		# can't avoid timer to update ival
 		# self.timer_ival = QtCore.QTimer()
 		# self.timer_ival.setInterval(1000)

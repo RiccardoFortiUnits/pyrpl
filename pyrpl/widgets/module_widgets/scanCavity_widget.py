@@ -2,7 +2,7 @@ from qtpy import QtCore, QtWidgets
 import pyqtgraph as pg
 import logging
 import numpy as np
-from ..attribute_widgets import BaseAttributeWidget
+from ..attribute_widgets import ResettableFloatAttributeWidget
 from .base_module_widget import ReducedModuleWidget, ModuleWidget
 from ...pyrpl_utils import get_base_module_class
 from ... import APP
@@ -213,7 +213,7 @@ class peak_widget(ModuleWidget):
 		self.i = aws["i"]
 		self.min_voltage = aws["min_voltage"]
 		self.max_voltage = aws["max_voltage"]
-		self.ival = aws["ival"]
+		self.ival : ResettableFloatAttributeWidget = aws["ival"]
 		self.input_widget = aws["input"]
 		self.output_direct = aws["output_direct"]
 		self.enablingBit = aws["enablingBit"]
@@ -261,6 +261,7 @@ class peak_widget(ModuleWidget):
 		self.normalizeIndex.value_changed.connect(self.updateCurve)
 		self.enabled.value_changed.connect(lambda : self.line.scanCavityWidget.setPeakGroups())
 		
+		self.ival.warningvalues = lambda *_ : (self.min_voltage._get_widget_value(), self.max_voltage._get_widget_value())
 		# self.enabled.value_changed.connect(self._enableLocking)
 		# self._enableLocking()
 
@@ -400,8 +401,8 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 				content.line.tab = tab
 				content.line.tabIdx = idx
 		
-		self.scanSwitcher = scanSwitcher(self)
-		self.attribute_layout.addWidget(self.scanSwitcher.button)
+		# self.scanSwitcher = scanSwitcher(self)
+		# self.attribute_layout.addWidget(self.scanSwitcher.button)
 
 
 		def on_view_changed():
@@ -514,10 +515,10 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		self.attribute_layout.addStretch(1)
 		self.setPeakGroups()
 
-		self.longTimeMeasure = QtWidgets.QPushButton("acquire ivals")
-		self.alreadyAcquiringIval = False
-		self.longTimeMeasure.clicked.connect(self.startIvalAcquisition)
-		self.main_layout.addWidget(self.longTimeMeasure)
+		# self.longTimeMeasure = QtWidgets.QPushButton("acquire ivals")
+		# self.alreadyAcquiringIval = False
+		# self.longTimeMeasure.clicked.connect(self.startIvalAcquisition)
+		# self.main_layout.addWidget(self.longTimeMeasure)
 		
 		
 		

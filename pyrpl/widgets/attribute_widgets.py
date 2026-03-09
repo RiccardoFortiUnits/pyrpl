@@ -418,6 +418,19 @@ class FloatAttributeWidget(NumberAttributeWidget):
     SpinBox = FloatSpinBox
 class ResettableFloatAttributeWidget(ResettableNumberAttributeWidget):
     SpinBox = FloatSpinBox
+    def warningvalues(self):
+        '''overwritable this function with your warning values
+        When the value of the spinbox is outside of this range, the spinbox will be coloured red'''
+        return -np.inf, np.inf
+    
+    def _set_widget_value(self, new_value):
+        ret = super()._set_widget_value(new_value)
+        min, max = self.warningvalues()
+        if new_value < min or new_value > max:
+            self.spinbox.setStyleSheet("background-color: red;")
+        else:
+            self.spinbox.setStyleSheet("background-color: #2b2b2b;")
+        return ret
 
 
 class ComplexAttributeWidget(FloatAttributeWidget):

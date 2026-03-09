@@ -101,11 +101,8 @@ class RedPitaya(object):
 
         if you are experiencing problems, try to increase delay, or try
         logging.getLogger().setLevel(logging.DEBUG)"""
-        if(isDefaultFpga):
-            self.cls_modules = [rp.HK, rp.AMS, rp.Scope, rp.Sampler, rp.Asg0, rp.Asg1] + \
-                      [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 4 + [rp.Trig] + [ rp.IIR] + [rp.linearizer] + [rp.Ramp] * 2
-        else:
-            self.cls_modules = [rp.HK, rp.AmsNouveau, rp.PidNouveau, rp.PidNouveau]
+        self.cls_modules = [rp.HK, rp.AMS, rp.Scope, rp.Sampler, rp.Asg0, rp.Asg1] + \
+                    [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 4 + [rp.Trig] + [ rp.IIR] + [rp.linearizer] + [rp.Ramp] * 2
         self.logger = logging.getLogger(name=__name__)
         #self.license()
         # make or retrieve the config file
