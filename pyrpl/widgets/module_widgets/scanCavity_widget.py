@@ -305,6 +305,13 @@ class peak_widget(ModuleWidget):
 		widget = self.ival
 		if self.isVisible() and not widget.editing():
 			widget.write_attribute_value_to_widget()
+		widget = self.setpoint
+		if not widget.editing():
+				writtenSetpoint = widget.attribute_value
+				if writtenSetpoint != widget._get_widget_value():
+					print(writtenSetpoint, widget._get_widget_value())
+					self.center.attribute_value = writtenSetpoint
+					self.line.updateGeneric()
 
 
 class secondaryPitaya_widget(ModuleWidget):
