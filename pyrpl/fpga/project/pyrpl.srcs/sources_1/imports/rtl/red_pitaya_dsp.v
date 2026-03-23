@@ -112,30 +112,31 @@ localparam	PID3					= 3;		/*modules use both input and output ;*/
 localparam	LINEARIZER				= 4;		/*modules use both input and output ;*/
 localparam	RAMP0					= 5;		/*modules use both input and output ;*/
 localparam	RAMP1					= 6;		/*modules use both input and output ;*/
-localparam	ASG0					= 7;		localparam	SCOPE0 					= 7;
-localparam	ASG1					= 8;		localparam	SCOPE1 					= 8;
-localparam	IN1						= 9;		localparam	DIG0					= 9;
-localparam	IN2						= 10;		localparam	DIG1					= 10;
-localparam	OUT1					= 11;		localparam	PWM0					= 11;
-localparam	OUT2					= 12;		localparam	PWM1					= 12;
-localparam	PEAK1					= 13;		localparam	ASG_AMPL0				= 13;
-localparam	PEAK2					= 14;		localparam	ASG_AMPL1				= 14;
-localparam	PEAK3					= 15;		localparam	PID0_SETPOINT_SIGNAL	= 15;
-localparam	PEAK4					= 16;		localparam	PID1_SETPOINT_SIGNAL	= 16;
-localparam	PEAK5					= 17;		localparam	PID2_SETPOINT_SIGNAL	= 17;
-localparam	PEAK6					= 18;											/*;*/
-localparam	PEAK_IDX1				= 19;											/*;*/
-localparam	PEAK_IDX2				= 20;											/*;*/
-localparam	PEAK_IDX3				= 21;											/*;*/
-localparam	PEAK_IDX4				= 22;											/*;*/
-localparam	PEAK_IDX5				= 23;											/*;*/
-localparam	PEAK_IDX6				= 24;											/*;*/
-localparam	ALLTRIGGERS				= 25;											/*;*/
+localparam	SENSOR_FUSER			= 7;		/*modules use both input and output ;*/
+localparam	ASG0					= 8;		localparam	SCOPE0 					= 8;
+localparam	ASG1					= 9;		localparam	SCOPE1 					= 9;
+localparam	IN1						= 10;		localparam	DIG0					= 10;
+localparam	IN2						= 11;		localparam	DIG1					= 11;
+localparam	OUT1					= 12;		localparam	PWM0					= 12;
+localparam	OUT2					= 13;		localparam	PWM1					= 13;
+localparam	PEAK1					= 14;		localparam	ASG_AMPL0				= 14;
+localparam	PEAK2					= 15;		localparam	ASG_AMPL1				= 15;
+localparam	PEAK3					= 16;		localparam	PID0_SETPOINT_SIGNAL	= 16;
+localparam	PEAK4					= 17;		localparam	PID1_SETPOINT_SIGNAL	= 17;
+localparam	PEAK5					= 18;		localparam	PID2_SETPOINT_SIGNAL	= 18;
+localparam	PEAK6					= 19;		localparam	PID3_SETPOINT_SIGNAL	= 19;
+localparam	PEAK_IDX1				= 20;		localparam	SENSOR_FUSER_IN1		= 20;
+localparam	PEAK_IDX2				= 21;											/*;*/
+localparam	PEAK_IDX3				= 22;											/*;*/
+localparam	PEAK_IDX4				= 23;											/*;*/
+localparam	PEAK_IDX5				= 24;											/*;*/
+localparam	PEAK_IDX6				= 25;											/*;*/
+localparam	ALLTRIGGERS				= 26;											/*;*/
 /*§§#§§*/
 
-localparam nOfDSP_arrivingFrom = 26, 			nOfDSP_goingTo = 18;
-localparam MODULES = 7;
-localparam nOfDSP_directOutputs = 11;//directOutputs are the outputs tha can be outputed to the DACs
+localparam nOfDSP_arrivingFrom = 27, 			nOfDSP_goingTo = 21;
+localparam MODULES = 8;
+localparam nOfDSP_directOutputs = 13;//directOutputs are the outputs tha can be outputed to the DACs
 
 localparam LOG_INPUT_MODULES = $clog2(nOfDSP_arrivingFrom);
 localparam LOG_OUTPUT_MODULES = $clog2(nOfDSP_goingTo);
@@ -333,7 +334,7 @@ generate for (j = PID0; j < LINEARIZER; j = j+1) begin
      .sync_i       (  sync[j] & isValid_arrivingFrom[switchSignal[j]] ),  // syncronization of different dsp modules
      .dat_i        (  signal_goingTo [j] ),  // input data
      .dat_o        (  signal_arrivingFrom[j]),  // output data
-     .setpoint_i   (  signal_goingTo[PID0_SETPOINT_SIGNAL + j]),  // output data
+     .setpoint_i   (  signal_goingTo[PID0_SETPOINT_SIGNAL + j - PID0]),  // output data
     // .diff_dat_i   (  diff_input_signal[j] ),  // input data for differential mode
     // .diff_dat_o   (  diff_output_signal[j] ),  // output data for differential mode
 
@@ -381,7 +382,7 @@ endgenerate
 // sequence of ramp functions, for arbitrary functions with strict timings (useful to make sequences of ramps with very different time frames, if you tried to do this with the normal asg, the very fast ramps would not be that precise)
 generate
 	if(1)begin
-		for (j = RAMP0; j < ASG0; j = j+1) begin
+		for (j = RAMP0; j < SENSOR_FUSER; j = j+1) begin
 
 			ramp#(
 				.nOfRamps                   (8),
@@ -403,6 +404,33 @@ generate
 				.wdata (sys_wdata)
 			);
 		
+		end
+	end
+endgenerate
+// sequence of ramp functions, for arbitrary functions with strict timings (useful to make sequences of ramps with very different time frames, if you tried to do this with the normal asg, the very fast ramps would not be that precise)
+generate
+	if(1)begin
+		for (j = SENSOR_FUSER; j < ASG0; j = j+1) begin
+			sensorFuser#(
+				.signalSize			(14),
+				.gainSize			(8),//not sure if it's enough
+				.gainFractionalSize	(6),//same
+				.sectionSize		(4) //doesn't require many bits, we would limit the possible combinations, but usually you won't need a section division different from 0.5, 0.25, 0.25
+			)segFus(
+				.clk				(clk_i),
+				.reset				(!rstn_i),
+				.a					(signal_goingTo[j]),
+				.b					(signal_goingTo[SENSOR_FUSER_IN1 + j - SENSOR_FUSER]),
+				.out				(signal_arrivingFrom[j]),
+				
+				//communincation with PS
+				.addr ( sys_addr[16-1:0] ),
+				.wen  ( sys_wen & (sys_addr[20-1:16]==j) ),
+				.ren  ( sys_ren & (sys_addr[20-1:16]==j) ),
+				.ack  ( module_ack[j] ),
+				.rdata (module_rdata[j]),
+				.wdata (sys_wdata)
+			);		
 		end
 	end
 endgenerate

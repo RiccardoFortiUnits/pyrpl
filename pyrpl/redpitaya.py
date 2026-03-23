@@ -102,7 +102,7 @@ class RedPitaya(object):
         if you are experiencing problems, try to increase delay, or try
         logging.getLogger().setLevel(logging.DEBUG)"""
         self.cls_modules = [rp.HK, rp.AMS, rp.Scope, rp.Sampler, rp.Asg0, rp.Asg1] + \
-                    [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 4 + [rp.Trig] + [ rp.IIR] + [rp.linearizer] + [rp.Ramp] * 2
+                    [rp.Pwm] * 2 + [rp.Iq] * 3 + [rp.Pid] * 4 + [rp.Trig] + [ rp.IIR] + [rp.linearizer] + [rp.Ramp] * 2 + [rp.sensor_fuser]
         self.logger = logging.getLogger(name=__name__)
         #self.license()
         # make or retrieve the config file
@@ -560,7 +560,7 @@ class RedPitaya(object):
         # software modules are Managers for various modules plus those defined in the config file
         # soft_mod_names = ['Asgs', 'Iqs', 'Pids', 'Scopes', 'Iirs', 'Trigs','Pwms',
         #                 'Hks', 'Linearizers', 'Ramps'] + self.c.pyrpl.modules
-        soft_mod_names = ['Asgs', 'Pids', 'Scopes', 'Trigs','Pwms', 'Hks', 'Linearizers', 'Ramps']
+        soft_mod_names = ['Asgs', 'Pids', 'Scopes', 'Trigs','Pwms', 'Hks', 'Linearizers', 'Ramps', 'Sensor_fusers']
         module_classes = [get_module(cls_name)
                           for cls_name in soft_mod_names]
         module_names, indexes = pyrpl_utils.\

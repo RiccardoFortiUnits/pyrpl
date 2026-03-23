@@ -88,42 +88,6 @@ DSP_ONLY_OUTPUTS = orderDictionary(DSP_ONLY_OUTPUTS_unordered, outputOrders, 0)
 #dictionary connecting the bits of signal alltriggers to the corresponding triggers
 DSP_TRIGGERS = {triggerName : i for i, triggerName in enumerate(parse_verilog_triggers(dsp_v_file))}
 
-# order here determines the order in the GUI etc.
-# DSP_INPUTS = OrderedDict([
-# 	('in1', 13), #same as asg
-# 	('in2', 14),
-# 	('out1', 15),
-# 	('out2', 16),
-# 	('peak1', 17), #same as asg
-# 	('peak2', 18),
-# 	('peak3', 19),
-# 	('peak_idx1', 20),
-# 	('peak_idx2', 21),
-# 	('peak_idx3', 22),
-# 	('iq0', 5),
-# 	('iq1', 6),
-# 	('iq2', 7),
-# 	('iq2_2', 8),
-# 	('pid0', 0),
-# 	('pid1', 1),
-# 	('pid2', 2),
-# 	('asg0', 11),
-# 	('asg1', 12),
-# 	('linearizer', 9),
-# 	('ramp', 10),
-# 	('trig', 3),
-# 	('iir', 4),
-# 	('off', -1)])
-# DSP_ONLY_OUTPUTS = OrderedDict([
-# 	('scope0', DSP_INPUTS['asg0']),
-# 	('scope1', DSP_INPUTS['asg1']),
-# 	('pwm0', DSP_INPUTS['in1']),
-# 	('pwm1', DSP_INPUTS['in2']),
-# 	('dig0', DSP_INPUTS['out1']),
-# 	('dig1', DSP_INPUTS['out2']),
-# 	('asg_ampl0', DSP_INPUTS['peak1']),
-# 	('asg_ampl1', DSP_INPUTS['peak2']),])
-
 def all_inputs_keys(instance):
 	""" collects all available logical inputs, composed of all
 	dsp inputs and all submodule inputs, such as lockbox signals etc."""

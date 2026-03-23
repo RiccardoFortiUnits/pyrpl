@@ -45,12 +45,14 @@ module ramp#(
 	//it starts a counter. Every time the counter reaches the value of timeStep, the output gets increased
 	//by the value of stepIncrease. When nOfSteps cycles have been executed, the ramp stops
 	
-//if you start from the ramp paramters startValue, endValue and rampTime, yo
-
-reg [data_size-1:0] startPoint	[nOfRamps-1:0];
-reg [time_size-1:0] timeStep	  [nOfRamps-1:0];
-reg [data_size-1:0] nOfSteps	  [nOfRamps-1:0];
-reg [data_size-1:0] stepIncrease  [nOfRamps-1:0];
+//if you start from the ramp paramters startValue, endValue and rampTime, 
+								//you can obtain the following values as:
+reg [data_size-1:0] startPoint	[nOfRamps-1:0];		// = startPoint
+reg [time_size-1:0] timeStep	  [nOfRamps-1:0];	// = rampTime / nOfSteps
+reg [data_size-1:0] stepIncrease  [nOfRamps-1:0];	// = (endValue - startValue) / nOfSteps
+reg [data_size-1:0] nOfSteps	  [nOfRamps-1:0];	// chosen so that the obtained ramp is 
+				//as similar as possible to the requested one (due to quantization, you might 
+				//need to try different values of the parameters)
 reg [1:0] idleConfig;
 reg [data_size-1:0] defaultValue;
 reg useMultipleTriggers;

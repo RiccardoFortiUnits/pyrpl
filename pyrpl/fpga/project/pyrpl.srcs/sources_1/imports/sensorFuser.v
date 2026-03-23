@@ -1,7 +1,19 @@
 
+/*
+		sensorFuser:
+	module that combines two input signals that work in different ranges. For example, if you have two sensors monitoring the same signal, 
+	and the sensors have different sensitivities and working ranges. In that case, you would use a highly sensitive sensor (a) to measure signals 
+	close to 0, and have a broader-range sensor (b) to measure signals far from 0, where the other sensor would saturate. With this module, you 
+	can combine the signals coming from the two sensors to have a signal in the range [-1,1] where, for example, an output in the range [-1,0] 
+	is used for small input values (section low, following only the signal of sensor a), while the range [0,1] indicates large input values 
+	(section high, following sensor b). And you can even have an intermediate range, where you assume that both sensors are valid/not saturated, 
+	and so a combination of the two sensor signals is used (section med).
+	The ranges of the 3 sections (low, med, high) can be configured to give more range to a specific section (example, large low section, to have 
+	more resolution on the small values, or small med section, if the signal is never expected to have "intermediate" values)
 
+*/
 module sensorFuser#(
-	parameter signalSize = 12,
+	parameter signalSize = 14,
 	parameter gainSize = 8,
 	parameter gainFractionalSize = 6,
 	parameter sectionSize = 4
@@ -11,17 +23,28 @@ module sensorFuser#(
 	input [signalSize -1:0]		a,
 	input [signalSize -1:0]		b,
 	output [signalSize -1:0]	out,
-	input [signalSize -1:0]		offset_a_low, //should always be 0, but let's define it just in case
-	input [signalSize -1:0]		offset_a_med,
-	input [signalSize -1:0]		offset_b_med,
-	input [signalSize -1:0]		offset_b_high,
-	input [gainSize -1:0]		gain_a_low,
-	input [gainSize -1:0]		gain_a_med,
-	input [gainSize -1:0]		gain_b_med,
-	input [gainSize -1:0]		gain_b_high,
-	input [sectionSize -1:0] 	section_low,
-	input [sectionSize -1:0] 	section_med
+	
+    // System bus
+    input      [ 32-1:0] addr   ,  // bus address
+    input      [ 32-1:0] wdata  ,  // bus write data
+    input                wen    ,  // bus write enable
+    input                ren    ,  // bus read enable
+    output reg [ 32-1:0] rdata  ,  // bus read data
+    output reg           err    ,  // bus error indicator
+    output reg           ack       // bus acknowledge signal
 );
+
+/*			parameters			*/
+reg [signalSize -1:0]		offset_a_low;
+reg [signalSize -1:0]		offset_a_med;
+reg [signalSize -1:0]		offset_b_med;
+reg [signalSize -1:0]		offset_b_high;
+reg [gainSize -1:0]			gain_a_low;
+reg [gainSize -1:0]			gain_a_med;
+reg [gainSize -1:0]			gain_b_med;
+reg [gainSize -1:0]			gain_b_high;
+reg [sectionSize -1:0] 		section_low;
+reg [sectionSize -1:0] 		section_med;
 
 //let's assume that the output is unsigned (value between 0 and 1), we'll make it signed at the end
 reg [signalSize -1:0] uOut;
@@ -159,6 +182,56 @@ always @(posedge clk) begin
 				uOut <= 1<<signalSize;
 			end
 		endcase
+	end
+end
+
+
+//---------------------------------------------------------------------------------
+//
+//  System bus connection
+
+always @(posedge clk)
+if (reset) begin
+	offset_a_low	<= 0;
+	offset_a_med	<= 0;
+	offset_b_med	<= 0;
+	offset_b_high	<= 0;
+	gain_a_low		<= 0;
+	gain_a_med		<= 0;
+	gain_b_med		<= 0;
+	gain_b_high		<= 0;
+	section_low		<= 0;
+	section_med		<= 0;
+end else if (wen) begin
+	if (addr[19:0]==20'h100) {offset_a_med, offset_a_low} <= wdata;
+	if (addr[19:0]==20'h104) {offset_b_high, offset_b_med} <= wdata;
+	if (addr[19:0]==20'h108) {gain_a_low} <= wdata;
+	if (addr[19:0]==20'h10c) {gain_a_med} <= wdata;
+	if (addr[19:0]==20'h110) {gain_b_med} <= wdata;
+	if (addr[19:0]==20'h114) {gain_b_high} <= wdata;
+	if (addr[19:0]==20'h118) {section_med, section_low} <= wdata;
+	
+end
+
+wire en;
+assign en = wen | ren;
+
+always @(posedge clk) begin
+	if (reset) begin
+	    err <= 1'b0;
+	    ack <= 1'b0;
+	end else begin
+	    err <= 1'b0;
+	    ack <= en;  
+	    rdata <=  32'h0;
+
+		if (addr[19:0]==20'h100) rdata <= {offset_a_med, offset_a_low};
+		if (addr[19:0]==20'h104) rdata <= {offset_b_high, offset_b_med};
+		if (addr[19:0]==20'h108) rdata <= {gain_a_low};
+		if (addr[19:0]==20'h10c) rdata <= {gain_a_med};
+		if (addr[19:0]==20'h110) rdata <= {gain_b_med};
+		if (addr[19:0]==20'h114) rdata <= {gain_b_high};
+		if (addr[19:0]==20'h118) rdata <= {section_med, section_low};
 	end
 end
 

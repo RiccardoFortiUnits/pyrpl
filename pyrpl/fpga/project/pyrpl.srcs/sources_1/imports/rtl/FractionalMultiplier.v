@@ -19,6 +19,8 @@ module FractionalMultiplier #(parameter A_WIDTH = 16,
 
 endmodule
 
+
+
 module clocked_FractionalMultiplier #(
           parameter A_WIDTH = 16,
           parameter B_WIDTH = 16,
@@ -34,6 +36,19 @@ module clocked_FractionalMultiplier #(
 );
 reg signed [A_WIDTH + B_WIDTH - 1:0] full_aByb;
 
+//assign result = full_aByb[OUTPUT_WIDTH - 1 + FRAC_BITS_A + FRAC_BITS_B - FRAC_BITS_OUT: 
+//                                               FRAC_BITS_A + FRAC_BITS_B - FRAC_BITS_OUT];
+	fixedPointShifter#(
+		.inputBitSize	(A_WIDTH + B_WIDTH),
+		.inputFracSize	(FRAC_BITS_A + FRAC_BITS_B),
+		.outputBitSize	(OUTPUT_WIDTH),
+		.outputFracSize	(FRAC_BITS_OUT),
+		.isSigned		(areSignalsSigned)
+	)outShifter(
+		.in				(full_aByb),
+		.out			(result)
+	);
+
 generate
     if(areSignalsSigned)begin
         always @(posedge clk)
@@ -45,10 +60,6 @@ generate
     end
 
 endgenerate
-
-assign result = full_aByb[OUTPUT_WIDTH - 1 + FRAC_BITS_A + FRAC_BITS_B - FRAC_BITS_OUT: 
-                                               FRAC_BITS_A + FRAC_BITS_B - FRAC_BITS_OUT];
-
 
 //sadly, MULT_MACRO only works with inputs up to 18 bita...
 //  wire signed [A_WIDTH + B_WIDTH - 1:0] full_aByb;
