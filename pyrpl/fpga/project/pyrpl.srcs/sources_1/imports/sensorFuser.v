@@ -11,6 +11,21 @@
 	The ranges of the 3 sections (low, med, high) can be configured to give more range to a specific section (example, large low section, to have 
 	more resolution on the small values, or small med section, if the signal is never expected to have "intermediate" values)
 
+	Assuming that the sensors read the same value x, we get the values a(x) and b(x). We assume that
+	a(x) = a(x_low) + g_a * (x - x_low) if x <= x_high, else a(x_high) 		(saturates for values higher than x_high)
+	b(x) = b(x_low) + g_b * (x - x_low) 		(it doesn't saturate, but it's not reliable for x < x_med)
+
+	then, we can define the combination signal c, which is composed of 3 sections (depending on the input signal x)
+	c(a(x), b(x)) = - 1 + 2 * (
+		section_low * (a(x) - a(x_low)) / g_a													if a(x) <= a(x_med)
+			else
+		section_low + section_med * .5 * ((a(x) - a(x_med)) / g_a	(b(x) - b(x_med)) / g_b)	if a(x) > a(x_med) and b(x) <= b(x_high)
+			else
+		section_low + section_med + section_high * (b(x) - b(x_high)) / g_b)	if b(x) > b(x_high)
+	)
+	where section_low + section_med + section_high = 1
+
+	this function maps x into the range [-1,1]
 */
 module sensorFuser#(
 	parameter signalSize = 14,

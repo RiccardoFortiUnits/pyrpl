@@ -387,7 +387,7 @@ class scanAmplitudeSelectorProperty(SelectProperty):
 
 class extendedOutputSelectorProperty(SelectProperty):
 	def __init__(self, **kwargs):
-		super().__init__(options = ["out1", "out2", "PWM1", "PWM2"], **kwargs)
+		super().__init__(options = ["out1", "out2", "PWM1", "PWM2", "off"], **kwargs)
 	def set_value(self, obj, value):
 		oldValue = self.get_value(obj)
 		if oldValue == "PWM1":
@@ -443,13 +443,17 @@ class peak(Module):
 	_widget_class = peak_widget
 
 	_signal_launcher = SignalLauncherPeak
-	def __init__(self, redpitaya, index, scanningCavity, name=None):
+	def __init__(self, redpitaya, index, scanningCavity, name=None, onlyReset = False):
 		super().__init__(redpitaya, name)
 		self.scanningCavity = scanningCavity
 		self.index = index
-		self.pid = redpitaya.pids.all_modules[index % len(redpitaya.pids.all_modules)]
-		self.input
-		self.addToSubmodules()
+		if onlyReset:
+			dt = self.redpitaya.scope.duration / 2**14
+			self.left = 1 * dt
+			self.right = 2 * dt
+		else:
+			self.pid = redpitaya.pids.all_modules[index % len(redpitaya.pids.all_modules)]
+			self.addToSubmodules()
 	 
 	left = peakEdgeValue(lambda peak: f"minTime{peak.index+1}", min = 0)
 	right = peakEdgeValue(lambda peak: f"maxTime{peak.index+1}")
@@ -672,6 +676,10 @@ class ScanningCavity(AcquisitionModule):
 		# and let's keep the 2nd pid free for the mainR peak, which does not require a pid, but it can still be useful
 		for i in range(0, nOfSecondaryPeaks-2):
 			self.addSecondaryPeak(peak(pitaya, i + 2, self, f"{pitaya.name}_secondary{i}"))
+		#let's define the unused peaks, just so that they won't annoy us 
+		peak(pitaya, nOfSecondaryPeaks , self, f"{pitaya.name}_secondary{nOfSecondaryPeaks - 2}", onlyReset= True)
+		peak(pitaya, nOfSecondaryPeaks + 1, self, f"{pitaya.name}_secondary{nOfSecondaryPeaks - 1}", onlyReset= True)
+
 		self.mainPitaya.hk.input1 = "alltriggers"
 	def addPitaya(self, pitaya):
 		if pitaya in self.usedPitayas:
@@ -689,6 +697,7 @@ class ScanningCavity(AcquisitionModule):
 			raise Exception("peak already used")
 		self.usedPeaks.append(newPeak)
 		self.secondaryPeaks.append(newPeak)
+			
 	def removeSecondaryPeak(self, peakToRemove):
 		self.usedPeaks.remove(peakToRemove)
 		self.secondaryPeaks.remove(peakToRemove)

@@ -100,8 +100,6 @@ module newPWM#(
   input	[bitResolution -1:0]			in,
   output reg		out
 );
-localparam maxVal = {(bitResolution){1'b1}};
-wire [bitResolution -1:0] incrementer = maxVal >> 2;
 reg [bitResolution -1:0] counter;
 wire [bitResolution -1:0] reversedCounter;
 wire isInputLowerThanHalf;
@@ -141,6 +139,156 @@ end
 endmodule
 
 
+
+module superFastPWM#(
+	parameter bitResolution = 14,
+	parameter isInputSignalSigned = 1
+)(
+  // system signals
+  input             clk ,
+  input             rst,
+
+  input	[bitResolution -1:0]			in,
+  output			out
+);
+reg [bitResolution -1:0] counter;
+wire [bitResolution -1:0] counter_p1 = counter + 1;
+wire [bitResolution -1:0] reversedCounter, reversedCounter_p1;
+wire isInputLowerThanHalf;
+generate
+	genvar i;
+	for (i = 0; i < bitResolution; i++) begin
+		assign reversedCounter[i] = counter[bitResolution - 1 - i];
+		assign reversedCounter_p1[i] = counter_p1[bitResolution - 1 - i];
+	end
+	if (isInputSignalSigned)begin
+		assign isInputLowerThanHalf = $signed(in) < $signed(0);
+	end else begin
+		assign isInputLowerThanHalf = $unsigned(in) < $unsigned(1 << (bitResolution - 1));
+	end
+endgenerate
+reg risingValue, fallingValue;
+
+reg fallingValue_delayed;//let's delay the signal of a clock cycle, so that we don't have glitches when the clock toggles 
+						//low and the asynchronous circuit hasn't settled yet.
+reg risingValue_delayed, risingValue_delayedHalf;//let's delay the signal of a one and half clock cycle. The first clock 
+						//cycle is o settle the circuit, while the half period is to avoid that the register switches 
+						//while the clock is rising
+						
+reg reverse, reverse_delayed;
+always @(posedge clk) begin
+	if(rst)begin
+		counter <= 0;
+		risingValue <= 0;
+		reverse <= 0;
+	end else begin
+		counter <= counter + 2;
+		if(isInputSignalSigned) begin
+			if(isInputLowerThanHalf)begin
+				risingValue <= $signed(-reversedCounter) < $signed(in);
+				fallingValue <= $signed(-reversedCounter_p1) < $signed(in);
+			end else begin
+				risingValue <= $signed(reversedCounter) < $signed(in);
+				fallingValue <= $signed(reversedCounter_p1) < $signed(in);
+			end
+		end else begin
+			if(isInputLowerThanHalf)begin
+				risingValue <= $unsigned(~reversedCounter) < $unsigned(in);
+				fallingValue <= $unsigned(~reversedCounter_p1) < $unsigned(in);
+			end else begin
+				risingValue <= $unsigned(reversedCounter) < $unsigned(in);
+				fallingValue <= $unsigned(reversedCounter_p1) < $unsigned(in);
+			end
+		end
+		if(risingValue == fallingValue)begin
+			reverse <= !reverse;
+		end
+	end
+	risingValue_delayed <= risingValue;	
+	fallingValue_delayed <= fallingValue;
+	reverse_delayed <= reverse;
+end
+always @(negedge clk) begin
+	risingValue_delayedHalf <= risingValue_delayed;
+end
+
+assign out = reverse_delayed ^ (clk ? risingValue_delayedHalf : fallingValue_delayed);
+
+endmodule
+
+// /*
+module sigmaDeltaPWM#(
+	parameter bitResolution = 14
+)(
+  // system signals
+  input             clk ,
+  input             rst,
+
+  input	[bitResolution -1:0]			in,
+  output reg			out
+);
+reg unsigned [bitResolution+1 -1:0] inputIntegral;
+wire currentSignBit = inputIntegral[bitResolution];
+reg prevSignBit;
+always @(posedge clk ) begin
+	if (rst) begin
+		inputIntegral <= 0;
+		prevSignBit <= 0;
+	end else begin
+		inputIntegral <= inputIntegral + in;
+		prevSignBit <= currentSignBit;
+		out <= prevSignBit != currentSignBit;
+	end
+end
+endmodule
+
+module doubleFreq_sigmaDeltaPWM#(
+	parameter bitResolution = 14,
+	parameter isInputSignalSigned = 1
+)(
+  // system signals
+  input             clk ,
+  input             rst,
+
+  input	[bitResolution -1:0] in,
+  output out
+);
+reg [1:0] outs;
+reg unsigned [bitResolution+2 -1:0] inputIntegral;
+wire [1:0] currentSignBit = inputIntegral[bitResolution+1 -:2];
+reg [1:0] prevSignBit;
+reg prevSignBit_halfDelayed;
+wire [1:0] signBitDifference = currentSignBit - prevSignBit;
+wire [bitResolution -1:0] unsigned_in;//let's always work with the unsigned version of the input
+generate
+if(isInputSignalSigned)begin
+	assign unsigned_in = {~in[bitResolution-1], in[bitResolution-1 -1:0]};
+end else begin
+	assign unsigned_in = in;
+end
+endgenerate
+always @(posedge clk ) begin
+	if (rst) begin
+		inputIntegral <= 0;
+		prevSignBit <= 0;
+		outs <= 0;
+	end else begin
+		inputIntegral <= inputIntegral + (unsigned_in << 1);
+		prevSignBit <= currentSignBit;
+		outs[0] <= |signBitDifference; //signBitDifference > 0;
+		outs[1] <= signBitDifference[1]; //signBitDifference > 1;
+	end
+end
+always @(negedge clk) begin
+	if (rst) begin
+		prevSignBit_halfDelayed <= 0;
+	end else begin
+		prevSignBit_halfDelayed <= outs[0];
+	end
+end
+assign out = clk ? prevSignBit_halfDelayed : outs[1];
+endmodule
+
 /*
 
 add wave -position insertpoint sim:/newPWM/*
@@ -149,14 +297,25 @@ force -freeze sim:/newPWM/rst z1 0
 force -freeze sim:/newPWM/in 0134 0
 run
 force -freeze sim:/newPWM/rst 10 0
-run
-run
-run
-run
-run
-run
-run
-run
+run 100ns
 
+
+vsim work.superFastPWM
+add wave -position insertpoint sim:/superFastPWM/*
+force -freeze sim:/superFastPWM/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/superFastPWM/rst z1 0
+force -freeze sim:/superFastPWM/in 0134 0
+run
+force -freeze sim:/superFastPWM/rst 10 0
+run 100ns
+
+vsim work.doubleFreq_sigmaDeltaPWM
+add wave -position insertpoint sim:/doubleFreq_sigmaDeltaPWM/*
+force -freeze sim:/doubleFreq_sigmaDeltaPWM/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/doubleFreq_sigmaDeltaPWM/rst z1 0
+force -freeze sim:/doubleFreq_sigmaDeltaPWM/in 2f 0
+run
+force -freeze sim:/doubleFreq_sigmaDeltaPWM/rst 10 0
+run 100ns
 
 */

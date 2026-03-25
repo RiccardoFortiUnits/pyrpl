@@ -634,23 +634,35 @@ red_pitaya_ams i_ams (
 
 
 
-// red_pitaya_pwm pwm [4-1:0] (
+// red_pitaya_pwm pwm_old (
 //   // system signals
 //   .clk   (pwm_clk ),
 //   .rstn  (pwm_rstn),
 //   // configuration
-//   .cfg   ({pwm_cfg_d, pwm_cfg_c, pwm_cfg_b, pwm_cfg_a}),
+//   .cfg   ({pwm_cfg_a}),
 //   //.signal_i ({pwm_signals[3],pwm_signals[2],pwm_signals[1],pwm_signals[0]}),
 //   // PWM outputs
-//   .pwm_o (dac_pwm_o),
+//   .pwm_o (dac_pwm_o[0]),
 //   .pwm_s ()
 // );
 
-newPWM pwm[4 -1:0] (
+// superFastPWM inverseCounter (
+// 	.clk	(adc_clk),
+// 	.rst	(!adc_rstn),
+// 	.in		(pwm_signals[1]),
+// 	.out	(dac_pwm_o[1])
+// );
+// doubleFreq_sigmaDeltaPWM dfsdp1 (
+// 	.clk	(adc_clk),
+// 	.rst	(!adc_rstn),
+// 	.in		(pwm_signals[0]),
+// 	.out	(dac_pwm_o[2])
+// );
+doubleFreq_sigmaDeltaPWM dfsdp[1:0] (
 	.clk	(adc_clk),
 	.rst	(!adc_rstn),
-	.in		({pwm_signals[3],pwm_signals[2],pwm_signals[1],pwm_signals[0]}),
-	.out	(dac_pwm_o)
+	.in		({pwm_signals[1], pwm_signals[0]}),
+	.out	({dac_pwm_o[1], dac_pwm_o[0]})
 );
 
 //---------------------------------------------------------------------------------
