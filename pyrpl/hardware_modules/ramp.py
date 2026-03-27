@@ -2,7 +2,7 @@ from ..attributes import IntRegister, ArrayRegister, FloatRegister, SelectRegist
 
 from ..widgets.module_widgets.ramp_widget import rampWidget
 import numpy as np
-from .dsp import DspModule, all_inputs, dsp_addr_base, InputSelectRegister
+from .dsp import DspModule, all_inputs, dsp_addr_base, InputSelectRegister, segmentedFunctionObject
 from .hk import HK
 
 class rampFunction(ArrayRegister):
@@ -163,7 +163,7 @@ class rampFunction(ArrayRegister):
 		self.nOfSteps.set_value(obj, list_nOfSteps)
 	  
 
-class Ramp(DspModule):
+class Ramp(DspModule, segmentedFunctionObject):
 	_widget_class = rampWidget
 
 	_setup_attributes = \
@@ -200,3 +200,6 @@ class Ramp(DspModule):
 
 
 	rampValues = rampFunction(nOfSegments, timeRegistersBitSize, smallestStepIncrease, smallestTimeStep)
+
+	def points(self):
+		return self.rampValues

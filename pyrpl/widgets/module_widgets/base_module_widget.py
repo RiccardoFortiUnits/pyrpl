@@ -284,7 +284,7 @@ class ReducedModuleWidget(QtWidgets.QGroupBox):
         name = self.module.name
         if self.module.owner is not None:
             self.setEnabled(False)
-            self.set_title(name + ' (' + self.module.owner + ')')
+            self.set_title(name + ' (' + self.module.owner.name + ')')
         else:
             self.setEnabled(True)
             self.set_title(name)

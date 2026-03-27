@@ -743,7 +743,10 @@ class Module(with_metaclass(ModuleMetaClass, object)):
         self._signal_launcher._clear()
         for sub in self._modules:
             getattr(self, sub)._clear()
-
+	
+    def _emit_signal_by_name(self, signal_name, *args, **kwds):
+        """Let's the module's signal_launcher emit signal name"""
+        self._signal_launcher.emit_signal_by_name(signal_name, *args, **kwds)
 
 class HardwareModule(Module):
     """

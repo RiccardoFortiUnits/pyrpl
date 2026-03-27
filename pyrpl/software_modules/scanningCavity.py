@@ -448,6 +448,7 @@ class peak(Module):
 		self.scanningCavity = scanningCavity
 		self.index = index
 		if onlyReset:
+            #let's put the range in a small small interval at the start, to avoid the FPGA glitching out on where the range is
 			dt = self.redpitaya.scope.duration / 2**14
 			self.left = 1 * dt
 			self.right = 2 * dt

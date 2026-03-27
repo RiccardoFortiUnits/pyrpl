@@ -1,13 +1,44 @@
-from ..attributes import IntRegister, ArrayRegister, FloatRegister, SelectRegister, IORegister, BoolProperty, BoolRegister, GainRegister, digitalPinRegister, FloatProperty, ExpandableProperty
+from ..attributes import IntRegister, ArrayRegister, FloatRegister, SelectRegister, SelectProperty, IORegister, BoolProperty, BoolRegister, GainRegister, digitalPinRegister, FloatProperty, ExpandableProperty
 
-from ..module_attributes import ModuleListProperty, Module
+from ..module_attributes import ModuleListProperty, Module, SignalLauncher
 from ..widgets.module_widgets.sensorFuser_widget import sensor_fuser_widget, sensorToBeFused_widget
 import numpy as np
-from .dsp import DspModule, all_inputs, dsp_addr_base, InputSelectRegister
+from .dsp import DspModule, all_inputs, dsp_addr_base, InputSelectRegister, all_output_directs, segmentedFunctionObject
+from .scope import Scope
+from .asg import Asg0
+import numpy as np
+from scipy.optimize import least_squares
+from qtpy import QtCore
 
+class SignalLauncherSensorFuserModule(SignalLauncher):
+    """ class that takes care of emitting signals to update all possible
+    displays"""
 
+    updateExpectedCurves = QtCore.Signal()  # This signal is emitted when
 
-class sensorToBeFused(Module):
+class updateSensorFuserProperty(ExpandableProperty):
+	'''whenever this property is updated, the FPGA values of the sensorFuser module are updated'''
+	alreadyUpdating = False
+	@staticmethod
+	def updateSensorFuser(self, sensorToBeFused, value):
+		try:
+			if updateSensorFuserProperty.alreadyUpdating:
+				return
+			updateSensorFuserProperty.alreadyUpdating = True
+			other = sensorToBeFused.getOtherProperty(self)
+			if other is not None:
+				valueForOther = sensorToBeFused.otherSensor.signalAtTime(sensorToBeFused.timeAtsignal(value))
+				other._prop.__set__(sensorToBeFused.otherSensor, valueForOther)
+			sensorToBeFused.parent.updateFPGA_valuesFromSensorValues()
+		finally:
+			updateSensorFuserProperty.alreadyUpdating = False
+
+	def __init__(self, prop):
+		super().__init__(prop, 
+			extraFunctionToDoAfterSettingValue=self.updateSensorFuser
+		)
+
+class sensorToBeFused(Module, segmentedFunctionObject):
 	'''submodule for the handling of a secondary peak, to set some parameters that involve all the peaks of that same redpitaya'''
 	_gui_attributes = [
 					"minValue",
@@ -16,32 +47,89 @@ class sensorToBeFused(Module):
 					]
 	_setup_attributes = _gui_attributes
 	_widget_class = sensorToBeFused_widget
-	def __init__(self, parent, name):
+	def __init__(self, parent, name, otherSensor = None):
 		super().__init__(parent, name)
 # 		self.addToSubmodules()
 		self.sensor_fuser = parent
+		self.otherSensor = otherSensor
+		self.op_minValue = None
+		self.op_maxValue = None
+		self.op_transitionValue = None
 
-	minValue = ExpandableProperty(
-		FloatProperty(-1, 1, doc = "min value that the input can have"),
-		extraFunctionToDoAfterSettingValue=lambda currentProperty, instance, value : instance.parent.updateFPGA_valuesFromSensorValues()
+	minValue = updateSensorFuserProperty(
+		FloatProperty(-1, 1, doc = "min value that the input can have")
 	)
-	maxValue = ExpandableProperty(
-		FloatProperty(-1, 1, doc = "max value that the input can have"),
-		extraFunctionToDoAfterSettingValue=lambda currentProperty, instance, value : instance.parent.updateFPGA_valuesFromSensorValues()
+	maxValue = updateSensorFuserProperty(
+		FloatProperty(-1, 1, doc = "max value that the input can have")
 	)
-	transitionValue = ExpandableProperty(
-		FloatProperty(-1, 1, doc = "value that the input has when the other sensor is at its limit/saturation"),
-		extraFunctionToDoAfterSettingValue=lambda currentProperty, instance, value : instance.parent.updateFPGA_valuesFromSensorValues()
+	transitionValue = updateSensorFuserProperty(
+		FloatProperty(-1, 1, doc = "value that the input has when the other sensor is at its limit/saturation")
 	)
+	def getOtherProperty(self, property):
+		if(property == sensorToBeFused.minValue):
+			return self.op_minValue
+		if(property == sensorToBeFused.maxValue):
+			return self.op_maxValue
+		if(property == sensorToBeFused.transitionValue):
+			return self.op_transitionValue
+	@property
+	def calibrationData(self):
+		if self.parent.sensor_a == self:
+			return self.parent.a
+		return self.parent.b
+	
+	def signalAtTime(self, value):
+		s = self.calibrationData
+		return np.interp(value, np.linspace(0,1,len(s)), s)
+	def timeAtsignal(self, value):
+		s = self.calibrationData
+		return np.interp(value, s, np.linspace(0,1,len(s)))
+
+	def points(self):
+		vals = np.array([self.minValue, self.transitionValue, self.maxValue])
+		return self.timeAtsignal(vals), vals
+	def updateFromInterface(self, x, y):
+		self.minValue = self.signalAtTime(x[0])
+		self.transitionValue = self.signalAtTime(x[1])
+		self.maxValue = self.signalAtTime(x[2])
+
+	@staticmethod
+	def generateSensorCouple(parent, name_a, name_b):
+		a = sensorToBeFused(parent, name_a)
+		b = sensorToBeFused(parent, name_b, a)
+		a.otherSensor = b
+		a.op_transitionValue = sensorToBeFused.minValue
+		b.op_minValue = sensorToBeFused.transitionValue
+		a.op_maxValue = sensorToBeFused.transitionValue
+		b.op_transitionValue = sensorToBeFused.maxValue
+
+		return a, b
+
+class outputRamp(segmentedFunctionObject):
+	def __init__(self, sensorFuser):
+		self.sensorFuser = sensorFuser
+	def points(self):
+		xa, ya = self.sensorFuser.sensor_a.points()
+		xb, yb = self.sensorFuser.sensor_b.points()
+		y = np.cumsum([0, self.sensorFuser.section_low, self.sensorFuser.section_med, self.sensorFuser.section_high]) * 2 - 1
+		x = np.array([xa[0], (xa[1] + xb[0]) / 2, (xa[2] + xb[1]) / 2, xb[2]])
+		return x, y
+	def updateFromInterface(self, x, y):
+		#cannot be modified directly from the interface
+		pass
+
+	
 
 
 
 class sensor_fuser(DspModule):
 	_widget_class = sensor_fuser_widget
 
+	_signal_launcher = SignalLauncherSensorFuserModule
 	_setup_attributes = ["input",
 					  	 "secondInput",
 						 "output_direct",
+						 "output_forCalibration",
 						 "section_low",
 						 "section_med",
 						 ]
@@ -50,16 +138,25 @@ class sensor_fuser(DspModule):
 
 	def __init__(self, rp, name, index=0):
 		super().__init__(rp, name, index)
-		self.sensor_a : sensorToBeFused = sensorToBeFused(self, f"{self.name}.sensor_a")
-		self.sensor_b : sensorToBeFused = sensorToBeFused(self, f"{self.name}.sensor_b")
+
+		self.sensor_a, self.sensor_b = sensorToBeFused.generateSensorCouple(self, f"{self.name}.sensor_a", f"{self.name}.sensor_b")
 		self.updatingAllValues = False
 		# self.updateSensorValuesFromFPGA()
+
+		#set some dummy values for signals a and b
+		self.a=np.array([0,1,1], dtype=float)
+		self.b=np.array([0,.5,1], dtype=float)
+
+		self.o=outputRamp(self)
 
 	secondInput = InputSelectRegister(- dsp_addr_base("sensor_fuser") + dsp_addr_base("sensor_fuser_in1") + 0x0,
 									options=all_inputs,
 									default='in2',
 									ignore_errors=True,
 									doc="selects the input signal of the module")
+	output_forCalibration = SelectProperty(options=all_output_directs,
+								   doc="selects to which analog output the "
+									   "module can generate a ramp for reading the sensor ranges")
 	offset_a_low	= FloatRegister(0x100, bits = 14,	startBit=0,		norm = 2**(13),	signed=True)
 	offset_a_med	= FloatRegister(0x100, bits = 14,	startBit=14,	norm = 2**(13),	signed=True)
 	offset_b_med	= FloatRegister(0x104, bits = 14,	startBit=0,		norm = 2**(13),	signed=True)
@@ -77,10 +174,12 @@ class sensor_fuser(DspModule):
 		FloatRegister(0x118, bits = 4,	startBit=4,		norm = 2**(4),	signed=False, max = .5),
 		extraFunctionToDoAfterSettingValue=lambda currentProperty, instance, value : instance.updateFPGA_valuesFromSensorValues()
 	)
-
 	@property
 	def section_high(self):
-		return 1 - self.section_low - self.section_med
+		return np.minimum(1 - self.section_low - self.section_med, .5)
+	
+
+
 
 	def updateFPGA_valuesFromSensorValues(self):
 		if self.updatingAllValues:
@@ -98,6 +197,7 @@ class sensor_fuser(DspModule):
 		except Exception as e:
 			print("set all the values to avoid divisions by 0")
 # 			raise(e)
+		self._emit_signal_by_name('updateExpectedCurves')
 		
 	def updateSensorValuesFromFPGA(self):
 		self.updatingAllValues = True
@@ -115,3 +215,66 @@ class sensor_fuser(DspModule):
 # 				raise(e)
 		finally:
 			self.updatingAllValues = False
+
+	def AskScopeForAnAcquisition(self, timeout = 5):
+		s : Scope = self.redpitaya.scope
+		a = self.redpitaya.asg0
+
+		try:
+			s.owner = self
+			a.owner = self
+			s.trigger_source = "asg0"
+			a.frequency = .5 / s.duration
+			a.waveform = "ramp"
+			a.output_direct = self.output_forCalibration
+			a.trigger_source = "immediately"
+
+			s.single(timeout=timeout)
+			return s.data_avg
+		finally:
+			s.free()
+			a.free()
+			
+	def calibrateFromScopeSignals(self):
+		'''
+		get the last curves obtained from the scope and fit the two sensor limits
+		'''
+		a, b = self.AskScopeForAnAcquisition()
+		t = np.linspace(0,1,len(a))
+		a = np.min(t*4,1) + np.random.randn(len(b))*.01
+		b = t + np.random.randn(len(b))*.04
+		self.a, self.b = sensor_fuser.smoothCurveExpectingMonotone(a), sensor_fuser.smoothCurveExpectingMonotone(b)
+	
+	@staticmethod
+	def _maxOfCurve(signal):
+		if signal[-1] < signal[0]:
+			return - sensor_fuser.smoothCurveExpectingMonotone(-signal)
+		y_monotone = np.maximum.accumulate(signal)
+		return y_monotone
+	@staticmethod
+	def smoothCurveExpectingMonotone(signal):
+		y_max = sensor_fuser._maxOfCurve(signal)
+		y_min = (-sensor_fuser._maxOfCurve(-signal[::-1]))[::-1]
+		return (y_min + y_max) / 2
+		
+		# from sklearn.isotonic import IsotonicRegression
+		# import numpy as np
+		# x = np.arange(len(signal))         # sampling indices
+		# y = np.array(signal)               # your noisy values
+
+		# iso = IsotonicRegression(increasing=True)
+		# y_iso = iso.fit_transform(x, y)
+
+# 		t=np.arange(len(a))
+# 		#todo: filter a bit
+# 		def residualsWithExpected_a(elbow):
+# 			ramp_t = [0, elbow]
+# 			ramp_x = [a[0], a[int(elbow * len(a))]]
+# 			return a - np.interp(t, ramp_t, ramp_x)
+# 		
+# 		sol_a = least_squares(residualsWithExpected_a, .5)
+# 		elbow_a = sol_a.x
+
+# 		a_min = a[0]
+# 		a_high = a[elbow_a]
+

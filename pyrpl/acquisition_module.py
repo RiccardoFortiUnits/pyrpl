@@ -224,9 +224,6 @@ class AcquisitionModule(Module):
         except:
             pass
 
-    def _emit_signal_by_name(self, signal_name, *args, **kwds):
-        """Let's the module's signal_launcher emit signal name"""
-        self._signal_launcher.emit_signal_by_name(signal_name, *args, **kwds)
 
     async def _trace_async(self, min_delay_ms):
         """
