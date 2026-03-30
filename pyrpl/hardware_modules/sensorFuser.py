@@ -3,7 +3,8 @@ from ..attributes import IntRegister, ArrayRegister, FloatRegister, SelectRegist
 from ..module_attributes import ModuleListProperty, Module, SignalLauncher
 from ..widgets.module_widgets.sensorFuser_widget import sensor_fuser_widget, sensorToBeFused_widget
 import numpy as np
-from .dsp import DspModule, all_inputs, dsp_addr_base, InputSelectRegister, all_output_directs, segmentedFunctionObject
+from .dsp import DspModule, all_inputs, dsp_addr_base, InputSelectRegister, all_output_directs
+from ..segmentedFunctionObject import segmentedFunctionObject
 from .scope import Scope
 from .asg import Asg0
 import numpy as np
@@ -239,10 +240,13 @@ class sensor_fuser(DspModule):
 		'''
 		get the last curves obtained from the scope and fit the two sensor limits
 		'''
+		# '''# uncomment this line to have some debug signals
 		a, b = self.AskScopeForAnAcquisition()
+		'''
 		t = np.linspace(0,1,len(a))
-		a = np.min(t*4,1) + np.random.randn(len(b))*.01
+		a = np.minimum(t*5,1) + np.random.randn(len(b))*.01
 		b = t + np.random.randn(len(b))*.04
+		#'''
 		self.a, self.b = sensor_fuser.smoothCurveExpectingMonotone(a), sensor_fuser.smoothCurveExpectingMonotone(b)
 	
 	@staticmethod

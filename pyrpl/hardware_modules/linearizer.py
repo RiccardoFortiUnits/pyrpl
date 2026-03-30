@@ -2,7 +2,8 @@ from ..attributes import IntRegister, ArrayRegister, FloatRegister, SelectRegist
 
 from ..widgets.module_widgets.linearizer_widget import linearizerWidget
 import numpy as np
-from .dsp import DspModule, all_inputs, dsp_addr_base, InputSelectRegister, segmentedFunctionObject
+from .dsp import DspModule, all_inputs, dsp_addr_base, InputSelectRegister
+from ..segmentedFunctionObject import segmentedFunctionObject
 
 class segmentedFunction(ArrayRegister):
     def __init__(self, nOfSegments = 8, coefficienBitSize=20, coefficientNorm = 2**14):
