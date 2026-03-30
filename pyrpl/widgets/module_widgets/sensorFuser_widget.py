@@ -10,156 +10,17 @@ import pyqtgraph as pg
 from qtpy import QtCore, QtGui, QtWidgets
 import numpy as np
 from ...errors import NotReadyError
-from .base_module_widget import ModuleWidget
+from .base_module_widget import ModuleWidget, segmentedFunctionLine
 from .acquisition_module_widget import AcquisitionModuleWidget
 import networkx as nx
 from ...graphCalculator import greedy_clique_partition
 import time
 import threading
 
-# class dot(QtWidgets.QGraphicsEllipseItem):
-# 	def __init__(self, center_x, center_y, size_x, segmentedFunctionLine, parent = ...):
-		
-# 		self.parent = parent
-# 		size_y = self.size_y(size_x)
-# 		super().__init__(center_x - size_x / 2, center_y - size_y / 2, size_x, size_y, parent)
-# 		self.setPen(QtGui.QPen(QtCore.Qt.red, 0))
-# 		self.segmentedFunctionLine = segmentedFunctionLine
-# 		self.setFlags(
-# 			QtWidgets.QGraphicsItem.ItemIsSelectable |
-# 			QtWidgets.QGraphicsItem.ItemIsMovable
-# 		)
-
-# 	def size_y(self, size_x):		
-# 		left, bottom, right, top = self.parent.viewRect().getCoords()
-# 		return size_x * (top - bottom) / (right - left)
-# 	def xCenter(self):
-# 		return self.rect().center().x()
-# 	def yCenter(self):
-# 		self.setRect
-# 		return self.rect().center().y()
-# 	def set(self, x, y, size_x = None):
-# 		if size_x is None:
-# 			size_x = self.rect().width()
-# 		size_y = self.size_y(size_x)		
-# 		self.setRect(x - size_x / 2, y - size_y / 2, size_x, size_y)
-# 	def setWidth(self, size_x):
-# 		size_y = self.size_y(size_x)		
-# 		self.setRect(self.xCenter() - size_x / 2, self.yCenter() - size_y / 2, size_x, size_y)
-	
-# 	def mousePressEvent(self, event):
-# 		self._distanceBetweenClickAndCenter = self.xCenter() - event.pos().x(), self.yCenter() - event.pos().y()
-# 		super().mousePressEvent(event)
-
-# 	def mouseMoveEvent(self, event):
-# 		self.set(event.pos().x() + self._distanceBetweenClickAndTop[0], 
-# 		   		event.pos().y() + self._distanceBetweenClickAndTop[1])
-# 		self.segmentedFunctionLine.updateLines()
-# 		self.segmentedFunctionLine.updateSegmentedFunctionFromLine()
-
-import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import numpy as np
+from ...segmentedFunctionObject import segmentedFunctionObject
 
-
-class segmentedFunctionLine(pg.ScatterPlotItem):
-	# def __init__(self, x, y, point_size=10, line_width=2, **kwargs):
-	def __init__(self, parent, segmentedFunction, parentWidget, color = QtCore.Qt.red, point_size=10, line_width=2, **kwargs):
-		
-		self.parent = parent
-		self.segmentedFunction = segmentedFunction
-		self.parentWidget = parentWidget
-		self.color = color
-		self.line_width = line_width
-
-		x, y = self.segmentedFunction.points()
-
-		super().__init__(
-			x=x, y=y,
-			size=point_size,
-			brush=color,
-			# pen='black',
-			# symbol='o',
-			pxMode=True,    # fixed-size symbols
-			**kwargs
-		)
-		parent.addItem(self)
-
-		self.setAcceptedMouseButtons(QtCore.Qt.LeftButton)
-		self.moving_point = None
-		self.x_y = np.column_stack([x, y])
-
-		# Create constant‑width line
-		self.line = pg.PlotCurveItem(self.x_y[:, 0], self.x_y[:, 1])
-		self.line.setPen(pg.mkPen(color, width=line_width))
-		self.line.setZValue(self.zValue() - 1)
-
-		# Make the line ignore view transforms → constant pixel width
-		self.line.setFlag(self.line.GraphicsItemFlag.ItemIgnoresTransformations)
-
-		# Connect to sigPlotChanged so the curve stays on the same plot
-		self.sigPlotChanged.connect(self._on_plot_changed)
-
-
-	def _on_plot_changed(self):
-		"""Ensure the line appears in the same plot as the ScatterPlotItem."""
-		plot = self.getViewBox()
-		if plot is not None:
-			if self.line not in plot.addedItems:
-				plot.addItem(self.line)
-
-	def updateLines(self):
-		x, y = self.segmentedFunction.points()
-
-		self.x_y = np.column_stack([x, y])
-		self.setData(self.x_y[:, 0], self.x_y[:, 1])
-		self.line.setData(self.x_y[:, 0], self.x_y[:, 1])
-
-		# plot = self.getViewBox()		
-		# newLine = pg.PlotCurveItem(self.x_y[:, 0], self.x_y[:, 1])
-		# newLine.setPen(pg.mkPen(self.color, width=self.line_width))
-		# newLine.setZValue(self.zValue() - 1)
-		# if plot is not None:
-		# 	if self.line not in plot.addedItems:
-		# 		plot.removeItem(self.line)
-		# 	plot.addItem(newLine)
-		# self.line = newLine
-
-
-	# ------------------------
-	#   DRAGGING LOGIC
-	# ------------------------
-	def mousePressEvent(self, event):
-		pts = self.pointsAt(event.pos())
-		if pts:
-			self.moving_pointIndex = list(self.points()).index(pts[0])
-			event.accept()
-		else:
-			super().mousePressEvent(event)
-
-	def mouseMoveEvent(self, event):
-		if self.moving_pointIndex is not None:
-			# Convert screen pos → data coordinates
-			vb = self.getViewBox()
-			mouse_point = vb.mapSceneToView(event.scenePos())
-
-			# Update data
-			self.x_y[self.moving_pointIndex] = [mouse_point.x(), mouse_point.y()]
-	
-			self.segmentedFunction.updateFromInterface(*self.x_y.T)
-
-			'''no need to actually update the point position, self.updateLines will be called by self.segmentedFunction already'''
-			# # Update display
-			# self.setData(self.x_y[:, 0], self.x_y[:, 1])
-			# self.line.setData(self.x_y[:, 0], self.x_y[:, 1])
-
-			event.accept()
-		else:
-			super().mouseMoveEvent(event)
-
-	def mouseReleaseEvent(self, event):
-		self.moving_point = None
-		super().mouseReleaseEvent(event)
 
 
 class segmentedFunctionLine_triedMyself_butCopilotIsBetterAtThis(QtWidgets.QGraphicsItem):

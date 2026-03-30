@@ -44,7 +44,8 @@ from collections import OrderedDict
 import functools
 import logging
 from ..yml_editor import YmlEditor
-
+from ...segmentedFunctionObject import segmentedFunctionObject
+import numpy as np
 
 class MyMenuLabel(QtWidgets.QLabel):
     """
@@ -359,3 +360,119 @@ class ModuleWidget(ReducedModuleWidget):
         self.setStyleSheet("ModuleWidget{margin: 0.1em; margin-top:0.6em; border: 1 dotted gray;border-radius:5}")
         # margin-top large enough for border to be in the middle of title
         self.layout().setContentsMargins(0, 5, 0, 0)
+
+import pyqtgraph as pg
+class segmentedFunctionLine(pg.ScatterPlotItem):
+    # def __init__(self, x, y, point_size=10, line_width=2, **kwargs):
+    def __init__(self, parent, segmentedFunction = None, parentWidget = None, color = QtCore.Qt.red, point_size=10, line_width=2, x_y_forIdeal = None, **kwargs):
+        
+        super().__init__(
+            size=point_size,
+            brush=color,
+            # pen='black',
+            # symbol='o',
+            pxMode=True,    # fixed-size symbols
+            **kwargs
+        )
+        self.parent = parent
+        if segmentedFunction is None:
+            ideal = segmentedFunctionLine.idealRamp(self)
+            ideal.x, ideal.y = x_y_forIdeal
+            segmentedFunction = ideal
+
+        self.segmentedFunction = segmentedFunction
+        self.parentWidget = parentWidget
+        self.color = color
+        self.line_width = line_width
+
+        parent.addItem(self)
+
+
+        self.setAcceptedMouseButtons(QtCore.Qt.LeftButton)
+        self.moving_point = None
+        self.x_y = np.column_stack(self.segmentedFunction.points())
+        # Create constant‑width line
+        self.line = pg.PlotCurveItem(self.x_y[:, 0], self.x_y[:, 1])
+        self.line.setPen(pg.mkPen(color, width=line_width))
+        self.line.setZValue(self.zValue() - 1)
+
+        # Make the line ignore view transforms → constant pixel width
+        self.line.setFlag(self.line.GraphicsItemFlag.ItemIgnoresTransformations)
+
+        # Connect to sigPlotChanged so the curve stays on the same plot
+        self.sigPlotChanged.connect(self._on_plot_changed)
+        self.updateLines(self.x_y.T)
+
+
+    def _on_plot_changed(self):
+        """Ensure the line appears in the same plot as the ScatterPlotItem."""
+        plot = self.getViewBox()
+        if plot is not None:
+            if self.line not in plot.addedItems:
+                plot.addItem(self.line)
+
+    def updateLines(self, x_y = None):
+        if x_y is None:
+            x_y = self.segmentedFunction.points()
+        x, y = x_y
+
+        self.x_y = np.column_stack([x, y])
+        self.setData(self.x_y[:, 0], self.x_y[:, 1])
+        self.line.setData(self.x_y[:, 0], self.x_y[:, 1])
+
+    # ------------------------
+    #   DRAGGING LOGIC
+    # ------------------------
+    def mousePressEvent(self, event):
+        pts = self.pointsAt(event.pos())
+        if pts:
+            self.moving_pointIndex = list(self.points()).index(pts[0])
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self.moving_pointIndex is not None:
+            # Convert screen pos → data coordinates
+            vb = self.getViewBox()
+            mouse_point = vb.mapSceneToView(event.scenePos())
+
+            # Update data
+            self.x_y[self.moving_pointIndex] = [mouse_point.x(), mouse_point.y()]
+            idx = self.moving_pointIndex+1
+            while(idx < len(self.x_y) and self.x_y[idx, 0] < self.x_y[self.moving_pointIndex, 0]):
+                self.x_y[idx, 0] = self.x_y[self.moving_pointIndex, 0]
+                idx += 1
+            idx = self.moving_pointIndex-1
+            while(idx >= 0 and self.x_y[idx, 0] > self.x_y[self.moving_pointIndex, 0]):
+                self.x_y[idx, 0] = self.x_y[self.moving_pointIndex, 0]
+                idx -= 1
+                
+            self.segmentedFunction.updateFromInterface(*self.x_y.T)
+
+            '''no need to actually update the point position, self.updateLines will be called by self.segmentedFunction already'''
+            # # Update display
+            # self.setData(self.x_y[:, 0], self.x_y[:, 1])
+            # self.line.setData(self.x_y[:, 0], self.x_y[:, 1])
+
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self.moving_point = None
+        super().mouseReleaseEvent(event)
+
+    
+    class idealRamp(segmentedFunctionObject):
+        def __init__(self, line):
+            super().__init__()
+            self.x = [0,1]
+            self.y = [0,1]
+            self.line = line
+        def points(self):
+            return self.x, self.y
+        def updateFromInterface(self, x, y):
+            self.x = x
+            self.y = y
+            self.line.updateLines((x,y))
