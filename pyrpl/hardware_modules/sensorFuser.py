@@ -50,7 +50,6 @@ class sensorToBeFused(Module, segmentedFunctionObject):
 	_widget_class = sensorToBeFused_widget
 	def __init__(self, parent, name, otherSensor = None):
 		super().__init__(parent, name)
-# 		self.addToSubmodules()
 		self.sensor_fuser = parent
 		self.otherSensor = otherSensor
 		self.op_minValue = None
@@ -80,11 +79,11 @@ class sensorToBeFused(Module, segmentedFunctionObject):
 		return self.parent.b
 	
 	def signalAtTime(self, value):
-		s = self.calibrationData
-		return np.interp(value, np.linspace(0,1,len(s)), s)
+		t, s = self.calibrationData
+		return np.interp(value, t, s)
 	def timeAtsignal(self, value):
-		s = self.calibrationData
-		return np.interp(value, s, np.linspace(0,1,len(s)))
+		t, s = self.calibrationData
+		return np.interp(value, s, t)
 
 	def points(self):
 		vals = np.array([self.minValue, self.transitionValue, self.maxValue])
@@ -140,13 +139,13 @@ class sensor_fuser(DspModule):
 	def __init__(self, rp, name, index=0):
 		super().__init__(rp, name, index)
 
-		self.sensor_a, self.sensor_b = sensorToBeFused.generateSensorCouple(self, f"{self.name}.sensor_a", f"{self.name}.sensor_b")
+		self.sensor_a, self.sensor_b = sensorToBeFused.generateSensorCouple(self, f"sensor_a", f"sensor_b")
 		self.updatingAllValues = False
 		# self.updateSensorValuesFromFPGA()
 
 		#set some dummy values for signals a and b
-		self.a=np.array([0,1,1], dtype=float)
-		self.b=np.array([0,.5,1], dtype=float)
+		self.a=np.array([[-1,0,1], [0,1,1]], dtype=float)
+		self.b=np.array([[-1,0,1], [0,.5,1]], dtype=float)
 
 		self.o=outputRamp(self)
 
@@ -240,26 +239,29 @@ class sensor_fuser(DspModule):
 		'''
 		get the last curves obtained from the scope and fit the two sensor limits
 		'''
-		# '''# uncomment this line to have some debug signals
+		'''# uncomment this line to have some debug signals
 		a, b = self.AskScopeForAnAcquisition()
 		'''
-		t = np.linspace(0,1,len(a))
-		a = np.minimum(t*5,1) + np.random.randn(len(b))*.01
-		b = t + np.random.randn(len(b))*.04
+		t = np.linspace(0,1,400)
+		a = np.minimum(t**2 * 5,1) + np.random.randn(len(t))*.001
+		b = np.arctan(t*10-5)/np.pi + np.random.randn(len(t))*.004
 		#'''
 		self.a, self.b = sensor_fuser.smoothCurveExpectingMonotone(a), sensor_fuser.smoothCurveExpectingMonotone(b)
 	
 	@staticmethod
 	def _maxOfCurve(signal):
 		if signal[-1] < signal[0]:
-			return - sensor_fuser.smoothCurveExpectingMonotone(-signal)
+			return - sensor_fuser._maxOfCurve(-signal)
 		y_monotone = np.maximum.accumulate(signal)
 		return y_monotone
 	@staticmethod
-	def smoothCurveExpectingMonotone(signal):
+	def smoothCurveExpectingMonotone(signal, inputRange = [-1,1]):
 		y_max = sensor_fuser._maxOfCurve(signal)
 		y_min = (-sensor_fuser._maxOfCurve(-signal[::-1]))[::-1]
-		return (y_min + y_max) / 2
+		y = (y_min + y_max) / 2
+		x = np.linspace(*inputRange, len(y))
+		y, i = np.unique(y, return_index=True)
+		return x[np.sort(i)], y[np.argsort(i)]
 		
 		# from sklearn.isotonic import IsotonicRegression
 		# import numpy as np
@@ -268,6 +270,11 @@ class sensor_fuser(DspModule):
 
 		# iso = IsotonicRegression(increasing=True)
 		# y_iso = iso.fit_transform(x, y)
+	def _load_setup_attributes(self):
+		ret = super()._load_setup_attributes()
+		self.sensor_a._load_setup_attributes()
+		self.sensor_b._load_setup_attributes()
+		return ret
 
 # 		t=np.arange(len(a))
 # 		#todo: filter a bit
