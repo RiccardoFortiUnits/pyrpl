@@ -59,8 +59,8 @@ class rampWidget(ModuleWidget):
         self.attribute_layout.removeWidget(self.function)
         self.total_layout.addWidget(self.function)
         
-        self.win = pg.GraphicsLayoutWidget(title="sensor calibration")
-        self.plot_item = self.win.addPlot(title="sensor calibration")
+        self.win = pg.GraphicsLayoutWidget(title="ramp")
+        self.plot_item = self.win.addPlot(title="ramp")
         self.plot_item.showGrid(y=True, alpha=1.)
         self.viewBox = self.plot_item.getViewBox()
         self.viewBox.setMouseEnabled(y=False)

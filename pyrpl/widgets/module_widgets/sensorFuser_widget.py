@@ -169,8 +169,9 @@ class sensor_fuser_widget(ModuleWidget):
 	def autoCalibrate(self):
 		self.module.calibrateFromScopeSignals()
 		a, b = self.module.a, self.module.b
-		t = np.linspace(0,1,len(a))
+		t, a = a
 		self.curves[0].setData(t, a)
+		t, b = b
 		self.curves[1].setData(t, b)
 
 	def updateExpectedCurves(self):
