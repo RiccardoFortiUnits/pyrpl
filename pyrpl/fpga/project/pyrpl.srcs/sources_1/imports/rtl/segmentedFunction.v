@@ -76,8 +76,10 @@ reg [$clog2(nOfEdges):0] edgeIndex;
 reg [totalBits_IO-1:0] current_Edge;
 reg [totalBits_IO-1:0] current_q[nOfInputDelays-2:0];
 reg [totalBits_m-1:0] current_m;
-wire [totalBits_IO-1:0] mx;
+wire [totalBits_IO+1 -1:0] mx;//mx requires one more bit. It's allowed to surpass the output range, because it will be later shifted back by current_q
 
+reg [totalBits_IO+2 -1:0] out_unsaturated;
+wire current_q_signBit, in_r_signBit, current_Edge_signBit;
 
 generate
     genvar gi;
@@ -90,6 +92,9 @@ generate
                 ($signed(edgePoints[gi]) > $signed(edgePoints[gi-1]));// if set lower or higher than the first 
                                                                                     //edge, it means it is disabled
         end
+		assign current_q_signBit = current_q[nOfInputDelays-2][totalBits_IO-1];
+		assign in_r_signBit = in_r[nOfInputDelays-1][totalBits_IO-1];
+		assign current_Edge_signBit = current_Edge[totalBits_IO-1];
     end else begin
         assign isInHigherThanEdge[0] = $unsigned(in_r[0]) >= $unsigned(edgePoints[0]);
         for(gi = 1; gi < nOfEdges; gi = gi + 1)begin
@@ -97,6 +102,9 @@ generate
                 ($unsigned(edgePoints[gi]) > $unsigned(edgePoints[gi-1]));// if set lower or higher than the first 
                                                                                     //edge, it means it is disabled
         end    
+		assign current_q_signBit = 0;
+		assign in_r_signBit = 0;
+		assign current_Edge_signBit = 0;
     end
     
     //set isCurrentEdge
@@ -110,17 +118,18 @@ endgenerate
 clocked_FractionalMultiplier #(
   .A_WIDTH			(totalBits_IO + 1),//stupid sum/difference between integers, which requires one more bit to not overflow... 
   .B_WIDTH			(totalBits_m),
-  .OUTPUT_WIDTH		(totalBits_IO),
+  .OUTPUT_WIDTH		(totalBits_IO+2),
   .FRAC_BITS_A		(fracBits_IO),
   .FRAC_BITS_B		(fracBits_m),
   .FRAC_BITS_OUT	(fracBits_IO),
-  .areSignalsSigned (areSignalsSigned)
+  .areSignalsSigned (1)//the coefficient can always be negative
 ) mult (
   .clk(clk),
-  .a({in_r[nOfInputDelays-1][totalBits_IO-1],in_r[nOfInputDelays-1]} - {current_Edge[totalBits_IO-1],current_Edge}),
+  .a({in_r_signBit,in_r[nOfInputDelays-1]} - {current_Edge_signBit,current_Edge}),
   .b(current_m),
   .result(mx)
 );
+
 
 
 integer i;
@@ -129,7 +138,7 @@ always @(posedge clk)begin
         for(i=0; i < nOfInputDelays; i = i + 1)begin
             in_r[i] <= 0;
         end
-        out <= 0;
+        out_unsaturated <= 0;
         
         edgeIndex <= 0;
         current_Edge <= 0;
@@ -158,9 +167,21 @@ always @(posedge clk)begin
         
         current_m <= ms[edgeIndex];
         
-        out <= current_q[nOfInputDelays-2] + mx;
+        out_unsaturated <= {{2{current_q_signBit}}, current_q[nOfInputDelays-2]} + mx;
     end
 end
+
+fixedPointShifter#(
+	.inputBitSize	(totalBits_IO+2),
+	.inputFracSize	(fracBits_IO),
+	.outputBitSize	(totalBits_IO),
+	.outputFracSize	(fracBits_IO),
+	.isSigned		(areSignalsSigned)
+)clipOutput(
+	.in				(out_unsaturated),
+	.out			(out)
+);
+
 
 //---------------------------------------------------------------------------------
 //
@@ -220,3 +241,20 @@ endmodule
 
 
 
+
+/*
+vsim work.segmentedFunction
+add wave -position insertpoint sim:/segmentedFunction/*
+force -freeze sim:/segmentedFunction/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/segmentedFunction/reset z1 0
+force -freeze sim:/segmentedFunction/in 20 0
+force -freeze sim:/segmentedFunction/l_edgePoints 603080 0
+force -freeze sim:/segmentedFunction/l_qs 701080 0
+force -freeze sim:/segmentedFunction/l_ms e0107f 0
+run
+force -freeze sim:/segmentedFunction/reset 10 0
+run
+run
+
+
+*/
