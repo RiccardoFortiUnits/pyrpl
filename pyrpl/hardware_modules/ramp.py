@@ -141,7 +141,7 @@ class rampFunction(ArrayRegister):
 		list_timeSteps = np.zeros(self.nOfSegments)
 		list_nOfSteps = np.zeros(self.nOfSegments)
 
-		for i in range(len(times)):
+		for i in range(len(times)-1):
 			startValue = edges[i]
 			endValue = edges[i+1]
 			rampTime = times[i]

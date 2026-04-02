@@ -67,31 +67,40 @@ class linearizerWidget(ModuleWidget):
         yo = sol.x[nOfPoints-2:]
         return xo, yo
 
+    # def updateFromSensorFuser(self):
+        
+    #     sensorFuser = self.module.redpitaya.sensor_fuser
+    #     ts, ys = sensorFuser.o.points()
+    #     (ta, a), (tb, b) = sensorFuser.a, sensorFuser.b#the "time" arrays are in the range [-1,1]
+    #     ts = np.array(ts)
+    #     ys = np.array(ys)
+    #     ts = (ts - ts[0]) / (ts[-1] - ts[0]) * 2 - 1
+    #     #linearize a for inputs between ts[0] and ts[1], (a+b)/2 for inputs between ts[1] and ts[2], and b for inputs between ts[2] and ts[3]
+    #     t = np.linspace(-1,1,(len(ta)+len(tb))//2)
+    #     tc = [ta, tb]
+    #     c = [a, b]
+    #     y = np.zeros_like(t)
+    #     for cIndex, startIndex, multiplier in [(0, 0, 1), (0, 1, .5), (1, 1, .5), (1, 2, 1)]:
+    #         start = ts[startIndex]
+    #         end = ts[startIndex+1]
+    #         modifiedRange = np.logical_and(tc[cIndex] >= start, tc[cIndex] < end)
+    #         cc = c[cIndex][modifiedRange]
+    #         outputModifiedRange = np.logical_and(t >= start, t <= end)
+    #         if len(cc) > 2:
+    #             cc = (cc - cc[0]) / (cc[-1] - cc[0])
+    #             cc = cc * (ys[startIndex+1] - ys[startIndex]) + ys[startIndex]
+    #             y[outputModifiedRange] += np.interp(t[outputModifiedRange], tc[cIndex][modifiedRange], cc * multiplier)
+    #         else:
+    #             y[outputModifiedRange] = -1
+    #     ramp = np.array(self.optimizeSegmentedFunction(t, y, self.module.nOfSegments + 1))
+    #     inverseRamp = ramp[::-1]
+    #     self.module.function = inverseRamp
+
     def updateFromSensorFuser(self):
         
         sensorFuser = self.module.redpitaya.sensor_fuser
-        ts, ys = sensorFuser.o.points()
-        (ta, a), (tb, b) = sensorFuser.a, sensorFuser.b#the "time" arrays are in the range [-1,1]
-        ts = np.array(ts)
+        xs, ys = sensorFuser.o.points()
+        xs = np.array(xs)
         ys = np.array(ys)
-        ts = (ts - ts[0]) / (ts[-1] - ts[0]) * 2 - 1
-        #linearize a for inputs between ts[0] and ts[1], (a+b)/2 for inputs between ts[1] and ts[2], and b for inputs between ts[2] and ts[3]
-        t = np.linspace(-1,1,(len(ta)+len(tb))//2)
-        tc = [ta, tb]
-        c = [a, b]
-        y = np.zeros_like(t)
-        for cIndex, startIndex, multiplier in [(0, 0, 1), (0, 1, .5), (1, 1, .5), (1, 2, 1)]:
-            start = ts[startIndex]
-            end = ts[startIndex+1]
-            modifiedRange = np.logical_and(tc[cIndex] >= start, tc[cIndex] < end)
-            cc = c[cIndex][modifiedRange]
-            outputModifiedRange = np.logical_and(t >= start, t <= end)
-            if len(cc) > 2:
-                cc = (cc - cc[0]) / (cc[-1] - cc[0])
-                cc = cc * (ys[startIndex+1] - ys[startIndex]) + ys[startIndex]
-                y[outputModifiedRange] += np.interp(t[outputModifiedRange], tc[cIndex][modifiedRange], cc * multiplier)
-            else:
-                y[outputModifiedRange] = -1
-        ramp = np.array(self.optimizeSegmentedFunction(t, y, self.module.nOfSegments + 1))
-        inverseRamp = ramp[::-1]
-        self.module.function = inverseRamp
+        xs = (xs - xs[0]) / (xs[-1] - xs[0]) * 2 - 1
+        self.module.function = np.array([ys, xs])

@@ -224,6 +224,11 @@ class sensor_fuser(DspModule):
 			s.owner = self
 			a.owner = self
 			s.trigger_source = "asg0"
+			s.trigger_delay = .5 * s.duration
+			s.ch1_active = True
+			s.ch2_active = True
+			s.input1 = self.input
+			s.input2 = self.secondInput
 			a.frequency = .5 / s.duration
 			a.waveform = "ramp"
 			a.output_direct = self.output_forCalibration
@@ -239,7 +244,7 @@ class sensor_fuser(DspModule):
 		'''
 		get the last curves obtained from the scope and fit the two sensor limits
 		'''
-		'''# uncomment this line to have some debug signals
+		# '''# uncomment this line to have some debug signals
 		a, b = self.AskScopeForAnAcquisition()
 		'''
 		t = np.linspace(0,1,400)
