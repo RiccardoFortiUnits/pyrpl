@@ -39,6 +39,12 @@ class segmentedFunction(ArrayRegister):
         c = y[0:len(y)-1]
         d = y[1:]
         
+        nonVerticals = a!=b
+        a = a[nonVerticals]
+        b = b[nonVerticals]
+        c = c[nonVerticals]
+        d = d[nonVerticals]
+        
         m = (d-c) / (b-a)
         s = a
         q = c
@@ -60,8 +66,9 @@ class segmentedFunction(ArrayRegister):
         return [list(x),list(y)]
 
     def set_value(self, obj, val):
-        x,y=val 
-        if len(x) > self.nOfSegments + 1:
+        x,y=val
+        unique = np.unique(x)
+        if len(unique) > self.nOfSegments + 1:
             raise Exception(f"too many segments! max number of points is {self.nOfSegments+1}")
         
         (s,q,m) = self.segmentedCoefficient(np.array(x),np.array(y))
