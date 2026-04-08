@@ -99,7 +99,7 @@ class linearizerWidget(ModuleWidget):
     def updateFromSensorFuser(self):
         
         sensorFuser = self.module.redpitaya.sensor_fuser
-        xs, ys = sensorFuser.o.points()
+        xs, ys = sensorFuser.o.pointsForLinearizer()
         xs = np.array(xs)
         ys = np.array(ys)
         xs = (xs - xs[0]) / (xs[-1] - xs[0]) * 2 - 1

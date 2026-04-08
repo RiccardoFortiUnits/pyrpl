@@ -152,7 +152,7 @@ class sensor_fuser_widget(ModuleWidget):
 												QtGui.QColor(color).blue()
 												)) for color in self.ch_color]
 		self.calibrate_button = QtWidgets.QPushButton("acquire sensors")
-		self.calibrate_button.clicked.connect(self.autoCalibrate)
+		self.calibrate_button.clicked.connect(self.acquireCalibrationData)
 		self.sensors_layout.addWidget(self.calibrate_button)
 
 		self.line_o = segmentedFunctionLine(self.plot_item, self.module.o, self, QtGui.QColor(self.ch_color[4]))
@@ -166,8 +166,8 @@ class sensor_fuser_widget(ModuleWidget):
 # 		self.plot_item.sigRangeChanged.connect(lambda _, __: on_view_changed())
 # 		self.plot_item.getViewBox().sigResized.connect(on_view_changed)
 
-	def autoCalibrate(self):
-		self.module.calibrateFromScopeSignals()
+	def acquireCalibrationData(self):
+		self.module.getCurvesFromScope()
 		a, b = self.module.a, self.module.b
 		t, a = a
 		self.curves[0].setData(t, a)

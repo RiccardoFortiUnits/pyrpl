@@ -141,7 +141,7 @@ class rampFunction(ArrayRegister):
 		list_timeSteps = np.zeros(self.nOfSegments)
 		list_nOfSteps = np.zeros(self.nOfSegments)
 
-		for i in range(len(times)-1):
+		for i in range(len(times)):
 			startValue = edges[i]
 			endValue = edges[i+1]
 			rampTime = times[i]
@@ -182,8 +182,8 @@ class rampFunction(ArrayRegister):
 
 	  
 def updateRealRamp(idealRamp, self, value):#declared outside of Ramp. Sometimes Python can be very stupid...
-	if not self.followSensorFuser:
-		return value
+	# if not self.followSensorFuser:
+	# 	return value
 	ti, yi = value
 	sensorFuser : sensor_fuser= self.redpitaya.sensor_fuser
 	xs, ys = sensorFuser.o.points()
@@ -222,7 +222,7 @@ class Ramp(DspModule, segmentedFunctionObject):
 					"usedRamps",
 					"external_trigger_pin",
 					"rampValues",
-					"followSensorFuser",
+					# "followSensorFuser",
                     "usedIdealRamps",
 					]
 						
@@ -250,7 +250,7 @@ class Ramp(DspModule, segmentedFunctionObject):
 
 
 
-	followSensorFuser = BoolProperty(default=False, doc="select if the ramps should follow the ramps defined in the sensorFuser module. If this property "
+	# followSensorFuser = BoolProperty(default=False, doc="select if the ramps should follow the ramps defined in the sensorFuser module. If this property "
 	"is set, each ramp will be divided in multiple ramps, so that, if used in tandem with the sensorFuser module, the output will be linear.")
 	def __init__(self, *args, **kwargs):        
 		super(Ramp, self).__init__(*args, **kwargs)
@@ -266,3 +266,12 @@ class Ramp(DspModule, segmentedFunctionObject):
 		
 	def updateFromInterface(self, x, y):
 		self.idealRamp = (x,y)
+
+	def addRampToEnd(self, rampDuration, rampEndValue):
+		t, y = self.rampValues
+		t = np.concatenate((t, t[-1] + rampDuration))
+		y = np.concatenate((y, rampEndValue))
+		self.rampValues = [t, y]
+	def addHoldToEnd(self, holdDuration):
+		self.addRampToEnd(holdDuration, self.rampValues[1][-1])
+

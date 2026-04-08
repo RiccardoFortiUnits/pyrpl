@@ -114,6 +114,26 @@ class outputRamp(segmentedFunctionObject):
 		y = np.cumsum([0, self.sensorFuser.section_low, self.sensorFuser.section_med, self.sensorFuser.section_high]) * 2 - 1
 		x = np.array([xa[0], (xa[1] + xb[0]) / 2, (xa[2] + xb[1]) / 2, xb[2]])
 		return x, y
+	def pointsForLinearizer(self):
+		#If the scan of the intensities was linear, self.sensorFuser.a would be on a straight line 
+		# (same for self.sensorFuser.b). But since the overall system is most probably nonlinear. 
+		# Let's "linearize" the scan to see the actual ranges of the sensors
+		a = self.sensorFuser.a
+		b = self.sensorFuser.b
+		xa, ya = self.sensorFuser.sensor_a.points()
+		xb, yb = self.sensorFuser.sensor_b.points()
+		ma, Ma = a[1][0], a[1][-1]
+		mb, Mb = b[1][0], b[1][-1]
+        #how does this conversion work? Essentially, we assume that a = min(1, b*k), with 
+        #the opportune shifts. So, let's first put the two signals in the same scale (the
+        #scale of b, since they can both fit correctly inside its range). Then, we will project them in the range [-1,1]
+		ya_rescaled = np.interp(ya, [ma, ya[-1]], [mb, yb[-2]])#ma corresponds to mb, ya[-1](=a(x_high)) corresponds to yb[-2](=b(x_high))
+		xa = np.interp(ya_rescaled, [mb, Mb], [-1,1])
+		xb = np.interp(yb, [mb, Mb], [-1,1])
+		y = np.cumsum([0, self.sensorFuser.section_low, self.sensorFuser.section_med, self.sensorFuser.section_high]) * 2 - 1
+		x = np.concatenate([[xa[0]], (xa[1:]+xb[:-1])/2, [xb[-1]]])#It's not correct, check again
+		return x, y
+		
 	def updateFromInterface(self, x, y):
 		#cannot be modified directly from the interface
 		pass
@@ -240,7 +260,7 @@ class sensor_fuser(DspModule):
 			s.free()
 			a.free()
 			
-	def calibrateFromScopeSignals(self):
+	def getCurvesFromScope(self):
 		'''
 		get the last curves obtained from the scope and fit the two sensor limits
 		'''
@@ -248,8 +268,9 @@ class sensor_fuser(DspModule):
 		a, b = self.AskScopeForAnAcquisition()
 		'''
 		t = np.linspace(0,1,400)
-		a = np.minimum(t**2 * 5,1) + np.random.randn(len(t))*.001
-		b = np.arctan(t*10-5)/np.pi + np.random.randn(len(t))*.004
+		b = np.arctan(t*10-5)/np.pi 
+		a = np.minimum((b-b[0]) * 5 - 1,1) + np.random.randn(len(t))*.001
+		b += np.random.randn(len(t))*.004
 		#'''
 		self.a, self.b = sensor_fuser.smoothCurveExpectingMonotone(a), sensor_fuser.smoothCurveExpectingMonotone(b)
 	
