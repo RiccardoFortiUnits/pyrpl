@@ -397,19 +397,20 @@ class segmentedFunctionLine(pg.ScatterPlotItem):
         self.line.setZValue(self.zValue() - 1)
 
         # Make the line ignore view transforms → constant pixel width
-        self.line.setFlag(self.line.GraphicsItemFlag.ItemIgnoresTransformations)
+        # self.line.setFlag(self.line.GraphicsItemFlag.ItemIgnoresTransformations)
 
         # Connect to sigPlotChanged so the curve stays on the same plot
-        self.sigPlotChanged.connect(self._on_plot_changed)
+        # self.sigPlotChanged.connect(self._on_plot_changed)
         self.updateLines(self.x_y.T)
+        parent.addItem(self.line)
 
 
-    def _on_plot_changed(self):
-        """Ensure the line appears in the same plot as the ScatterPlotItem."""
-        plot = self.getViewBox()
-        if plot is not None:
-            if self.line not in plot.addedItems:
-                plot.addItem(self.line)
+    # def _on_plot_changed(self):
+    #     """Ensure the line appears in the same plot as the ScatterPlotItem."""
+    #     plot = self.getViewBox()
+    #     if plot is not None:
+    #         if self.line not in plot.addedItems:
+    #             plot.addItem(self.line)
 
     def updateLines(self, x_y = None):
         if x_y is None:

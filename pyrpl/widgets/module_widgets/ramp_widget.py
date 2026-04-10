@@ -79,5 +79,7 @@ class rampWidget(ModuleWidget):
             segmentedFunctionLine.idealRamp.updateFromInterface(self.idealRamp.segmentedFunction, x, y)
             self.discreteRamp.segmentedFunction.updateFromInterface(x, y)
         self.idealRamp.segmentedFunction.updateFromInterface = updateBothRamps
+        
+        self.usedIdealRamps.value_changed.connect(self.idealRamp.segmentedFunction.updateFromInterface)
     def updateRampCurve(self, x, y):
         self.discreteRamp.updateLines()
