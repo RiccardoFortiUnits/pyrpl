@@ -52,6 +52,9 @@ class linearizerWidget(ModuleWidget):
         self.main_lay.addWidget(self.updateFromSensorFuser_button)
         self.updateFromSensorFuser_button.clicked.connect(self.updateFromSensorFuser)
 
+        self.switch_xy_button = QtWidgets.QPushButton("switch the x and y axes")
+        self.main_lay.addWidget(self.switch_xy_button)
+        self.switch_xy_button.clicked.connect(self.switch_xy)
 
     @staticmethod
     def optimizeSegmentedFunction(x, y, nOfPoints):
@@ -104,3 +107,6 @@ class linearizerWidget(ModuleWidget):
         ys = np.array(ys)
         xs = (xs - xs[0]) / (xs[-1] - xs[0]) * 2 - 1
         self.module.function = np.array([ys, xs])
+    def switch_xy(self):
+        x,y = self.module.function
+        self.module.function = np.array([y, x])

@@ -210,10 +210,10 @@ class sensor_fuser(DspModule):
 			sf.offset_a_med		= sf.sensor_a.transitionValue
 			sf.offset_b_med		= sf.sensor_b.minValue
 			sf.offset_b_high	= sf.sensor_b.transitionValue
-			sf.gain_a_low		= sf.section_low / (sf.sensor_a.transitionValue - sf.sensor_a.minValue)
-			sf.gain_a_med		= sf.section_med / (sf.sensor_a.maxValue - sf.sensor_a.transitionValue)
-			sf.gain_b_med		= sf.section_med / (sf.sensor_b.transitionValue - sf.sensor_b.minValue)
-			sf.gain_b_high		= sf.section_high / (sf.sensor_b.maxValue - sf.sensor_b.transitionValue)
+			sf.gain_a_low		= sf.section_low / (sf.sensor_a.transitionValue - sf.sensor_a.minValue) if sf.section_low else 0
+			sf.gain_a_med		= sf.section_med / (sf.sensor_a.maxValue - sf.sensor_a.transitionValue) if sf.section_med else 0
+			sf.gain_b_med		= sf.section_med / (sf.sensor_b.transitionValue - sf.sensor_b.minValue) if sf.section_med else 0
+			sf.gain_b_high		= sf.section_high / (sf.sensor_b.maxValue - sf.sensor_b.transitionValue) if sf.section_high else 0
 		except Exception as e:
 			print("set all the values to avoid divisions by 0")
 # 			raise(e)
@@ -228,8 +228,8 @@ class sensor_fuser(DspModule):
 				sf.sensor_a.transitionValue = 	sf.offset_a_med
 				sf.sensor_b.minValue = 			sf.offset_b_med
 				sf.sensor_b.transitionValue = 	sf.offset_b_high
-				sf.sensor_a.maxValue = sf.sensor_a.transitionValue + sf.section_med / sf.gain_a_med
-				sf.sensor_b.maxValue = sf.sensor_b.transitionValue + sf.section_high / sf.gain_b_high
+				sf.sensor_a.maxValue = sf.sensor_a.transitionValue + (sf.section_med / sf.gain_a_med if sf.section_med else 0)
+				sf.sensor_b.maxValue = sf.sensor_b.transitionValue + (sf.section_high / sf.gain_b_high if sf.section_high else 0)
 			except Exception as e:
 				print("set all the values to avoid divisions by 0")
 # 				raise(e)
