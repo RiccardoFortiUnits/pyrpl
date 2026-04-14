@@ -64,10 +64,6 @@ class rampFunction(ArrayRegister):
 		
 	def get_value(self, obj):
 		
-		startPoints = self.startPoints.get_value(obj)
-		stepIncreases = self.stepIncreases.get_value(obj)
-		timeSteps = self.timeSteps.get_value(obj)
-		nOfSteps = self.nOfSteps.get_value(obj)
 		'''
 		try:
 			firstUnusedIndex = nOfSteps.index(0) + 1
@@ -75,11 +71,17 @@ class rampFunction(ArrayRegister):
 			firstUnusedIndex = len(nOfSteps)
 		'''
 		firstUnusedIndex = obj.usedRamps
+		if firstUnusedIndex == 0:
+			return [[0],[self.startPoints.get_value(obj)[0]]]
+		startPoints = self.startPoints.get_value(obj)[:firstUnusedIndex]
+		stepIncreases = self.stepIncreases.get_value(obj)[:firstUnusedIndex]
+		timeSteps = self.timeSteps.get_value(obj)[:firstUnusedIndex]
+		nOfSteps = self.nOfSteps.get_value(obj)[:firstUnusedIndex]
 		
 		rampTimes = np.array(timeSteps) * np.array(nOfSteps)
 		x = np.concatenate((np.zeros(1), np.cumsum(rampTimes)))
 		y = np.array(startPoints + [startPoints[-1]+stepIncreases[-1]*nOfSteps[-1]])
-		return [list(x)[:firstUnusedIndex],list(y)[:firstUnusedIndex]]
+		return [list(x),list(y)]
 	
 	@staticmethod    
 	def findBestRatio(r, A, B):
@@ -178,12 +180,12 @@ class rampFunction(ArrayRegister):
 		self.stepIncreases.set_value(obj, list_stepIncreases)
 		self.timeSteps.set_value(obj, list_timeSteps)
 		self.nOfSteps.set_value(obj, list_nOfSteps)
-		obj._emit_signal_by_name("updateRampCurve", np.concatenate(([0], np.cumsum(times))), np.array(y))
+# 		obj._emit_signal_by_name("updateRampCurve", np.concatenate(([0], np.cumsum(times))), np.array(y))
 
 	  
 def updateRealRamp(idealRamp, self, value):#declared outside of Ramp. Sometimes Python can be very stupid...
 	# if not self.followSensorFuser:
-	# 	return value
+	return value
 	ti, yi = value
 	sensorFuser : sensor_fuser= self.redpitaya.sensor_fuser
 	xs, ys = sensorFuser.o.points()
@@ -240,7 +242,7 @@ class Ramp(DspModule, segmentedFunctionObject):
 	useMultipleTriggers = BoolRegister(0x100, bit = 2, doc="if True, each section of the ramp function will wait for a new "
 			"trigger to arrive before starting (and if a trigger arrives prematurely, the next section will be started sooner). "
 			"If False, only one trigger is necessary to start the entire function")
-	defaultValue = FloatRegister(0x100, startBit=3, bits=14, doc="value that the output will keep at the end of the function, if idleConfiguration is set to 'defaultValue'")
+	defaultValue = FloatRegister(0x100, startBit=3, bits=14, norm= 2 **13, min=-1, max=1, doc="value that the output will keep at the end of the function, if idleConfiguration is set to 'defaultValue'")
 	usedRamps = IntRegister(0x100, startBit=14+3, bits = int(np.ceil(np.log2(nOfSegments) + 1)), min=0, max=nOfSegments, default=0, 
 			doc="number of ramps used by the function. The values set for the 'exceding' ramps will not be used. If 0, it effectively disables the ramp")
 	usedIdealRamps = IntProperty(1,nOfSegments)
@@ -251,7 +253,7 @@ class Ramp(DspModule, segmentedFunctionObject):
 
 
 	# followSensorFuser = BoolProperty(default=False, doc="select if the ramps should follow the ramps defined in the sensorFuser module. If this property "
-	"is set, each ramp will be divided in multiple ramps, so that, if used in tandem with the sensorFuser module, the output will be linear.")
+	#"is set, each ramp will be divided in multiple ramps, so that, if used in tandem with the sensorFuser module, the output will be linear.")
 	def __init__(self, *args, **kwargs):        
 		super(Ramp, self).__init__(*args, **kwargs)
 # 		self.rampValues = "[[0,1e-3,2e-3,2.5e-3],[0.5,-0.5,0,0.5]]"
@@ -269,8 +271,8 @@ class Ramp(DspModule, segmentedFunctionObject):
 
 	def addRampToEnd(self, rampDuration, rampEndValue):
 		t, y = self.rampValues
-		t = np.concatenate((t, t[-1] + rampDuration))
-		y = np.concatenate((y, rampEndValue))
+		t = np.concatenate((t, [t[-1] + rampDuration]))
+		y = np.concatenate((y, [rampEndValue]))
 		self.rampValues = [t, y]
 	def addHoldToEnd(self, holdDuration):
 		self.addRampToEnd(holdDuration, self.rampValues[1][-1])
