@@ -31,7 +31,7 @@ module segmentedFunction#(
     input                                       clk   ,
     input                                       reset ,
     input [totalBits_IO-1:0]                    in    ,
-    output reg [totalBits_IO-1:0]               out   ,
+    output [totalBits_IO-1:0]               out   ,
     // System bus
     input      [ 32-1:0] addr   ,  // bus address
     input      [ 32-1:0] wdata  ,  // bus write data

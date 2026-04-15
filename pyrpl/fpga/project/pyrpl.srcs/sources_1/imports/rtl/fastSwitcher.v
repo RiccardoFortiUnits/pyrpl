@@ -293,11 +293,11 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
 );
 	localparam timingSize = $clog2(maxPeriods+1);
 	localparam valueSize = 1;
-	reg alreadyStarted;
+	reg delayedTrigger;
 	// reg prevTrigger;
 
 	always @(posedge clk) begin
-		alreadyStarted <= trigger;
+		delayedTrigger <= trigger;
 	end
 
 	wire [timingSize -1:0] 	a = nOfPeriodsActive,
@@ -308,16 +308,9 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
 										i_2 = i >> 1,
 										i_2p = i_2 + (i & 1'b1);
 
-	`define setTimingAndValue(time, value, index, TimeArray, ValueArray)	\
-			assign TimeArray[(index+1) * timingSize -1-:timingSize] = time;\
-			assign ValueArray [(index+1) * valueSize -1-:valueSize] = value;
 	//first pin: Half active period, inactive period, other half of active period
-	wire [(timingSize * 3) -1:0] pin1_loopTimings;
-	wire [(valueSize * 3) -1:0] pin1_loopValues;
-	`setTimingAndValue(a_2,  2'b1, 0, pin1_loopTimings, pin1_loopValues)
-	`setTimingAndValue(i, 	 2'b0, 1, pin1_loopTimings, pin1_loopValues)
-	`setTimingAndValue(a_2p, 2'b1, 2, pin1_loopTimings, pin1_loopValues)
-	
+	wire [(timingSize * 3) -1:0] pin1_loopTimings = {a_2p, i, a_2};
+	wire [(valueSize * 3) -1:0] pin1_loopValues = 4'b101;
 	multiTimingDoubleFreqCounter#(
 		.nOfTimings		(3),
 		.nofOutputs		(1),
@@ -325,20 +318,17 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
 	)mtdfc_1(
     	.clk					(clk),
     	.reset					(reset),
-		.trigger				(trigger),
+		.trigger				(delayedTrigger),
 		.timings				(pin1_loopTimings),
 		.requestedOutputValues	(pin1_loopValues),
 		.defaultOutputValue		(0),
 		.outputs				(out1)
 	);
+
 	//second pin: Half inactive period, active period, other half inactive period. The phase changes 
 		//slightly the length of the 2 inactive periods	
-	wire [(timingSize * 3) -1:0] pin2_loopTimings;
-	wire [(valueSize * 3) -1:0] pin2_loopValues;
-	`setTimingAndValue(i_2 + d	, 2'b0, 0, 	pin2_loopTimings, pin2_loopValues)
-	`setTimingAndValue(a		, 2'b1, 1, 	pin2_loopTimings, pin2_loopValues)
-	`setTimingAndValue(i_2p - d	, 2'b0, 2, 	pin2_loopTimings, pin2_loopValues)
-	
+	wire [(timingSize * 3) -1:0] pin2_loopTimings = {i_2p - d, a, i_2 + d};
+	wire [(valueSize * 3) -1:0] pin2_loopValues = 4'b010;
 	multiTimingDoubleFreqCounter#(
 		.nOfTimings		(3),
 		.nofOutputs		(1),
@@ -346,7 +336,7 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
 	)mtdfc_2(
     	.clk					(clk),
     	.reset					(reset),
-		.trigger				(trigger),
+		.trigger				(delayedTrigger),
 		.timings				(pin2_loopTimings),
 		.requestedOutputValues	(pin2_loopValues),
 		.defaultOutputValue		(0),
@@ -362,11 +352,13 @@ add wave -position insertpoint sim:/doubleFastSwitcher_HalfStart_doubleFreqTimer
 force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/clk 1 0, 0 {50 ps} -r 100
 force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/reset z1 0
 force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/trigger z0 0
-force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/nOfPeriodsActive 08 0
-force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/nOfPeriodsInactive 04 0
+force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/nOfPeriodsActive 19 0
+force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/nOfPeriodsInactive 1d 0
 force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/phase 1 0
 run
 force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/reset 10 0
 run
+force -freeze sim:/doubleFastSwitcher_HalfStart_doubleFreqTimers/trigger 1 0
+run 100ns
 
 */
