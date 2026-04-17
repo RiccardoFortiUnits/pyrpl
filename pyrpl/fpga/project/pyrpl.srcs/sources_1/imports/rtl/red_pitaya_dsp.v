@@ -385,10 +385,10 @@ generate
 	if(1)begin
 		for (j = RAMP0; j < SENSOR_FUSER; j = j+1) begin
 
-			ramp#(
+			ramp_withDivisionsAndExponential#(
 				.nOfRamps                   (8),
 				.data_size                  (14),
-				.time_size                  (24),
+				.time_size                  (28),
 				.inhibitionTimeForTrigger   (500)//4e-6s
 			)rmp(
 				.clk      (clk_i),

@@ -33,7 +33,7 @@ module segmentedFunction#(
     input [totalBits_IO-1:0]                    in    ,
     output [totalBits_IO-1:0]               out   ,
     // System bus
-    input      [ 32-1:0] addr   ,  // bus address
+    input      [ 16-1:0] addr   ,  // bus address
     input      [ 32-1:0] wdata  ,  // bus write data
     input                wen    ,  // bus write enable
     input                ren    ,  // bus read enable
@@ -76,7 +76,7 @@ reg [$clog2(nOfEdges):0] edgeIndex;
 reg [totalBits_IO-1:0] current_Edge;
 reg [totalBits_IO-1:0] current_q[nOfInputDelays-2:0];
 reg [totalBits_m-1:0] current_m;
-wire [totalBits_IO+1 -1:0] mx;//mx requires one more bit. It's allowed to surpass the output range, because it will be later shifted back by current_q
+wire [totalBits_IO+2 -1:0] mx;//mx requires one more bit. It's allowed to surpass the output range, because it will be later shifted back by current_q
 
 reg [totalBits_IO+2 -1:0] out_unsaturated;
 wire current_q_signBit, in_r_signBit, current_Edge_signBit;
@@ -197,8 +197,8 @@ if (reset) begin
 end else if (wen) begin
 
     for(i=0; i < nOfEdges; i = i + 1)begin
-        if (addr[19:0]==20'h100 + i*8)   {qs[i], edgePoints[i]} <= wdata;
-        if (addr[19:0]==20'h104 + i*8)           ms[i]          <= wdata;
+        if (addr==20'h100 + i*8)   {qs[i], edgePoints[i]} <= wdata;
+        if (addr==20'h104 + i*8)           ms[i]          <= wdata;
     end
 end
 
@@ -214,8 +214,8 @@ end else begin
     ack <= en;  
     rdata <=  32'h0;
     for(i=0; i < nOfEdges; i = i + 1)begin
-        if (addr[19:0]==20'h100 + i*8)  rdata <= {qs[i], edgePoints[i]};
-        if (addr[19:0]==20'h104 + i*8)  rdata <=         ms[i]         ;
+        if (addr==20'h100 + i*8)  rdata <= {qs[i], edgePoints[i]};
+        if (addr==20'h104 + i*8)  rdata <=         ms[i]         ;
     end
 end
 

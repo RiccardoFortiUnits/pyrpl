@@ -33,7 +33,7 @@ module ramp#(
 	
 	output reg [data_size-1:0] out,
     // System bus
-    input      [ 32-1:0] addr   ,  // bus address
+    input      [ 16-1:0] addr   ,  // bus address
     input      [ 32-1:0] wdata  ,  // bus write data
     input                wen    ,  // bus write enable
     input                ren    ,  // bus read enable
@@ -210,11 +210,11 @@ if (reset) begin
 		stepIncrease [i]  <= 0; 
 	end
 end else if (wen) begin
-	if (addr[19:0]==20'h100) {usedRamps, defaultValue, useMultipleTriggers, idleConfig} <= wdata;
+	if (addr==20'h100) {usedRamps, defaultValue, useMultipleTriggers, idleConfig} <= wdata;
 	for(i = 0; i < nOfRamps; i = i + 1) begin
-		if (addr[19:0]==20'h104 + i * 12) {stepIncrease[i], startPoint[i]} <= wdata;
-		if (addr[19:0]==20'h108 + i * 12) timeStep[i] <= wdata;
-		if (addr[19:0]==20'h10C + i * 12) nOfSteps[i] <= wdata;
+		if (addr==20'h104 + i * 12) {stepIncrease[i], startPoint[i]} <= wdata;
+		if (addr==20'h108 + i * 12) timeStep[i] <= wdata;
+		if (addr==20'h10C + i * 12) nOfSteps[i] <= wdata;
 	end
 end
 
@@ -230,11 +230,11 @@ always @(posedge clk) begin
 	    ack <= en;  
 	    rdata <=  32'h0;
 
-		if (addr[19:0]==20'h100) rdata <= {usedRamps, defaultValue, useMultipleTriggers, idleConfig};
+		if (addr==20'h100) rdata <= {usedRamps, defaultValue, useMultipleTriggers, idleConfig};
 		for(i = 0; i < nOfRamps; i = i + 1) begin
-			if (addr[19:0]==20'h104 + i * 12) rdata <= {stepIncrease[i], startPoint[i]};
-			if (addr[19:0]==20'h108 + i * 12) rdata <= timeStep[i];
-			if (addr[19:0]==20'h10C + i * 12) rdata <= nOfSteps[i];
+			if (addr==20'h104 + i * 12) rdata <= {stepIncrease[i], startPoint[i]};
+			if (addr==20'h108 + i * 12) rdata <= timeStep[i];
+			if (addr==20'h10C + i * 12) rdata <= nOfSteps[i];
 		end
 	end
 end
@@ -256,9 +256,6 @@ force -freeze sim:/ramp/trigger z0 0
 
 */
 
-
-
-
 module ramp_withDivisionsAndExponential#(
 	parameter nOfRamps = 4,
 	parameter data_size = 8,
@@ -271,22 +268,46 @@ module ramp_withDivisionsAndExponential#(
 	
 	output reg [data_size-1:0] out,
     // System bus
-    // input      [ 32-1:0] addr   ,  // bus address
-    // input      [ 32-1:0] wdata  ,  // bus write data
-    // input                wen    ,  // bus write enable
-    // input                ren    ,  // bus read enable
-    // output reg [ 32-1:0] rdata  ,  // bus read data
-    // output reg           err    ,  // bus error indicator
-    // output reg           ack       // bus acknowledge signal
-
-	input [(data_size+1)*nOfRamps -1:0] DVs,//needs an extra bit, because you can have a ramp that does the entire range, and it can also be negative
-	input [time_size*nOfRamps -1:0] DTs,
-	input [data_size -1:0] startValue,
-	input [$clog2(nOfRamps):0] usedRamps,
-	input [data_size-1:0] defaultValue,
-	input [1:0] idleConfig,
-	input [nOfRamps -1:0] doesNextRampWaitForTriggers
+    input      [ 16-1:0] addr   ,  // bus address
+    input      [ 32-1:0] wdata  ,  // bus write data
+    input                wen    ,  // bus write enable
+    input                ren    ,  // bus read enable
+    output reg [ 32-1:0] rdata  ,  // bus read data
+    output reg           err    ,  // bus error indicator
+    output reg           ack       // bus acknowledge signal
 );
+/*	
+This module generates a sequence of ramps, each of which has its duration and slope specified by the user.
+The ramp sequence starts when a trigger is recieved, and each ramp can be requested to wait for a new 
+	trigger before starting, otherwise, a ramp will start immediately after the end of the previous one.
+	Whether or not the sequence will be halted after the end of a ramp is dictated by the bits of 
+	register doesNextRampWaitForTriggers. If the bits of this register are set, the next ramp can be 
+	started prematurely (even if the current ramp has not ended yet) if a trigger is received during the 
+	execution of the current ramp
+
+The value of the output at the end of the sequence can be selected by setting idleConfig between these options
+	defaultValue	= 0: the output value is set to defaultValue
+	start			= 1: the output value is set to the start value of the first ramp (startValue)
+	current			= 2: the output value is set to the end value of the last ramp
+	inverseRamp		= 3: the entire sequence will executed in a reversed order, after which the output will 
+							be set to startValue
+
+how does it work
+
+	for each ramp: 
+		the user specifies 
+			DT (duration of the ramp, in clock cycles)
+			DV (difference between the initial value of the ramp and the last)
+		at each clock cycle, the output will be 
+			o = V0 + n DV / DT
+			with n the number of clock cycles from the start of the ramp and V0 the offset value of the ramp
+		V0 is either
+			startValue, if we're doing the first ramp
+			the last value of the previous ramp otherwise
+
+
+*/
+
 
 //trigger cleaner
 wire cleanTrigger;
@@ -304,12 +325,15 @@ localparam  c_defaultValue = 0,
 			c_start = 1,
 			c_current = 2,
 			c_inverseRamp = 3;
-// reg [1:0] idleConfig;
-// reg [data_size-1:0] defaultValue;
+						
+reg [(data_size+1)*nOfRamps -1:0] DVs;
+reg [time_size*nOfRamps -1:0] DTs;
+reg [data_size -1:0] startValue;
+reg [$clog2(nOfRamps):0] usedRamps;
+reg [data_size-1:0] defaultValue;
+reg [1:0] idleConfig;
+reg [nOfRamps -1:0] doesNextRampWaitForTriggers;
 
-// reg [nOfRamps -1:0] doesNextRampWaitForTrigger;//you can have the sequence to stop at the end of any ramp to wait for a new trigger, 
-	// or to start the next ramp even before the current ramp is done. The last bit might seem useless, since there's no more ramps after 
-	// the last. It's only purpose is to stop the last ramp prematurely if a trigger is recieved
 reg isRunning;//will be 0 when waiting for a trigger, even if we're in the middle of the sequence (if the current bit in doesNextRampWaitForTrigger is 1)
 
 reg [$clog2(nOfRamps):0] currentRamp;
@@ -320,29 +344,34 @@ wire doesNextRampWaitForTrigger = doesNextRampWaitForTriggers[currentRamp];//thi
 
 reg [time_size -1:0] n;//main counter. We'll go to the next ramp when n == DT
 reg [time_size+data_size+1 -1:0] nDV;//will store n*DV
+
+localparam divisorDelay = 5;
 reg [data_size-1:0] V0;
+wire [data_size-1:0] V0_delayed;
+delayer#(data_size, divisorDelay) delayV0(clk,reset, V0, V0_delayed);
+
 
 wire isLastRamp = currentRamp == usedRamps - 1;
 
-wire [time_size+data_size+1 -1:0] nDV_DT;
 wire [data_size+1 -1:0] mt;
-//divisor...
-wire [time_size+data_size -1:0] abs_nDV = nDV[time_size+data_size+1-1] ? -nDV : nDV;
-wire [time_size+data_size -1:0] abs_nDV_DT;
-assign abs_nDV_DT = abs_nDV / DT;
-assign nDV_DT = nDV[time_size+data_size+1-1] ? -{1'b0, abs_nDV_DT} : {1'b0, abs_nDV_DT};
 
-fixedPointShifter#(
-	.inputBitSize	(time_size+data_size+1),
-	.inputFracSize	(data_size),
-	.outputBitSize	(data_size+1),
-	.outputFracSize	(data_size),
-	.isSigned		(1),
-	.saturateOutput (1)
-)create_mt(
-	.in				(nDV_DT),
-	.out			(mt)
-);
+	fractionalDivider #(//dividers take 5 clock cycles to generate the output
+		.A_WIDTH			(time_size+data_size+1),
+		.B_WIDTH			(time_size),
+		.OUTPUT_WIDTH		(data_size+1),
+		.FRAC_BITS_A		(data_size),
+		.FRAC_BITS_B		(0),
+		.FRAC_BITS_OUT		(data_size),
+		.areSignalsSigned	(1),// numerator and denominators will always be positive
+		.saturateOutput     (0)
+	) create_mt(
+		.clk		(clk),
+		.reset		(reset),
+		.a			(nDV),
+		.b			(DT),
+	.result		(mt)
+	);
+
 
 always @(posedge clk)begin
 	if(reset)begin
@@ -353,28 +382,36 @@ always @(posedge clk)begin
 		currentRamp <= 0;
 		out <= 0;
 	end else begin
-		out <= {V0[data_size-1], V0} + mt;
+		out <= {V0_delayed[data_size-1], V0_delayed} + mt;
 
 		if(!isRunning)begin//waiting for a trigger?
 			if(cleanTrigger && usedRamps)begin//trigger recieved?
 				isRunning <= 1;
 				n <= 1;
 				nDV <= {{time_size{DV[data_size+1-1]}},DV};
-			end else if(currentRamp == 0)begin//are we waiting to start the sequence?
-				//add exception for inverseRamp, and save start value
-				V0 <= startValue;
+				if(currentRamp == 0)begin//are we waiting to start the sequence?
+					//add exception for inverseRamp, and save start value
+					V0 <= startValue;
+				end
 			end
 		end else begin
 			if(	(doesNextRampWaitForTrigger && cleanTrigger	) ||//should we start prematurely the next ramp?
 				(					n==DT					))begin//current ramp ended?
-				V0 <= {V0[data_size-1],V0} + DV;//can't set it equal to the current output, because we might be ending prematurely a ramp
-				
+
 				if(isLastRamp)begin//last ramp?
 					currentRamp <= 0;
 					isRunning <= 0;
 					nDV <= 0;//set to 0, so that in the next clock cycle the output won't move
-					n <= 0;
+					n <= 0;					
+                    case(idleConfig)
+                        c_defaultValue: begin		V0 <= defaultValue;end
+                        c_start:        begin		V0 <= startValue;end
+                        c_current:        begin		V0 <= {V0[data_size-1],V0} + DV;end
+                        default: begin end
+                    endcase
+
 				end else begin
+					V0 <= {V0[data_size-1],V0} + DV;
 					currentRamp <= currentRamp + 1;
 					if(doesNextRampWaitForTrigger || isLastRamp)begin//do we have to wait for a new trigger?
 						isRunning <= 0;
@@ -398,52 +435,49 @@ end
 
 
 
-//---------------------------------------------------------------------------------
-//
-//  System bus connection
+	// ---------------------------------------------------------------------------------
 
-// always @(posedge clk)
-// if (reset) begin
-// 	usedRamps <= 0;
-// 	idleConfig <= 0;
-// 	defaultValue <= 0;
-// 	useMultipleTriggers <= 0;
-// 	for(i = 0; i < nOfRamps; i = i + 1) begin
-// 		startPoint [i]	<= 0;
-// 		timeStep [i]	  <= 0;
-// 		nOfSteps [i]	  <= 0;
-// 		stepIncrease [i]  <= 0; 
-// 	end
-// end else if (wen) begin
-// 	if (addr[19:0]==20'h100) {usedRamps, defaultValue, useMultipleTriggers, idleConfig} <= wdata;
-// 	for(i = 0; i < nOfRamps; i = i + 1) begin
-// 		if (addr[19:0]==20'h104 + i * 12) {stepIncrease[i], startPoint[i]} <= wdata;
-// 		if (addr[19:0]==20'h108 + i * 12) timeStep[i] <= wdata;
-// 		if (addr[19:0]==20'h10C + i * 12) nOfSteps[i] <= wdata;
-// 	end
-// end
+	//  System bus connection
 
-// wire en;
-// assign en = wen | ren;
+	integer i;
+	always @(posedge clk)
+	if (reset) begin
+		DVs <= 0;
+		DTs <= 0;
+		startValue <= 0;
+		usedRamps <= 0;
+		defaultValue <= 0;
+		idleConfig <= 0;
+		doesNextRampWaitForTriggers <= 0;
+	end else if (wen) begin
+		if (addr==20'h100) {usedRamps, doesNextRampWaitForTriggers, idleConfig} <= wdata;
+		if (addr==20'h104) {defaultValue, startValue} <= wdata;
+		for(i = 0; i < nOfRamps; i = i + 1) begin
+			if (addr==20'h108 + i * 8) DVs[(i+1)*(data_size+1) -1-:(data_size+1)] <= wdata;
+			if (addr==20'h10C + i * 8) DTs[(i+1)*time_size -1-:time_size] <= wdata;
+		end
+	end
 
-// always @(posedge clk) begin
-// 	if (reset) begin
-// 	    err <= 1'b0;
-// 	    ack <= 1'b0;
-// 	end else begin
-// 	    err <= 1'b0;
-// 	    ack <= en;  
-// 	    rdata <=  32'h0;
+	wire en;
+	assign en = wen | ren;
 
-// 		if (addr[19:0]==20'h100) rdata <= {usedRamps, defaultValue, useMultipleTriggers, idleConfig};
-// 		for(i = 0; i < nOfRamps; i = i + 1) begin
-// 			if (addr[19:0]==20'h104 + i * 12) rdata <= {stepIncrease[i], startPoint[i]};
-// 			if (addr[19:0]==20'h108 + i * 12) rdata <= timeStep[i];
-// 			if (addr[19:0]==20'h10C + i * 12) rdata <= nOfSteps[i];
-// 		end
-// 	end
-// end
+	always @(posedge clk) begin
+		if (reset) begin
+			err <= 1'b0;
+			ack <= 1'b0;
+		end else begin
+			err <= 1'b0;
+			ack <= en;  
+			rdata <=  32'h0;
 
+			if (addr==20'h100) rdata <= {usedRamps, doesNextRampWaitForTriggers, idleConfig};
+			if (addr==20'h104) rdata <= {defaultValue, startValue};
+			for(i = 0; i < nOfRamps; i = i + 1) begin
+				if (addr==20'h108 + i * 8) rdata <= DVs[(i+1)*(data_size+1) -1-:(data_size+1)];
+				if (addr==20'h10C + i * 8) rdata <= DTs[(i+1)*time_size -1-:time_size];
+			end
+		end
+	end
 
 endmodule
 
@@ -458,10 +492,10 @@ force -freeze sim:/ramp_withDivisionsAndExponential/reset z1 0
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger z0 0
 force -freeze sim:/ramp_withDivisionsAndExponential/DVs 36ae823 0
 force -freeze sim:/ramp_withDivisionsAndExponential/DTs 637 0
-force -freeze sim:/ramp_withDivisionsAndExponential/startValue 0 0
+force -freeze sim:/ramp_withDivisionsAndExponential/startValue f0 0
 force -freeze sim:/ramp_withDivisionsAndExponential/usedRamps 3 0
 force -freeze sim:/ramp_withDivisionsAndExponential/defaultValue 0 0
-force -freeze sim:/ramp_withDivisionsAndExponential/idleConfig 0 0
+force -freeze sim:/ramp_withDivisionsAndExponential/idleConfig 1 0
 force -freeze sim:/ramp_withDivisionsAndExponential/doesNextRampWaitForTriggers 2 0
 run
 force -freeze sim:/ramp_withDivisionsAndExponential/reset 10 0
@@ -469,11 +503,12 @@ run
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
 run
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
-run 1200ps
+run 1900ps
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
 run
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
-run 1000ps
+run 2000ps
 
 
 */
+

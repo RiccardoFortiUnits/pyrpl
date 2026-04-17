@@ -1,10 +1,13 @@
+
+// `define notInModelsimSimulation
+
 module fractionalDivider#(
-	parameter A_WIDTH = 16,
-	parameter B_WIDTH = 16,
-	parameter OUTPUT_WIDTH = 32,
+	parameter A_WIDTH = 12,
+	parameter B_WIDTH = 4,
+	parameter OUTPUT_WIDTH = 8,
 	parameter FRAC_BITS_A = 8,
-	parameter FRAC_BITS_B = 8,
-	parameter FRAC_BITS_OUT = 12,
+	parameter FRAC_BITS_B = 2,
+	parameter FRAC_BITS_OUT = 4,
 	parameter areSignalsSigned = 1,
 	parameter saturateOutput = 0
 )(
@@ -18,7 +21,7 @@ module fractionalDivider#(
 
 //operations: 
 	// a,b <<= FRAC_BITS_B;// => b becomes an integer; 
-	//if FRAC_BITS_OUT > FRAC_BITS_A: a <<= (FRAC_BITS_OUT-FRAC_BITS_A) input a;
+	//if FRAC_BITS_OUT > FRAC_BITS_A: a <<= (FRAC_BITS_OUT-FRAC_BITS_A) so we have some more fractional bits in the result;
 	//result = a / b;
 
 
@@ -31,108 +34,119 @@ module fractionalDivider#(
 				fracDifference = FRAC_BITS_A > FRAC_BITS_B ? FRAC_BITS_A - FRAC_BITS_B : 0,
 				
 				wholePad_a = B_WIDTH > (A_WIDTH + fracPad_a) ? B_WIDTH - (A_WIDTH + fracPad_a) : 0,
-				wholePad_b = A_WIDTH + fracPad_a + wholePad_a - B_WIDTH,
 				
 				fracOutputPad_a = FRAC_BITS_OUT > fracDifference ? FRAC_BITS_OUT - fracDifference : 0,
 				
 				numer_FRAC_BITS = fracDifference + fracOutputPad_a,
-				numDen_WIDTH = 1 + A_WIDTH + fracPad_a + wholePad_a + fracOutputPad_a,
+				num_WIDTH = 1 + A_WIDTH + fracPad_a + wholePad_a + fracOutputPad_a,
+				den_WIDTH = B_WIDTH,
 				den_FRAC_BITS = 0,
 				
-				rawQuotient_WIDTH = numDen_WIDTH,
-				FRAC_BITS_rawQuotient = numer_FRAC_BITS;
+				rawQuotient_WIDTH = num_WIDTH,
+				FRAC_BITS_rawQuotient = numer_FRAC_BITS,
+				rawRem_WIDTH = den_WIDTH;
 			
-wire [numDen_WIDTH -1:0] a_shifted;
+wire [num_WIDTH -1:0] a_shifted;
 	fixedPointShifter#(
 		.inputBitSize	(A_WIDTH),
 		.inputFracSize	(FRAC_BITS_A),
-		.outputBitSize	(numDen_WIDTH),
+		.outputBitSize	(num_WIDTH),
 		.outputFracSize	(fracPad_a + FRAC_BITS_A + fracOutputPad_a),
 		.isSigned		(areSignalsSigned),
-		.saturateOutput (saturateOutput)
+		.saturateOutput (0)
 	)a_shifter(
 		.in				(a),
 		.out			(a_shifted)
 	);
-wire [numDen_WIDTH -1:0] b_shifted;
-	fixedPointShifter#(
-		.inputBitSize	(B_WIDTH),
-		.inputFracSize	(FRAC_BITS_B),
-		.outputBitSize	(numDen_WIDTH),
-		.outputFracSize	(fracPad_b + FRAC_BITS_B),
-		.isSigned		(areSignalsSigned),
-		.saturateOutput (saturateOutput)
-	)b_shifter(
-		.in				(b),
-		.out			(b_shifted)
-	);
-				
-//todo: numeratof and denominator don't have to have the same sizes. Also, length(num)==length(quot), and length(den)==length(rem)
-				
-				
+wire [den_WIDTH -1:0] b_shifted = b;//we'll consider b as a completely whole number
+
 generate
-/*
-	reg [rawQuotient_WIDTH -1:0] rawQuotient;
-	reg [rawQuotient_WIDTH -1:0] rawRemain;
+
+`ifndef notInModelsimSimulation
+	reg [rawQuotient_WIDTH -1:0] rawQuotient_nonDelayed;
+	reg [rawQuotient_WIDTH -1:0] rawRemain_nonDelayed;
+	wire [rawQuotient_WIDTH -1:0] rawQuotient;
+	wire [rawQuotient_WIDTH -1:0] rawRemain;
+	delayer#(rawQuotient_WIDTH, 5-1) delayquot(clk,reset, rawQuotient_nonDelayed, rawQuotient);
+	delayer#(rawQuotient_WIDTH, 5-1) delayrem(clk,reset, rawRemain_nonDelayed, rawRemain);
 	if(areSignalsSigned)begin
 		always @(posedge clk) begin
 			if(reset) begin
-				rawQuotient <= 0;
-				rawRemain <= 0;
+				rawQuotient_nonDelayed <= 0;
+				rawRemain_nonDelayed <= 0;
 			end else begin
-				rawQuotient <= $signed(a_shifted) / $signed(b_shifted);
-				rawRemain <= $signed(a_shifted) % $signed(b_shifted);
+				rawQuotient_nonDelayed <= $signed(a_shifted) / $signed(b_shifted);
+				rawRemain_nonDelayed <= $signed(a_shifted) % $signed(b_shifted);
 			end
 		end		
 	end else begin
 		always @(posedge clk) begin
 			if(reset) begin
-				rawQuotient <= 0;
-				rawRemain <= 0;
+				rawQuotient_nonDelayed <= 0;
+				rawRemain_nonDelayed <= 0;
 			end else begin
-				rawQuotient <= $unsigned(a_shifted) / $unsigned(b_shifted);
-				rawRemain <= $unsigned(a_shifted) % $unsigned(b_shifted);
+				rawQuotient_nonDelayed <= $unsigned(a_shifted) / $unsigned(b_shifted);
+				rawRemain_nonDelayed <= $unsigned(a_shifted) % $unsigned(b_shifted);
 			end
 		end		
 	end
-/*/
+
+
+`else
 	wire [rawQuotient_WIDTH -1:0] rawQuotient;
-	wire [rawQuotient_WIDTH -1:0] rawRemain;
-	if(numDen_WIDTH == 29 && rawQuotient_WIDTH == 29 && !areSignalsSigned)begin:div29_29
-		divider_29_29 d29_29(
+	wire [rawRem_WIDTH -1:0] rawRemain;
+	if(num_WIDTH == 29 && den_WIDTH == 14 && !areSignalsSigned)begin:div29_29
+		wire [47:0]m_axis_dout_tdata;
+		div_gen_u_29_14 d29_14(
 			.aclk					(clk),
-			.s_axis_divisor_tvalid	(1),
-			.s_axis_divisor_tdata	(b_shifted),
-			.s_axis_dividend_tvalid	(1),
+			.aresetn				(!reset),	
+			.s_axis_divisor_tvalid	(1),				
+			.s_axis_divisor_tdata	(b_shifted),					
+			.s_axis_dividend_tvalid	(1),				
 			.s_axis_dividend_tdata	(a_shifted),
-			.m_axis_dout_tdata		({rawQuotient, {32 - rawQuotient_WIDTH{1'b0}}, rawRemain})
+			.m_axis_dout_tdata		({rawQuotient, {16 - rawRem_WIDTH{1'b0}}, rawRemain})
 		);
-	end else begin
-		$error("combination of register lengths does not have an IP core divider associated. Create a new divider with the correct register sizes and add it to the fractionalDivider module (yes, I know it sucks...). divider/divisor size: %n, quotient size: %n",
-		numDen_WIDTH, rawQuotient_WIDTH);
+		assign rawRemain = m_axis_dout_tdata[14 -1:0];
+		assign rawQuotient = m_axis_dout_tdata[47:16];
+	end else if(num_WIDTH == 44 && den_WIDTH == 28 && areSignalsSigned)begin:div_gen_s_44_28
+		wire [79:0]m_axis_dout_tdata;
+		div_gen_s_44_28 d44_28(
+			.aclk					(clk),
+			.aresetn				(!reset),	
+			.s_axis_divisor_tvalid	(1),				
+			.s_axis_divisor_tdata	(b_shifted),					
+			.s_axis_dividend_tvalid	(1),				
+			.s_axis_dividend_tdata	(a_shifted),
+			.m_axis_dout_tdata		(m_axis_dout_tdata)
+		);
+		assign rawRemain = m_axis_dout_tdata[28 -1:0];
+		assign rawQuotient = m_axis_dout_tdata[79:32];
+	end 
+		else begin
+		$error("combination of register lengths does not have an IP core divider associated. Create a new divider with the correct register sizes and add it to the fractionalDivider module (yes, I know it sucks...). %sSigned, numerator size: %n, denominator size %n",
+		areSignalsSigned ? "" : "Un", num_WIDTH, den_WIDTH);
+		/*
+		how to create a new divider IP core:
+			In Vivado, open the IP Catalog (Window->IP Catalog), search and select DIVIDE GENERATOR.
+			set the Component Name to div_gen_<u|s>_<num_WIDTH>_<den_WIDTH>
+			select the operand sign (signed or unsigned)
+			select the dividend (numerator) and divisor (denominator) widths
+			in the tab Options, set the latency configuration to manual and the latency to 5 
+				(I know, we're asking a lot to the FPGA, but I'm not waiting tens of clock cycles for a single division operation)
+				in the control signals, add the input ARESETN
+			Click OK and start the generation of the IP. It's gonna take a few minutes, and it's gonna be executed in the background
+
+			Now add the module to this script. For the wire m_axis_dout_tdata: it's a register combining remainder and quotient, and the 
+				divider module aligns them so that the quotient starts at a power of 2 (16, 32...). So, put the correct amout of 
+				stuffing bits between the remainder and quotient
+
+			If you compile the project and you get an error saying that the newly added module does not exist, try again after a few 
+				minutes, maybe the generation of the IP core wasn't finished yet (and compliment yourself, you finished faster than  
+				the IP module generator!)
+		*/
 	end
-//*/
+`endif
 endgenerate
-
-
-// wire [rawQuotient_WIDTH -1:0] rawQuotient;
-// wire [rawQuotient_WIDTH -1:0] rawRemain;
-// lpm_divide#(
-// 	.lpm_drepresentation				("SIGNED"),
-// 	.lpm_hint				("MAXIMIZE_SPEED=6,LPM_REMAINDERPOSITIVE=FALSE"),
-// 	.lpm_nrepresentation				("SIGNED"),
-// 	.lpm_pipeline				(3),
-// 	.lpm_type				("LPM_DIVIDE"),
-// 	.lpm_widthd				(numDen_WIDTH),
-// 	.lpm_widthn				(numDen_WIDTH)
-// )LPM_DIVIDE_component (
-// 	.aclr (reset),
-// 	.clock (clk),
-// 	.denom (b_shifted),
-// 	.numer (a_shifted),
-// 	.quotient (rawQuotient),
-// 	.remain (rawRemain),
-//  .clken (1'b1));
 		
 fixedPointShifter#(
 	.inputBitSize	(rawQuotient_WIDTH),
@@ -147,8 +161,8 @@ fixedPointShifter#(
 );
 
 fixedPointShifter#(
-	.inputBitSize	(rawQuotient_WIDTH),
-	.inputFracSize	(FRAC_BITS_rawQuotient),
+	.inputBitSize	(rawRem_WIDTH),
+	.inputFracSize	(FRAC_BITS_B),
 	.outputBitSize	(OUTPUT_WIDTH),
 	.outputFracSize	(FRAC_BITS_OUT),
 	.isSigned		(areSignalsSigned),
@@ -158,3 +172,21 @@ fixedPointShifter#(
 	.out			(remain)
 );
 endmodule
+
+
+/*
+
+vsim work.fractionalDivider
+add wave -position insertpoint sim:/fractionalDivider/*
+force -freeze sim:/fractionalDivider/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/fractionalDivider/reset z1 0
+force -freeze sim:/fractionalDivider/a 2e4 0
+force -freeze sim:/fractionalDivider/b 4 0
+run
+force -freeze sim:/fractionalDivider/reset 10 0
+run
+run
+force -freeze sim:/fractionalDivider/a 200 0
+run
+run
+*/

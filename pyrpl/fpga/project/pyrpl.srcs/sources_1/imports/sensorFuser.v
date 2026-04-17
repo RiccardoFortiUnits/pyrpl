@@ -40,7 +40,7 @@ module sensorFuser#(
 	output [signalSize -1:0]	out,
 	
     // System bus
-    input      [ 32-1:0] addr   ,  // bus address
+    input      [ 16-1:0] addr   ,  // bus address
     input      [ 32-1:0] wdata  ,  // bus write data
     input                wen    ,  // bus write enable
     input                ren    ,  // bus read enable
@@ -218,13 +218,13 @@ if (reset) begin
 	section_low		<= 0;
 	section_med		<= 0;
 end else if (wen) begin
-	if (addr[19:0]==20'h100) {offset_a_med, offset_a_low} <= wdata;
-	if (addr[19:0]==20'h104) {offset_b_high, offset_b_med} <= wdata;
-	if (addr[19:0]==20'h108) {gain_a_low} <= wdata;
-	if (addr[19:0]==20'h10c) {gain_a_med} <= wdata;
-	if (addr[19:0]==20'h110) {gain_b_med} <= wdata;
-	if (addr[19:0]==20'h114) {gain_b_high} <= wdata;
-	if (addr[19:0]==20'h118) {section_med, section_low} <= wdata;
+	if (addr==20'h100) {offset_a_med, offset_a_low} <= wdata;
+	if (addr==20'h104) {offset_b_high, offset_b_med} <= wdata;
+	if (addr==20'h108) {gain_a_low} <= wdata;
+	if (addr==20'h10c) {gain_a_med} <= wdata;
+	if (addr==20'h110) {gain_b_med} <= wdata;
+	if (addr==20'h114) {gain_b_high} <= wdata;
+	if (addr==20'h118) {section_med, section_low} <= wdata;
 	
 end
 
@@ -240,13 +240,13 @@ always @(posedge clk) begin
 	    ack <= en;  
 	    rdata <=  32'h0;
 
-		if (addr[19:0]==20'h100) rdata <= {offset_a_med, offset_a_low};
-		if (addr[19:0]==20'h104) rdata <= {offset_b_high, offset_b_med};
-		if (addr[19:0]==20'h108) rdata <= {gain_a_low};
-		if (addr[19:0]==20'h10c) rdata <= {gain_a_med};
-		if (addr[19:0]==20'h110) rdata <= {gain_b_med};
-		if (addr[19:0]==20'h114) rdata <= {gain_b_high};
-		if (addr[19:0]==20'h118) rdata <= {section_med, section_low};
+		if (addr==20'h100) rdata <= {offset_a_med, offset_a_low};
+		if (addr==20'h104) rdata <= {offset_b_high, offset_b_med};
+		if (addr==20'h108) rdata <= {gain_a_low};
+		if (addr==20'h10c) rdata <= {gain_a_med};
+		if (addr==20'h110) rdata <= {gain_b_med};
+		if (addr==20'h114) rdata <= {gain_b_high};
+		if (addr==20'h118) rdata <= {section_med, section_low};
 	end
 end
 
