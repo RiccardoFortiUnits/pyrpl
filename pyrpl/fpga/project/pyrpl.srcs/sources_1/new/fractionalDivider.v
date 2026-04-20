@@ -1,5 +1,5 @@
 
-// `define notInModelsimSimulation
+// `define inModelsimSimulation
 
 module fractionalDivider#(
 	parameter A_WIDTH = 12,
@@ -62,7 +62,7 @@ wire [den_WIDTH -1:0] b_shifted = b;//we'll consider b as a completely whole num
 
 generate
 
-`ifndef notInModelsimSimulation
+`ifndef InModelsimSimulation
 	reg [rawQuotient_WIDTH -1:0] rawQuotient_nonDelayed;
 	reg [rawQuotient_WIDTH -1:0] rawRemain_nonDelayed;
 	wire [rawQuotient_WIDTH -1:0] rawQuotient;
