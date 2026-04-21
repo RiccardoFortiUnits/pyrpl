@@ -43,7 +43,7 @@ generate
 		end
 	end
 
-	if(saturateOutput & outputWholeSize < inputWholeSize)begin
+	if(saturateOutput && outputWholeSize < inputWholeSize)begin
 		wire isSaturated = 	((in[inputBitSize-1]) & ~(&in[inputBitSize-1 -1-:inputWholeSize-outputWholeSize])) |
 									((~in[inputBitSize-1]) & (|in[inputBitSize-1 -1-:inputWholeSize-outputWholeSize]));
 		assign out = isSaturated ? {in[inputBitSize-1], {(outputBitSize - 1){~in[inputBitSize-1]}}} : out_unsaturated;
