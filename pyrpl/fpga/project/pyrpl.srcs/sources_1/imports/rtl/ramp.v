@@ -351,18 +351,22 @@ end
 reg isRunning;//will be 0 when waiting for a trigger, even if we're in the middle of the sequence (if the current bit in doesNextRampWaitForTrigger is 1)
 
 
-localparam delay_expShifter = 1;
-localparam delay_ns_sum = 1;
-localparam delay_divisor = 5;
+localparam delay_expShifter = 1;//green to cyan
+localparam delay_ns_sum = 1;//cyan to blue
+localparam delay_divisor = 5;//blue to purple
 
 localparam delay_1 = delay_expShifter;
-localparam delay_2 = delay_1 + delay_ns_sum;
-localparam delay_3 = delay_2 + delay_divisor;
+localparam delay_2 = delay_ns_sum;
+localparam delay_3 = delay_divisor;
+localparam delay_12 = delay_1 + delay_2;
+localparam delay_23 = delay_2 + delay_3;
+localparam delay_123 = delay_12 + delay_3;
+
 
 `define delayedRegister(registerSize, inputName, outputName, delayCycles) 			\
 	reg [registerSize -1:0] inputName;													\
 	wire [registerSize -1:0] outputName;												\
-	delayer#(registerSize, delayCycles-1) delay_``inputName(clk,reset, inputName, outputName);
+	delayer#(registerSize, delayCycles) delay_``inputName(clk,reset, inputName, outputName);
 
 `define delayedWire(registerSize, inputName, outputName, delayCycles, assignedValue)\
 	wire [registerSize -1:0] inputName = assignedValue;									\
@@ -373,34 +377,51 @@ localparam delay_3 = delay_2 + delay_divisor;
 	reg [registerSize -1:0] inputName;													\
 	wire [registerSize -1:0] outputName;												\
 	reg intermediateIndexName;												\
-	delayer_withIntermediateSet#(registerSize, delayCycles-1, intermediateDelay) delay_``inputName(clk,reset, inputName, intermediateIndexName, outputName);
+	delayer_withIntermediateSet#(registerSize, delayCycles, intermediateDelay) delay_``inputName(clk,reset, inputName, intermediateIndexName, outputName);
 
 
 reg [$clog2(nOfRamps+1) -1:0] currentRamp;
-wire doesNextRampWaitForTrigger = doesNextRampWaitForTriggers[currentRamp];//this bit tells us if the next ramp wants a trigger, not the current one
-
-//`delayedWire(time_size,		DT_f,					DT,					delay_1, DTs[(currentRamp+1)*time_size -1-:time_size])
-wire[time_size -1:0] DT = DTs[(currentRamp+1)*time_size -1-:time_size];
-wire[data_size+1 -1:0] DV = DVs[(currentRamp+1)*(data_size+1) -1-:(data_size+1)];
-//`delayedWire(data_size+1,	DV_forExpShift,			DV,					delay_1, DVs[(currentRamp+1)*(data_size+1) -1-:(data_size+1)])
-`delayedWire(section_size,	exp_SectionLength_f,	exp_SectionLength,	delay_1, exp_SectionLengths[(currentRamp+1)*section_size -1-:section_size])
-wire[data_size+1 -1:0] DV_next = DVs[(currentRamp+2)*(data_size+1) -1-:(data_size+1)];
-
 reg [time_size -1:0] n;//main counter. We'll go to the next ramp when n == DT
 reg [section_size -1:0] m;//internal counter of the exponential ramp. resets when m==exp_SectionLength
+
+//green lines
 reg [$clog2(nOfStepsBeforeHalfing+1) -1:0] exp_coeffIndex;
-reg[$clog2(data_size+1) -1:0] exp_bitShift;
+wire [coefficientSize -1:0] exp_coeff = halfExponents[(exp_coeffIndex+1)*coefficientSize -1-:coefficientSize];
+`delayedWire(data_size+1, DV_forExpMult, DV, delay_1, DVs[(currentRamp+1)*(data_size+1) -1-:(data_size+1)])// wire[data_size+1 -1:0] DV = DVs[(currentRamp+1)*(data_size+1) -1-:(data_size+1)];
+`delayedRegister($clog2(data_size+1), exp_bitShift, exp_bitShift_forShift, delay_1)// reg[$clog2(data_size+1) -1:0] exp_bitShift;
+`delayedWire(time_size, DT_forEndOfRamp, DT, delay_12, DTs[(currentRamp+1)*time_size -1-:time_size])//wire[time_size -1:0] DT = DTs[(currentRamp_blue+1)*time_size -1-:time_size];
+`delayedWire(1, endOfRamp, endOfRamp_cyan, delay_1, n==DT_forEndOfRamp)	//current ramp ended?  //wire endOfRamp = (doesNextRampWaitForTrigger && cleanTrigger	) ||//should we start prematurely the next ramp?\				 (					n==DT						);//current ramp ended?
+`delayedWire($clog2(nOfRamps+1), currentRamp_green, currentRamp_cyan, delay_1, currentRamp)
+
+//cyan lines
 wire [coefficientSize+data_size+1 -1:0] exp_s_unshifted;
 wire [data_size+1 -1:0] exp_s;
-`delayedWire(1, isExponential_f, isExponential, delay_1, isExponentials[currentRamp])
+`delayedWire(1, isExponential, isExponential_forDenomitatorChoice, delay_2, isExponentials[currentRamp_cyan])
 wire [data_size+1 -1:0] s = isExponential ? exp_s : DV;
-wire [data_size+1 -1:0] s_next = isExponential ? exp_s : DV_next;//exp_s is already updated to the next value
+`delayedWire($clog2(nOfRamps+1), currentRamp_cyan_copy, currentRamp_blue, delay_2, currentRamp_cyan)
+`delayedRegister(data_size, V0, V0_forOutSum, delay_23)
+reg override_ns;
+reg [time_size+data_size+1 -1:0] newValueFor_ns;
+
+
+//blue lines
+wire[section_size -1:0] exp_SectionLength = exp_SectionLengths[(currentRamp_blue+1)*time_size -1-:time_size];
+wire[time_size -1:0] denominator = isExponential_forDenomitatorChoice ? exp_SectionLength : DT;
 reg [time_size+data_size+1 -1:0] ns;//will store n*s
-wire [coefficientSize -1:0] exp_coeff = halfExponents[(exp_coeffIndex+1)*coefficientSize -1-:coefficientSize];
+
+//purple lines
+wire [data_size+1 -1:0] mt;
+
+
+
+
+
+wire doesNextRampWaitForTrigger = doesNextRampWaitForTriggers[currentRamp];//this bit tells us if the next ramp wants a trigger, not the current one
+
+// wire[data_size+1 -1:0] DV_next = DVs[(currentRamp+2)*(data_size+1) -1-:(data_size+1)];
+// wire [data_size+1 -1:0] s_next = isExponential ? exp_s : DV_next;//exp_s is already updated to the next value
 
 wire triggerReceived = cleanTrigger && usedRamps;
-wire endOfRamp = (doesNextRampWaitForTrigger && cleanTrigger	) ||//should we start prematurely the next ramp?
-				 (					n==DT						);//current ramp ended?
 wire exp_nextSectionLength = m >= exp_SectionLength;
 wire exp_nextShift = exp_coeffIndex == nOfStepsBeforeHalfing - 1;
 
@@ -414,16 +435,13 @@ clocked_FractionalMultiplier #(
   .areSignalsSigned (1)
 ) generate_expSlope (
   .clk(clk),
-  .a(endOfRamp ? DV_next : DV),
-  .b(endOfRamp ? halfExponents[coefficientSize -1:0] : exp_coeff),
+  .a(DV_forExpMult),
+  .b(exp_coeff),
   .result(exp_s_unshifted)
 );
 
-reg [(coefficientSize+data_size+1)*nOfStepsBeforeHalfing -1:0] all_exp_s_unshifted;
-reg savedAll_exp_sUnshifted;
-
-wire calculateNextCoefficient = m == delay_1;
-reg resetShifter;
+wire calculateNextCoefficient = m == delay_1;											//todo correct delay?
+reg resetShifter;																		//todo correct delay?
 fixedSumCoefficientShifter_oneAtATime #(
 	.coefficientSize	(coefficientSize+data_size+1),
 	.nOfCoefficients	(nOfStepsBeforeHalfing)
@@ -432,19 +450,18 @@ fixedSumCoefficientShifter_oneAtATime #(
 	.reset					(reset | resetShifter),
 	.triggerNextCoeff		(calculateNextCoefficient),
 	.currentCoefficient		(exp_s_unshifted),
-	.shift					({1'b0, exp_bitShift} + coefficientSize),
+	.shift					({1'b0, exp_bitShift_forShift} + coefficientSize),
 	.shiftedCoefficient		(exp_s)
 );
 
 
-`delayedIntermediatedRegister(data_size, V0, V0_forOutSum, V0_fastSet, 6, 1)
-`define setV0(newValue, isFastSet) \
-			V0 <= newValue;				\
-			V0_fastSet <= isFastSet;
-`define setV0_fast(newValue) `setV0(newValue, 1)
-`define setV0_slow(newValue) `setV0(newValue, 0)
+// `delayedIntermediatedRegister(data_size, V0, V0_forOutSum, V0_fastSet, 6, 1)
+// `define setV0(newValue, isFastSet) \
+// 			V0 <= newValue;				\
+// 			V0_fastSet <= isFastSet;
+// `define setV0_fast(newValue) `setV0(newValue, 1)
+// `define setV0_slow(newValue) `setV0(newValue, 0)
 wire isLastRamp = currentRamp == usedRamps - 1;
-wire [data_size+1 -1:0] mt;
 fractionalDivider #(//dividers take 5 clock cycles to generate the output
 	.A_WIDTH			(time_size+data_size+1),
 	.B_WIDTH			(time_size+1),
@@ -458,38 +475,42 @@ fractionalDivider #(//dividers take 5 clock cycles to generate the output
 	.clk		(clk),
 	.reset		(reset),
 	.a			(ns),
-	.b			(isExponential ? (exp_SectionLength) : {1'b0,DT}),
-.result		(mt)
+	.b			({1'b0, denominator}),
+	.result		(mt)
 );
 
+
+// wire [time_size+data_size+1 -1:0] ns_startValue = 0;//{{time_size{s[data_size+1-1]}},s}
 
 always @(posedge clk)begin
 	if(reset)begin
 		isRunning <= 0;
 		ns <= 0;
 		V0 <= 0;
-		V0_fastSet <= 0;
 		n <= 0;
 		m <= 0;
 		exp_bitShift <= 0;
 		currentRamp <= 0;
 		out <= 0;
 		exp_coeffIndex <= 0;
-		all_exp_s_unshifted <= 0;
-		savedAll_exp_sUnshifted <= 0;
 		resetShifter <= 0;
+		newValueFor_ns <= 0;
+		override_ns <= 1;
+		ns <= 0;
 	end else begin
 		out <= {V0_forOutSum[data_size-1], V0_forOutSum} + mt;
+		ns <= override_ns ? newValueFor_ns : ns + {{time_size{s[data_size+1-1]}},s};
 
 		if(!isRunning)begin//waiting for a trigger?
 			if(triggerReceived)begin
 				isRunning <= 1;
 				n <= 1;
 				m <= 1;
-				ns <= {{time_size{s[data_size+1-1]}},s};
+				newValueFor_ns <= 0;
+				override_ns <= 1;
 				if(currentRamp == 0)begin//are we waiting to start the sequence?
 					//add exception for inverseRamp, and save start value
-					`setV0_fast(startValue)
+					V0 <= startValue;
 				end
 			end
 		end else begin
@@ -497,31 +518,30 @@ always @(posedge clk)begin
 				exp_bitShift <= 0;
 				exp_coeffIndex <= 0;
 				resetShifter <= 1;
+				newValueFor_ns <= 0;
+				override_ns <= 1;
 
 				if(isLastRamp)begin//last ramp?
 					currentRamp <= 0;
 					isRunning <= 0;
-					ns <= 0;//set to 0, so that in the next clock cycle the output won't move
 					n <= 0;
 					m <= 0;
 					case(idleConfig)
-						c_defaultValue: begin		`setV0_slow(defaultValue)end
-						c_start:        begin		`setV0_slow(startValue)end
-						c_current:        begin		`setV0_slow({V0[data_size-1],V0} + DV)end
+						c_defaultValue: begin		V0 <= defaultValue;end
+						c_start:        begin		V0 <= startValue;end
+						c_current:        begin		V0 <= {V0[data_size-1],V0} + DV;end
 						default: begin end
 					endcase
 
 				end else begin
-					`setV0_slow({V0[data_size-1],V0} + DV)
+					V0 <= {V0[data_size-1],V0} + DV;
 					currentRamp <= currentRamp + 1;
 					if(doesNextRampWaitForTrigger || isLastRamp)begin//do we have to wait for a new trigger?
 						isRunning <= 0;
-						ns <= 0;//set to 0, so that in the next clock cycle the output won't move
 						n <= 0;
 						m <= 0;
 					end else begin
 						isRunning <= 1;
-						ns <= {{time_size{s_next[data_size+1-1]}},s_next};//todo s_next? too much pain?
 						n <= 1;
 						m <= 1;
 					end
@@ -530,7 +550,7 @@ always @(posedge clk)begin
 			end else begin
 				//let's continue the ramp
 				n <= n + 1;
-				ns <= ns + {{time_size{s[data_size+1-1]}},s};
+				override_ns <= 0;
 				if (exp_nextSectionLength) begin
 					m <= 1;
 					if (exp_nextShift) begin
@@ -624,10 +644,18 @@ force -freeze sim:/ramp_withDivisionsAndExponential/defaultValue 0 0
 force -freeze sim:/ramp_withDivisionsAndExponential/idleConfig 1 0
 force -freeze sim:/ramp_withDivisionsAndExponential/doesNextRampWaitForTriggers 0 0
 force -freeze sim:/ramp_withDivisionsAndExponential/exp_SectionLengths 02030704 0
-force -freeze sim:/ramp_withDivisionsAndExponential/isExponentials f 0
+force -freeze sim:/ramp_withDivisionsAndExponential/isExponentials 5 0
 run 500ps
 force -freeze sim:/ramp_withDivisionsAndExponential/reset 10 0
+run 500ps
+force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
 run
+force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
+run 50000ps
+force -freeze sim:/ramp_withDivisionsAndExponential/isExponentials 3 0
+run 500ps
+force -freeze sim:/ramp_withDivisionsAndExponential/reset 10 0
+run 500ps
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
 run
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
