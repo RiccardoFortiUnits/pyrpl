@@ -110,7 +110,7 @@ localparam	PID1					= 1;		/*modules use both input and output ;*/
 localparam	PID2					= 2;		/*modules use both input and output ;*/
 localparam	PID3					= 3;		/*modules use both input and output ;*/
 localparam	LINEARIZER				= 4;		/*modules use both input and output ;*/
-localparam	RAMP0					= 5;		/*modules use both input and output ;*/
+localparam	RAMP					= 5;		/*modules use both input and output ;*/
 localparam	RAMP1					= 6;		/*modules use both input and output ;*/
 localparam	SENSOR_FUSER			= 7;		/*modules use both input and output ;*/
 localparam	ASG0					= 8;		localparam	SCOPE0 					= 8;
@@ -353,7 +353,7 @@ endgenerate
 // segmented function, for linearizations
 generate 
 	if(1)begin
-		for (j = LINEARIZER; j < RAMP0; j = j+1) begin
+		for (j = LINEARIZER; j < RAMP; j = j+1) begin
 
 			segmentedFunction#(
 				.nOfEdges          (8),
@@ -383,7 +383,7 @@ endgenerate
 // sequence of ramp functions, for arbitrary functions with strict timings (useful to make sequences of ramps with very different time frames, if you tried to do this with the normal asg, the very fast ramps would not be that precise)
 generate
 	if(1)begin
-		for (j = RAMP0; j < SENSOR_FUSER; j = j+1) begin
+		for (j = RAMP; j < RAMP1; j = j+1) begin
 
 			ramp_withDivisionsAndExponential#(
 				.nOfRamps                   (8),

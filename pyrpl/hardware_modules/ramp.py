@@ -24,42 +24,27 @@ class idealRampFunction(ArrayProperty):
 		val = self.pre_setting_function(self, obj, val)
 		self.realRamp.set_value(obj, val)
 		return super().set_value(obj, val)
+
 class rampFunction(ArrayRegister):
-	def __init__(self, nOfSegments = 8, timeRegistersBitSize = 24, smallestStepIncrease = 2**-13, smallestTimeStep = 8e-9, minStepCycles = 3):
+	def __init__(self, nOfSegments = 8, timeRegistersBitSize = 28, voltageRegistersBitSize = 14):
 		self.nOfSegments = nOfSegments
 		self.timeRegistersBitSize = timeRegistersBitSize
-		self.smallestStepIncrease = smallestStepIncrease
-		self.smallestTimeStep = smallestTimeStep
-		self.minStepCycles = minStepCycles
-
-		self.startPoints = ArrayRegister(FloatRegister, 
-								addresses=[0x104 + i*0xC for i in range(nOfSegments)],
-								startBits=[0] * nOfSegments,
-								bits=14,
-								norm=2**13,
-								doc="value at the start of each ramp")
-		self.stepIncreases = ArrayRegister(FloatRegister, 
-								addresses=[0x104 + i*0xC for i in range(nOfSegments)],
-								startBits=[14] * nOfSegments,
-								bits=14,
-								norm=2**13,
-								default=smallestStepIncrease,
-								doc="output increment at each time step. Leave it to 2^(-13) for slow ramps, increase it for very fast ramps")
-		self.timeSteps = ArrayRegister(FloatRegister, 
+		self.voltageRegistersBitSize = voltageRegistersBitSize
+		self.startPoint = FloatRegister(0x104, bits=14, norm=2**13, signed = True)
+		self.DVs = ArrayRegister(FloatRegister, 
 								addresses=[0x108 + i*0xC for i in range(nOfSegments)],
+								startBits=[0] * nOfSegments,
+								bits=voltageRegistersBitSize + 1,
+								norm=2**13,
+								doc="difference between the end and start of the ramp")
+		self.DTs = ArrayRegister(FloatRegister, 
+								addresses=[0x10C + i*0xC for i in range(nOfSegments)],
 								startBits=[0] * nOfSegments,
 								bits=timeRegistersBitSize,
 								norm=125e6,
 								signed = False,
-								doc="time between each output increment")
-		self.nOfSteps = ArrayRegister(IntRegister, 
-								addresses=[0x10C + i*0xC for i in range(nOfSegments)],
-								startBits=[0] * nOfSegments,
-								bits=14,
-								signed=False,
-								doc="number of steps done before switching to the following ramp. The total time of ramp[i] is equal to "
-								"timeSteps[i] * nOfSteps[i], while the final value of the output is startPoints[i] + stepIncrease[i] * nOfSteps[i]")
-		super().__init__(registers=[self.startPoints, self.stepIncreases, self.timeSteps, self.nOfSteps])
+								doc="duration of the ramp")
+		super().__init__(registers=[self.DVs, self.DTs])
 		self.len = 2
 		
 	def get_value(self, obj):
@@ -71,118 +56,25 @@ class rampFunction(ArrayRegister):
 			firstUnusedIndex = len(nOfSteps)
 		'''
 		firstUnusedIndex = obj.usedRamps
-		if firstUnusedIndex == 0:
-			return [[0],[self.startPoints.get_value(obj)[0]]]
-		startPoints = self.startPoints.get_value(obj)[:firstUnusedIndex]
-		stepIncreases = self.stepIncreases.get_value(obj)[:firstUnusedIndex]
-		timeSteps = self.timeSteps.get_value(obj)[:firstUnusedIndex]
-		nOfSteps = self.nOfSteps.get_value(obj)[:firstUnusedIndex]
-		
-		rampTimes = np.array(timeSteps) * np.array(nOfSteps)
-		x = np.concatenate((np.zeros(1), np.cumsum(rampTimes)))
-		y = np.array(startPoints + [startPoints[-1]+stepIncreases[-1]*nOfSteps[-1]])
+		dt = self.DTs.get_value(obj)[:firstUnusedIndex]
+		dv = self.DVs.get_value(obj)[:firstUnusedIndex]
+		x = np.concatenate((np.zeros(1), np.cumsum(dt)))
+		y = np.cumsum(np.concatenate(([self.startPoint.get_value(obj)], dv)))
 		return [list(x),list(y)]
-	
-	@staticmethod    
-	def findBestRatio(r, A, B):
-		if r<1:
-			best_b, best_a = rampFunction.findBestRatio(1/r, B, A)
-			return best_a, best_b
-		b = 1
-		a = int(r)
-		if r > A:
-			return a, b
-		best = a
-		best_a = a
-		best_b = b
-		for b in range(2,B):
-			starting_a = int(a * float(b) / float(b-1))
-			if starting_a > A:
-				break
-			current = starting_a / b
-			while current < r:
-				starting_a+=1
-				prev = current
-				current = starting_a / b
-			a = starting_a - 1
-			if prev >= best:
-				best = prev
-				best_a = a
-				best_b = b
-		return best_a, best_b
-	
-	@staticmethod    
-	def findBestRamp(voltage, time, dV, dt, minStepNumber = 3, minN = 2):
-		'''let's find the best number of steps to obtain a ramp as close as possible to the required ramp, in therms of the final voltage and the duration'''
-		v = voltage / dV
-		t = time / dt
-		n = max(min(v,t), 1)
-		
-		n = np.arange(minN, max(min(v,t) / minStepNumber, 1) + 1)
-		if len(n) == 0:
-			return minN
-		l = np.round(v / n)
-		m = np.round(t / n)
-		voltErr = np.abs(voltage - l*n*dV)#error on the final voltage
-		timeErr = np.abs(time - m*n*dt)#error on the final time
-		stepError = dt * dV * l * m / 2#area "lost" of one step
-
-		totalError = voltErr * timeErr + stepError
-		return n[np.argsort(totalError)[0]]
 	
 	def set_value(self, obj, val):
 		x,y=val 
 		if len(x) > self.nOfSegments + 1:
 			raise Exception(f"too many segments! max number of points is {self.nOfSegments+1}")
 		edges = np.array(y[:])
-		times = np.array(x[1:]) - np.array(x[:-1])# np.array(x) - np.concatenate(([0],x[:-1]))
+		times = np.array(x[1:]) - np.array(x[:-1])
 		obj.usedRamps = len(x) - 1
 
-		list_startPoints = np.zeros(self.nOfSegments)
-		list_stepIncreases = np.zeros(self.nOfSegments)
-		list_timeSteps = np.zeros(self.nOfSegments)
-		list_nOfSteps = np.zeros(self.nOfSegments)
+		self.startPoint.set_value(obj, edges[0])
+		self.DVs.set_value(obj, edges[1:] - edges[:-1])
+		self.DTs.set_value(obj, times)
+		obj._emit_signal_by_name("updateRampCurve",np.array(x),np.array(y))
 
-		for i in range(len(times)):
-			startValue = edges[i]
-			endValue = edges[i+1]
-			rampTime = times[i]
-			if startValue == endValue:#flat segment
-				valueIncrementer = 0
-				maxStepTime = 0.10 #should be (2^24 * 8e-9s) = 0.134 s, but let's use a just sligthly lower one
-				nOfSteps = np.ceil(times[i] / maxStepTime)#if times[i] < maxStepTime, we'll just use a single long step
-			else:
-				DV = abs(endValue - startValue)
-				
-				nOfSteps = rampFunction.findBestRamp(DV, rampTime, self.smallestStepIncrease, self.smallestTimeStep, self.minStepCycles)
-				valueIncrementer = (endValue - startValue) / nOfSteps
-				
-			stepTime = rampTime / nOfSteps
-			
-			actualTiming = int((rampTime / nOfSteps / self.smallestTimeStep)) * self.smallestTimeStep * nOfSteps
-			if i != len(times) - 1:
-				times[i+1] += (rampTime - actualTiming)
-				# valueIncrementer = self.smallestStepIncrease if startValue < endValue else -self.smallestStepIncrease #let's always use the smallest incrementer possible, to have the highest resolution
-				# nOfSteps = int((endValue - startValue) / valueIncrementer)
-				
-			
-			# if stepTime < self.smallestTimeStep:
-			#     stepTime = self.smallestTimeStep
-			#     nOfSteps = int(rampTime / stepTime)
-			#     valueIncrementer = (endValue - startValue) / nOfSteps
-			
-			list_startPoints[i] = startValue
-			list_stepIncreases[i] = valueIncrementer
-			list_timeSteps[i] = stepTime
-			list_nOfSteps[i] = nOfSteps
-
-		self.startPoints.set_value(obj, list_startPoints)
-		self.stepIncreases.set_value(obj, list_stepIncreases)
-		self.timeSteps.set_value(obj, list_timeSteps)
-		self.nOfSteps.set_value(obj, list_nOfSteps)
-# 		obj._emit_signal_by_name("updateRampCurve", np.concatenate(([0], np.cumsum(times))), np.array(y))
-
-	  
 def updateRealRamp(idealRamp, self, value):#declared outside of Ramp. Sometimes Python can be very stupid...
 	# if not self.followSensorFuser:
 	return value
@@ -212,7 +104,6 @@ def updateRealRamp(idealRamp, self, value):#declared outside of Ramp. Sometimes 
 	# unique, index = np.unique(tr, return_index=True)
 	# return tr[index], yr[index]
 	return tr, yr
-
 class Ramp(DspModule, segmentedFunctionObject):
 	_widget_class = rampWidget
 	_signal_launcher = SignalLauncherRampModule
@@ -220,32 +111,40 @@ class Ramp(DspModule, segmentedFunctionObject):
 					["output_direct",
 					"idleConfiguration",
 					"useMultipleTriggers",
+					"isRampExponential",
+					"exp_taus",
 					"defaultValue",
 					"usedRamps",
 					"external_trigger_pin",
 					"rampValues",
-					# "followSensorFuser",
-                    "usedIdealRamps",
 					]
 						
 	_gui_attributes =  _setup_attributes
 
 	nOfSegments = 8
-	timeRegistersBitSize = 24
-	smallestStepIncrease = 2**-13
-	smallestTimeStep = 8e-9 * 3
 
 	idleConfiguration = SelectRegister(0x100, startBit=0, options={"defaultValue" : 0, "start" : 1, "end" : 2, "inverseRamp" : 3}, 
 			doc="set the value that the output keeps when the ramp is finished, while waiting for a new start trigger. "
 			"either use property defaultValue, the value at the start of the function, keep the final value of the function, "
 			"or execute a mirror version of the function (finishing at the starting value)")
-	useMultipleTriggers = BoolRegister(0x100, bit = 2, doc="if True, each section of the ramp function will wait for a new "
-			"trigger to arrive before starting (and if a trigger arrives prematurely, the next section will be started sooner). "
-			"If False, only one trigger is necessary to start the entire function")
-	defaultValue = FloatRegister(0x100, startBit=3, bits=14, norm= 2 **13, min=-1, max=1, doc="value that the output will keep at the end of the function, if idleConfiguration is set to 'defaultValue'")
-	usedRamps = IntRegister(0x100, startBit=14+3, bits = int(np.ceil(np.log2(nOfSegments) + 1)), min=0, max=nOfSegments, default=0, 
+	
+	useMultipleTriggers = IntRegister(0x100, startBit=2, bits=8, doc="if any bit is 1, at the end the corresponding ramp the sequence will be halted, and it will continue only after a new trigger is received."
+			"If the trigger arrives before that ramp has ended, the next section will be started immediately.")
+	
+	defaultValue = FloatRegister(0x104, startBit=14, bits=14, norm= 2 **13, min=-1, max=1, doc="value that the output will keep at the end of the function, if idleConfiguration is set to 'defaultValue'")
+	usedRamps = IntRegister(0x100, startBit=2+8, bits = int(np.ceil(np.log2(nOfSegments) + 1)), min=0, max=nOfSegments, default=0, 
 			doc="number of ramps used by the function. The values set for the 'exceding' ramps will not be used. If 0, it effectively disables the ramp")
-	usedIdealRamps = IntProperty(1,nOfSegments)
+	isRampExponential = IntRegister(0x100, startBit=2+8+int(np.ceil(np.log2(nOfSegments) + 1)), bits=8, doc="if any bit is 1, the corresponding ramp will be exponential, with timing constant given by the corresponding value in ")
+
+	exp_taus = ArrayRegister(
+						FloatRegister, 
+						[0x110 + 0xC*i for i in range(nOfSegments)], 
+						[0] * nOfSegments, 
+						28, 
+						norm=1/4.6e-8,
+						signed = False,
+						doc="timing constant of the exponential ramp"
+						)
 	
 
 
@@ -259,7 +158,7 @@ class Ramp(DspModule, segmentedFunctionObject):
 # 		self.rampValues = "[[0,1e-3,2e-3,2.5e-3],[0.5,-0.5,0,0.5]]"
 	external_trigger_pin = digitalPinRegister(HK.addr_base + 0x28, startBit=8, isAddressStatic = True)
 
-	rampValues = rampFunction(nOfSegments, timeRegistersBitSize, smallestStepIncrease, smallestTimeStep)
+	rampValues = rampFunction(nOfSegments)
 	idealRamp = idealRampFunction(rampValues, updateRealRamp)
 
 

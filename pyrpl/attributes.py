@@ -628,9 +628,10 @@ class ArrayProperty(BaseProperty):
 		return np.zeros(self.len)
 
 	def __init__(self,
-				 len = 1,
+				 len = 1, fixedLength = False,
 				 **kwargs):
 		self.len = len
+		self.fixedLength = False
 		BaseProperty.__init__(self, **kwargs)
 
 	def _create_widget(self, module, widget_name=None):
@@ -645,10 +646,12 @@ class ArrayProperty(BaseProperty):
 		if value is None:  # setting a number to None essentially calls setup()
 			value = self.get_value(obj)
 		if isinstance(value, str):
+			if "array" in value:
+				value = value.replace("array(", "").replace(")", "")
 			value = ast.literal_eval(value)
 		if not np.iterable(value):
 			value = [value]
-		if len(value) != self.len:
+		if self.fixedLength and len(value) != self.len:
 			raise Exception(f"unexpected amount of values. Should give {self.len} elements, but received {len(value)}")
 		return list(value)
 

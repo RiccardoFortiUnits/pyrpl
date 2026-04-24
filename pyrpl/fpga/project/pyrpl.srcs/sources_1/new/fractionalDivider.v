@@ -62,7 +62,7 @@ wire [den_WIDTH -1:0] b_shifted = b;//we'll consider b as a completely whole num
 
 generate
 
-`ifndef InModelsimSimulation
+`ifdef InModelsimSimulation
 	reg [rawQuotient_WIDTH -1:0] rawQuotient_nonDelayed;
 	reg [rawQuotient_WIDTH -1:0] rawRemain_nonDelayed;
 	wire [rawQuotient_WIDTH -1:0] rawQuotient;
@@ -108,9 +108,9 @@ generate
 		);
 		assign rawRemain = m_axis_dout_tdata[14 -1:0];
 		assign rawQuotient = m_axis_dout_tdata[47:16];
-	end else if(num_WIDTH == 44 && den_WIDTH == 28 && areSignalsSigned)begin:div_gen_s_44_28
+	end else if(num_WIDTH == 44 && den_WIDTH == 29 && areSignalsSigned)begin:div_gen_s_44_29
 		wire [79:0]m_axis_dout_tdata;
-		div_gen_s_44_28 d44_28(
+		div_gen_s_44_29 d44_29(
 			.aclk					(clk),
 			.aresetn				(!reset),	
 			.s_axis_divisor_tvalid	(1),				
@@ -119,12 +119,13 @@ generate
 			.s_axis_dividend_tdata	(a_shifted),
 			.m_axis_dout_tdata		(m_axis_dout_tdata)
 		);
-		assign rawRemain = m_axis_dout_tdata[28 -1:0];
+		assign rawRemain = m_axis_dout_tdata[29 -1:0];
 		assign rawQuotient = m_axis_dout_tdata[79:32];
+		//delay: 20
 	end 
 		else begin
-		$error("combination of register lengths does not have an IP core divider associated. Create a new divider with the correct register sizes and add it to the fractionalDivider module (yes, I know it sucks...). %sSigned, numerator size: %n, denominator size %n",
-		areSignalsSigned ? "" : "Un", num_WIDTH, den_WIDTH);
+		$error("combination of register lengths does not have an IP core divider associated. Create a new divider with the correct register sizes and add it to the fractionalDivider module (yes, I know it sucks...).%sSigned, numerator size: %n, denominator size %n",
+		(areSignalsSigned ? " " : " Un"), num_WIDTH, den_WIDTH);
 		/*
 		how to create a new divider IP core:
 			In Vivado, open the IP Catalog (Window->IP Catalog), search and select DIVIDE GENERATOR.

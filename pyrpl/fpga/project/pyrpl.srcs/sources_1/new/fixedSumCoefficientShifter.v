@@ -69,7 +69,7 @@ run
 */
 
 module fixedSumCoefficientShifter_oneAtATime #(
-	parameter coefficientSize = 8,//the coefficients are assumed to be unsigned
+	parameter coefficientSize = 8,//coefficients are assumed to be signed
 	parameter nOfCoefficients = 4,
 	parameter maxShift = coefficientSize
 ) (
@@ -84,11 +84,19 @@ module fixedSumCoefficientShifter_oneAtATime #(
 reg [$clog2(nOfCoefficients) -1:0] coefficientIndex;
 reg [coefficientSize -1:0] sum;
 
-wire [coefficientSize -1:0] nextSum = sum + currentCoefficient;
-wire signed [coefficientSize -1:0] shiftedSum;
-wire signed [coefficientSize -1:0] shiftedNextSum;
-assign shiftedSum = $signed( ($signed(sum) >>> shift) + $signed({0,sum[shift-1]}) );//I have no idea why this stupidly easy shift plus carry bit has to be written in such a complicated way...
-assign shiftedNextSum = $signed( ($signed(nextSum) >>> shift) + $signed({0,(coefficientIndex != nOfCoefficients-1) & nextSum[shift - 1]}) );
+wire signed [coefficientSize -1:0] nextSum = sum + currentCoefficient;
+
+wire signed [coefficientSize -1:0] shiftedSum_noRounding, shiftedNextSum_noRounding;
+wire signed [coefficientSize -1:0] shiftedSum, shiftedNextSum;
+
+wire sum_signBit = sum[coefficientSize -1];
+wire nextSum_signBit = nextSum[coefficientSize -1];
+
+assign shiftedSum_noRounding = $signed($signed(sum) >>> shift);//I have no idea why this stupidly easy shift has to be written in such a complicated way...
+assign shiftedNextSum_noRounding = $signed($signed(nextSum) >>> shift);
+
+assign shiftedSum = sum_signBit ? shiftedSum_noRounding : shiftedSum_noRounding + sum[shift-1];
+assign shiftedNextSum = nextSum_signBit ? shiftedNextSum_noRounding : (shiftedNextSum_noRounding + ((coefficientIndex != nOfCoefficients-1) & nextSum[shift - 1]));
 
 
 always @(posedge clk) begin
@@ -118,8 +126,8 @@ add wave -position insertpoint sim:/fixedSumCoefficientShifter_oneAtATime/*
 force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/clk 1 0, 0 {50 ps} -r 100
 force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/reset z 0
 force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/triggerNextCoeff z0 0
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 29 0
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/shift 3 0
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 15 0
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/shift 2 0
 run
 force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/reset z1 0
 run
@@ -129,17 +137,17 @@ force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/reset 10 0
 run
 force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/triggerNextCoeff 01 0
 run
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 22 0
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 11 0
 run
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 1d 0
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 0e 0
 run
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 18 0
-run
-run
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient c 0
 run
 run
 run
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 1f 0
+run
+run
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient f3 0
 run
 run
 run

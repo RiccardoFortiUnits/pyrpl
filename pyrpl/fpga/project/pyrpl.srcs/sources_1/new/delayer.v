@@ -29,9 +29,7 @@ module delayer#(
 	input [data_size -1:0] newValue,	
 	output [data_size -1:0] delayedValue	
 );
-
 reg [data_size -1:0] delays[nOfDelays -1:0];
-
 integer i;
 always @(posedge clk) begin
 	if (reset) begin
@@ -45,7 +43,6 @@ always @(posedge clk) begin
 		delays[0] <= newValue;		
 	end
 end
-
 assign delayedValue = delays[nOfDelays-1];
 endmodule
 

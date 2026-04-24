@@ -62,7 +62,7 @@ inputOrders = [
 	"iq0", "iq1", "iq2", "iq2_2", 
 	"pid0", "pid1", "pid2", "pid3", 
 	"asg0", "asg1", 
-	"linearizer", "ramp0", "ramp1", 
+	"linearizer", "ramp", #"ramp0", "ramp1", 
 	"trig", "iir", 
 	"off", ]
 outputOrders = [
