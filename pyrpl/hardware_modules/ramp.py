@@ -117,6 +117,8 @@ class Ramp(DspModule, segmentedFunctionObject):
 					"usedRamps",
 					"external_trigger_pin",
 					"rampValues",
+					"exponentialDirection",
+					"initialExponentialShift",
 					]
 						
 	_gui_attributes =  _setup_attributes
@@ -135,6 +137,18 @@ class Ramp(DspModule, segmentedFunctionObject):
 	usedRamps = IntRegister(0x100, startBit=2+8, bits = int(np.ceil(np.log2(nOfSegments) + 1)), min=0, max=nOfSegments, default=0, 
 			doc="number of ramps used by the function. The values set for the 'exceding' ramps will not be used. If 0, it effectively disables the ramp")
 	isRampExponential = IntRegister(0x100, startBit=2+8+int(np.ceil(np.log2(nOfSegments) + 1)), bits=8, doc="if any bit is 1, the corresponding ramp will be exponential, with timing constant given by the corresponding value in ")
+	exponentialDirection = ArrayRegister(
+						BoolRegister,
+						[0x108 + 0xC*i for i in range(nOfSegments)], 
+						[15] * nOfSegments
+						)
+	
+	initialExponentialShift = ArrayRegister(
+						IntRegister,
+						[0x108 + 0xC*i for i in range(nOfSegments)], 
+						[16] * nOfSegments,
+						4
+						)
 
 	exp_taus = ArrayRegister(
 						FloatRegister, 
@@ -145,6 +159,7 @@ class Ramp(DspModule, segmentedFunctionObject):
 						signed = False,
 						doc="timing constant of the exponential ramp"
 						)
+	
 	
 
 
@@ -159,14 +174,13 @@ class Ramp(DspModule, segmentedFunctionObject):
 	external_trigger_pin = digitalPinRegister(HK.addr_base + 0x28, startBit=8, isAddressStatic = True)
 
 	rampValues = rampFunction(nOfSegments)
-	idealRamp = idealRampFunction(rampValues, updateRealRamp)
 
 
 	def points(self):
 		return self.rampValues
 		
 	def updateFromInterface(self, x, y):
-		self.idealRamp = (x,y)
+		self.rampValues = (x,y)
 
 	def addRampToEnd(self, rampDuration, rampEndValue):
 		t, y = self.rampValues

@@ -63,12 +63,13 @@ wire [den_WIDTH -1:0] b_shifted = b;//we'll consider b as a completely whole num
 generate
 
 `ifdef InModelsimSimulation
+	parameter delay = 20;
 	reg [rawQuotient_WIDTH -1:0] rawQuotient_nonDelayed;
 	reg [rawQuotient_WIDTH -1:0] rawRemain_nonDelayed;
 	wire [rawQuotient_WIDTH -1:0] rawQuotient;
 	wire [rawQuotient_WIDTH -1:0] rawRemain;
-	delayer#(rawQuotient_WIDTH, 5-1) delayquot(clk,reset, rawQuotient_nonDelayed, rawQuotient);
-	delayer#(rawQuotient_WIDTH, 5-1) delayrem(clk,reset, rawRemain_nonDelayed, rawRemain);
+	delayer#(rawQuotient_WIDTH, delay-1) delayquot(clk,reset, rawQuotient_nonDelayed, rawQuotient);
+	delayer#(rawQuotient_WIDTH, delay-1) delayrem(clk,reset, rawRemain_nonDelayed, rawRemain);
 	if(areSignalsSigned)begin
 		always @(posedge clk) begin
 			if(reset) begin
@@ -132,7 +133,7 @@ generate
 			set the Component Name to div_gen_<u|s>_<num_WIDTH>_<den_WIDTH>
 			select the operand sign (signed or unsigned)
 			select the dividend (numerator) and divisor (denominator) widths
-			in the tab Options, set the latency configuration to manual and the latency to 5 
+			in the tab Options, set the latency configuration to manual. For the latency, you'll have to try out different values, but you can definitely go lower than the proposed delay
 				(I know, we're asking a lot to the FPGA, but I'm not waiting tens of clock cycles for a single division operation)
 				in the control signals, add the input ARESETN
 			Click OK and start the generation of the IP. It's gonna take a few minutes, and it's gonna be executed in the background

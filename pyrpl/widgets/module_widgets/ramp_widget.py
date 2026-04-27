@@ -38,6 +38,8 @@ class rampWidget(ModuleWidget):
         self.defaultValue_widget = self.attribute_widgets['defaultValue']
         self.usedRamps_widget = self.attribute_widgets['usedRamps']
         self.external_trigger_widget = self.attribute_widgets['external_trigger_pin']
+        self.exponentialDirection = self.attribute_widgets['exponentialDirection']
+        self.initialExponentialShift = self.attribute_widgets['initialExponentialShift']
         # self.followSensorFuser = self.attribute_widgets['followSensorFuser']
         self.attribute_layout.removeWidget(self.output_direct)
         self.attribute_layout.removeWidget(self.idleConfig_widget)
@@ -47,6 +49,8 @@ class rampWidget(ModuleWidget):
         self.attribute_layout.removeWidget(self.defaultValue_widget)
         self.attribute_layout.removeWidget(self.usedRamps_widget)
         self.attribute_layout.removeWidget(self.external_trigger_widget)
+        self.attribute_layout.removeWidget(self.exponentialDirection)
+        self.attribute_layout.removeWidget(self.initialExponentialShift)
         # self.attribute_layout.removeWidget(self.followSensorFuser)
         self.config_layout.addWidget(self.output_direct)
         self.config_layout.addWidget(self.idleConfig_widget)
@@ -56,6 +60,8 @@ class rampWidget(ModuleWidget):
         self.config_layout.addWidget(self.defaultValue_widget)
         self.config_layout.addWidget(self.usedRamps_widget)
         self.config_layout.addWidget(self.external_trigger_widget)
+        self.config_layout.addWidget(self.exponentialDirection)
+        self.config_layout.addWidget(self.initialExponentialShift)
         # self.config_layout.addWidget(self.followSensorFuser)
 
         self.function=self.attribute_widgets['rampValues']

@@ -69,7 +69,7 @@ run
 */
 
 module fixedSumCoefficientShifter_oneAtATime #(
-	parameter coefficientSize = 8,//coefficients are assumed to be signed
+	parameter coefficientSize = 8,
 	parameter nOfCoefficients = 4,
 	parameter maxShift = coefficientSize
 ) (
@@ -78,25 +78,22 @@ module fixedSumCoefficientShifter_oneAtATime #(
 	input triggerNextCoeff,//when high, the input coefficients will be saved.
 	input [coefficientSize -1:0] currentCoefficient,
 	input [$clog2(maxShift+1) -1:0] shift,
+	input areCoefficientsDecreasing,// in absolute number
 	output [coefficientSize -1:0] shiftedCoefficient
 );
 
 reg [$clog2(nOfCoefficients) -1:0] coefficientIndex;
 reg [coefficientSize -1:0] sum;
 
-wire signed [coefficientSize -1:0] nextSum = sum + currentCoefficient;
+//let's work only with positive values
+wire sign = currentCoefficient[coefficientSize-1];
+wire [coefficientSize -1:0] abs = sign ? - currentCoefficient : currentCoefficient;
 
-wire signed [coefficientSize -1:0] shiftedSum_noRounding, shiftedNextSum_noRounding;
-wire signed [coefficientSize -1:0] shiftedSum, shiftedNextSum;
-
-wire sum_signBit = sum[coefficientSize -1];
-wire nextSum_signBit = nextSum[coefficientSize -1];
-
-assign shiftedSum_noRounding = $signed($signed(sum) >>> shift);//I have no idea why this stupidly easy shift has to be written in such a complicated way...
-assign shiftedNextSum_noRounding = $signed($signed(nextSum) >>> shift);
-
-assign shiftedSum = sum_signBit ? shiftedSum_noRounding : shiftedSum_noRounding + sum[shift-1];
-assign shiftedNextSum = nextSum_signBit ? shiftedNextSum_noRounding : (shiftedNextSum_noRounding + ((coefficientIndex != nOfCoefficients-1) & nextSum[shift - 1]));
+wire [coefficientSize -1:0] nextSum = sum + abs;
+wire signed [coefficientSize -1:0] shiftedSum;
+wire signed [coefficientSize -1:0] shiftedNextSum;
+assign shiftedSum = (sum >> shift) + (areCoefficientsDecreasing & sum[shift-1]);
+assign shiftedNextSum = (nextSum >> shift) + (areCoefficientsDecreasing && (coefficientIndex != nOfCoefficients-1) & nextSum[shift - 1]);
 
 
 always @(posedge clk) begin
@@ -115,7 +112,8 @@ always @(posedge clk) begin
 		end
 	end
 end
-assign shiftedCoefficient = reset ? 0 : shiftedNextSum - shiftedSum;
+wire [coefficientSize -1:0] abs_shiftedCoefficient = reset ? 0 : shiftedNextSum - shiftedSum;
+assign shiftedCoefficient = sign ? - abs_shiftedCoefficient : abs_shiftedCoefficient;
 	
 endmodule
 
@@ -126,8 +124,8 @@ add wave -position insertpoint sim:/fixedSumCoefficientShifter_oneAtATime/*
 force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/clk 1 0, 0 {50 ps} -r 100
 force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/reset z 0
 force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/triggerNextCoeff z0 0
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 15 0
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/shift 2 0
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 29 0
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/shift 3 0
 run
 force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/reset z1 0
 run
@@ -137,17 +135,17 @@ force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/reset 10 0
 run
 force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/triggerNextCoeff 01 0
 run
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 11 0
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 22 0
 run
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 0e 0
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 1d 0
 run
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient c 0
-run
-run
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 18 0
 run
 run
 run
-force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient f3 0
+run
+run
+force -freeze sim:/fixedSumCoefficientShifter_oneAtATime/currentCoefficient 1f 0
 run
 run
 run

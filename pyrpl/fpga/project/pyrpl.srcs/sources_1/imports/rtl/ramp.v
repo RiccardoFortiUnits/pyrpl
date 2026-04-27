@@ -332,6 +332,10 @@ reg [data_size-1:0] defaultValue;
 reg [1:0] idleConfig;
 reg [nOfRamps -1:0] doesNextRampWaitForTriggers;
 
+localparam bitShift_size = $clog2(data_size+1);
+reg [nOfRamps -1:0] exp_directions;//0: negative exponential (c^-kt), 1: positive exponential
+reg [nOfRamps*bitShift_size -1:0] exp_initialShifts;//0: negative exponential (c^-kt), 1: positive exponential
+
 reg [nOfRamps -1:0] isExponentials;
 localparam section_size = time_size;//todo put a smaller register size, time_size is a bit too big
 localparam coefficientSize = data_size;//todo corretto?
@@ -378,6 +382,11 @@ localparam delay_123 = delay_12 + delay_3;
 	wire [registerSize -1:0] outputName;												\
 	delayer#(registerSize, delayCycles) delay_``inputName(clk,reset, inputName, outputName);
 
+`define delayedWire_noAssignment(registerSize, inputName, outputName, delayCycles)	\
+	wire [registerSize -1:0] inputName;													\
+	wire [registerSize -1:0] outputName;												\
+	delayer#(registerSize, delayCycles) delay_``inputName(clk,reset, inputName, outputName);
+
 `define delayedIntermediatedRegister(registerSize, inputName, outputName, intermediateIndexName, delayCycles, intermediateDelay) 			\
 	reg [registerSize -1:0] inputName;													\
 	wire [registerSize -1:0] outputName;												\
@@ -393,17 +402,34 @@ reg reversed;
 wire [1:0] modifiedIdleConfig = reversed ? c_start : idleConfig;
 wire needToReverse = idleConfig == c_inverseRamp && currentRamp == usedRamps - 1;
 wire isLastRamp = reversed || needToReverse ? currentRamp == 0 : currentRamp == usedRamps - 1;
+wire [$clog2(nOfRamps+1) -1:0] nextRamp = currentRamp + (
+											reversed ?
+												-1 : 
+												needToReverse ?
+													0 :
+													1
+											);
 
 //green lines
 reg [$clog2(nOfStepsBeforeHalfing+1) -1:0] exp_coeffIndex;
 wire [coefficientSize -1:0] exp_coeff = halfExponents[(exp_coeffIndex+1)*coefficientSize -1-:coefficientSize];
 wire [data_size+1 -1:0] unreversedDV = DVs[(currentRamp+1)*(data_size+1) -1-:(data_size+1)];
+wire [data_size+1 -1:0] next_unreversedDV = DVs[(nextRamp+1)*(data_size+1) -1-:(data_size+1)];
 `delayedWire(data_size+1, DV_forExpMult, DV, delay_1, reversed ? - unreversedDV : unreversedDV)// wire[data_size+1 -1:0] DV = DVs[(currentRamp+1)*(data_size+1) -1-:(data_size+1)];
-`delayedRegister($clog2(data_size+1), exp_bitShift, exp_bitShift_forShift, delay_1)// reg[$clog2(data_size+1) -1:0] exp_bitShift;
+wire [data_size+1 -1:0] next_DV = reversed ? - next_unreversedDV : next_unreversedDV;
+wire [bitShift_size -1:0] exp_initialShift = exp_initialShifts[(currentRamp+1)*bitShift_size -1-:bitShift_size];
+wire [bitShift_size -1:0] exp_nextInitialShift = exp_initialShifts[(nextRamp+1)*bitShift_size -1-:bitShift_size];
+`delayedWire(1, exp_direction, exp_direction_forShift, delay_1, exp_directions[currentRamp])
+wire exp_nextdirection = exp_directions[nextRamp];
+wire [$clog2(nOfStepsBeforeHalfing+1) -1:0] exp_startingCoeffIndex = exp_direction ? nOfStepsBeforeHalfing - 1 : 0;
+
+`delayedRegister(bitShift_size, exp_bitShift, exp_bitShift_forShift, delay_1)// reg[bitShift_size -1:0] exp_bitShift;
 `delayedWire(time_size, DT_forEndOfRamp, DT, delay_12, DTs[(currentRamp+1)*time_size -1-:time_size])//wire[time_size -1:0] DT = DTs[(currentRamp_blue+1)*time_size -1-:time_size];
 `delayedWire(1, endOfRamp, endOfRamp_cyan, delay_1, n==DT_forEndOfRamp)	//current ramp ended?  //wire endOfRamp = (doesNextRampWaitForTrigger && cleanTrigger	) ||//should we start prematurely the next ramp?\				 (					n==DT						);//current ramp ended?
 `delayedWire($clog2(nOfRamps+1), currentRamp_green, currentRamp_cyan, delay_1, currentRamp)
-
+`delayedRegister(data_size, overrideV0, overrideV0_blue, delay_123-2)
+`delayedRegister(2, selectWhichV0, selectWhichV0_blue, delay_123-2)
+localparam swv0_noChange=1,swv0_outputValue=2,swv0_overrideValue=3;
 
 //cyan lines
 wire [coefficientSize+data_size+1 -1:0] exp_s_unshifted;
@@ -411,18 +437,18 @@ wire [data_size+1 -1:0] exp_s;
 `delayedWire(1, isExponential, isExponential_forDenomitatorChoice, delay_2, isExponentials[currentRamp_cyan])
 wire [data_size+1 -1:0] s = isExponential ? exp_s : DV;
 `delayedWire($clog2(nOfRamps+1), currentRamp_cyan_copy, currentRamp_blue, delay_2, currentRamp_cyan)
-`delayedRegister(data_size, V0, V0_forOutSum, delay_23)
 reg override_ns;
 reg [time_size+data_size+1 -1:0] newValueFor_ns;
 
 
 //blue lines
 wire[section_size -1:0] exp_SectionLength = exp_SectionLengths[(currentRamp_blue+1)*time_size -1-:time_size];
-wire[time_size -1:0] denominator = isExponential_forDenomitatorChoice ? exp_SectionLength : DT;
+wire[time_size -1:0] denominator = isExponential_forDenomitatorChoice ? exp_SectionLength : DT - 1;
 reg [time_size+data_size+1 -1:0] ns;//will store n*s
 
 //purple lines
 wire [data_size+1 -1:0] mt;
+reg [data_size -1:0] V0;
 
 
 
@@ -435,7 +461,7 @@ wire doesNextRampWaitForTrigger = doesNextRampWaitForTriggers[currentRamp];//thi
 
 wire triggerReceived = cleanTrigger && usedRamps;
 wire exp_nextSectionLength = m >= exp_SectionLength;
-wire exp_nextShift = exp_coeffIndex == nOfStepsBeforeHalfing - 1;
+wire exp_nextShift = exp_direction ? (exp_coeffIndex == 0) : (exp_coeffIndex == nOfStepsBeforeHalfing - 1);
 
 clocked_FractionalMultiplier #(
   .A_WIDTH			(data_size+1),
@@ -458,21 +484,16 @@ fixedSumCoefficientShifter_oneAtATime #(
 	.coefficientSize	(coefficientSize+data_size+1),
 	.nOfCoefficients	(nOfStepsBeforeHalfing)
 ) shift_exp_coeff (
-	.clk					(clk),
-	.reset					(reset | resetShifter),
-	.triggerNextCoeff		(calculateNextCoefficient),
-	.currentCoefficient		(exp_s_unshifted),
-	.shift					({1'b0, exp_bitShift_forShift} + coefficientSize),
-	.shiftedCoefficient		(exp_s)
+	.clk						(clk),
+	.reset						(reset | resetShifter),
+	.triggerNextCoeff			(calculateNextCoefficient),
+	.currentCoefficient			(exp_s_unshifted),
+	.areCoefficientsDecreasing	(exp_direction_forShift),
+	.shift						({1'b0, exp_bitShift_forShift} + coefficientSize),
+	.shiftedCoefficient			(exp_s)
 );
 
 
-// `delayedIntermediatedRegister(data_size, V0, V0_forOutSum, V0_fastSet, 6, 1)
-// `define setV0(newValue, isFastSet) \
-// 			V0 <= newValue;				\
-// 			V0_fastSet <= isFastSet;
-// `define setV0_fast(newValue) `setV0(newValue, 1)
-// `define setV0_slow(newValue) `setV0(newValue, 0)
 fractionalDivider #(//dividers take 5 clock cycles to generate the output
 	.A_WIDTH			(time_size+data_size+1),
 	.B_WIDTH			(time_size+1),
@@ -511,10 +532,17 @@ always @(posedge clk)begin
 		override_ns <= 1;
 		ns <= 0;
 		reversed <= 0;
+		selectWhichV0 <= 0;
+		overrideV0 <= 0;
 	end else begin
-		out <= {V0_forOutSum[data_size-1], V0_forOutSum} + mt;
+		out <= {V0[data_size-1], V0} + mt;
 		ns <= override_ns ? newValueFor_ns : ns + {{time_size{s[data_size+1-1]}},s};
-
+		case (selectWhichV0_blue)
+			swv0_noChange: V0 <= V0;
+			swv0_outputValue: V0 <= {V0[data_size-1], V0} + mt;
+			swv0_overrideValue: V0 <= overrideV0_blue; 
+			default: V0 <= 0;
+		endcase
 		if(!isRunning)begin//waiting for a trigger?
 			if(triggerReceived)begin
 				isRunning <= 1;
@@ -524,17 +552,19 @@ always @(posedge clk)begin
 				override_ns <= 1;
 				if(currentRamp == 0 && !reversed)begin//are we waiting to start the sequence?
 					//add exception for inverseRamp, and save start value
-					V0 <= startValue;
+					selectWhichV0 <= swv0_overrideValue;
+					overrideV0 <= startValue;
+					exp_bitShift <= exp_initialShift;
 				end
 				resetShifter <= 1;
 			end
 		end else begin
 			if(endOfRamp)begin
-				exp_bitShift <= 0;
-				exp_coeffIndex <= 0;
+				exp_bitShift <= exp_nextInitialShift;
+				exp_coeffIndex <= exp_nextdirection ? nOfStepsBeforeHalfing - 1 : 0;
 				resetShifter <= 1;
-				newValueFor_ns <= 0;
 				override_ns <= 1;
+				newValueFor_ns <= 0;
 				if(needToReverse)begin
 					reversed <= 1;
 				end
@@ -544,20 +574,14 @@ always @(posedge clk)begin
 					n <= 0;
 					m <= 0;
 					case(modifiedIdleConfig)
-						c_defaultValue: begin		V0 <= defaultValue;end
-						c_start:        begin		V0 <= startValue;end
-						c_current:        begin		V0 <= {V0[data_size-1],V0} + DV;end
+						c_defaultValue:	begin	selectWhichV0 <= swv0_overrideValue; overrideV0 <= defaultValue;end
+						c_start:		begin	selectWhichV0 <= swv0_overrideValue; overrideV0 <= startValue;end
+						c_current:		begin	selectWhichV0 <= swv0_outputValue;end
 						default: begin end
 					endcase
-
 				end else begin
-					V0 <= {V0[data_size-1],V0} + DV;
-					currentRamp <= currentRamp + (reversed ?
-													-1 : 
-													needToReverse ?
-													 	0 :
-														1
-												 );
+					selectWhichV0 <= swv0_outputValue;
+					currentRamp <= nextRamp;
 					if(doesNextRampWaitForTrigger)begin//do we have to wait for a new trigger?
 						isRunning <= 0;
 						n <= 0;
@@ -567,19 +591,26 @@ always @(posedge clk)begin
 						n <= 1;
 						m <= 1;
 					end
-					
 				end
 			end else begin
 				//let's continue the ramp
 				n <= n + 1;
 				override_ns <= 0;
+				selectWhichV0 <= swv0_noChange;
 				if (exp_nextSectionLength) begin
 					m <= 1;
 					if (exp_nextShift) begin
-						exp_coeffIndex <= 0;
-						exp_bitShift <= exp_bitShift + (exp_bitShift >= data_size ? 0 : 1);
+						exp_coeffIndex <= exp_startingCoeffIndex;
+						exp_bitShift <= exp_direction ? 
+											(exp_bitShift > 0 ?
+												exp_bitShift - 1 : 
+												exp_bitShift)
+											:
+											(exp_bitShift < data_size ?
+												exp_bitShift + 1 :
+												exp_bitShift);
 					end else begin
-						exp_coeffIndex <= exp_coeffIndex + 1;
+						exp_coeffIndex <= exp_coeffIndex + (exp_direction ? -1 : 1);
 					end
 				end else begin
 					m <= m + 1;
@@ -608,11 +639,14 @@ if (reset) begin
 	doesNextRampWaitForTriggers <= 0;
 	isExponentials <= 0;
 	exp_SectionLengths <= 0;
+
+	exp_directions <= 0;
+	exp_initialShifts <= 0;
 end else if (wen) begin
 	if (addr==20'h100) {isExponentials, usedRamps, doesNextRampWaitForTriggers, idleConfig} <= wdata;
 	if (addr==20'h104) {defaultValue, startValue} <= wdata;
 	for(i = 0; i < nOfRamps; i = i + 1) begin
-		if (addr==20'h108 + i * 12) DVs[(i+1)*(data_size+1) -1-:(data_size+1)] <= wdata;
+		if (addr==20'h108 + i * 12) {exp_initialShifts[(i+1)*bitShift_size -1-:bitShift_size], exp_directions[i], DVs[(i+1)*(data_size+1) -1-:(data_size+1)]} <= wdata;
 		if (addr==20'h10C + i * 12) DTs[(i+1)*time_size -1-:time_size] <= wdata;
 		if (addr==20'h110 + i * 12) exp_SectionLengths[(i+1)*section_size -1-:time_size] <= wdata;
 	end
@@ -633,7 +667,7 @@ always @(posedge clk) begin
 		if (addr==20'h100) rdata <= {isExponentials, usedRamps, doesNextRampWaitForTriggers, idleConfig};
 		if (addr==20'h104) rdata <= {defaultValue, startValue};
 		for(i = 0; i < nOfRamps; i = i + 1) begin
-			if (addr==20'h108 + i * 12) rdata <= DVs[(i+1)*(data_size+1) -1-:(data_size+1)];
+			if (addr==20'h108 + i * 12) rdata <= {exp_initialShifts[(i+1)*bitShift_size -1-:bitShift_size], exp_directions[i], DVs[(i+1)*(data_size+1) -1-:(data_size+1)]};
 			if (addr==20'h10C + i * 12) rdata <= DTs[(i+1)*time_size -1-:time_size];
 			if (addr==20'h110 + i * 12) rdata <= exp_SectionLengths[(i+1)*section_size -1-:time_size];
 		end
@@ -662,15 +696,17 @@ add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/*
 force -freeze sim:/ramp_withDivisionsAndExponential/clk 1 0, 0 {50 ps} -r 100
 force -freeze sim:/ramp_withDivisionsAndExponential/reset z1 0
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger z0 0
-force -freeze sim:/ramp_withDivisionsAndExponential/DVs 40201038040 0
-force -freeze sim:/ramp_withDivisionsAndExponential/DTs 80808080 0
+force -freeze sim:/ramp_withDivisionsAndExponential/DVs cfb6ae823 0
+force -freeze sim:/ramp_withDivisionsAndExponential/DTs 25060371 0
 force -freeze sim:/ramp_withDivisionsAndExponential/startValue 0 0
 force -freeze sim:/ramp_withDivisionsAndExponential/usedRamps 4 0
 force -freeze sim:/ramp_withDivisionsAndExponential/defaultValue aa 0
 force -freeze sim:/ramp_withDivisionsAndExponential/idleConfig 2 0
 force -freeze sim:/ramp_withDivisionsAndExponential/doesNextRampWaitForTriggers 0 0
-force -freeze sim:/ramp_withDivisionsAndExponential/exp_SectionLengths 01020404 0
-force -freeze sim:/ramp_withDivisionsAndExponential/isExponentials f 0
+force -freeze sim:/ramp_withDivisionsAndExponential/exp_SectionLengths 10080404 0
+force -freeze sim:/ramp_withDivisionsAndExponential/isExponentials 0 0
+force -freeze sim:/ramp_withDivisionsAndExponential/exp_directions 1 0
+force -freeze sim:/ramp_withDivisionsAndExponential/exp_initialShifts 0205 0
 run 500ps
 force -freeze sim:/ramp_withDivisionsAndExponential/reset 10 0
 run 500ps
@@ -678,6 +714,43 @@ force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
 run
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
 run 80000ps
+
+vsim work.ramp_withDivisionsAndExponential
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/clk 
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/out
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/V0_forOutSum
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/V0
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/ns
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/mt
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/s
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/s_next
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/exp_coeff
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/exp_bitShift
+add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/*
+force -freeze sim:/ramp_withDivisionsAndExponential/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/ramp_withDivisionsAndExponential/reset z1 0
+force -freeze sim:/ramp_withDivisionsAndExponential/trigger z0 0
+force -freeze sim:/ramp_withDivisionsAndExponential/DVs e01078040 0
+force -freeze sim:/ramp_withDivisionsAndExponential/DTs 60606060 0
+force -freeze sim:/ramp_withDivisionsAndExponential/startValue 0 0
+force -freeze sim:/ramp_withDivisionsAndExponential/usedRamps 4 0
+force -freeze sim:/ramp_withDivisionsAndExponential/defaultValue aa 0
+force -freeze sim:/ramp_withDivisionsAndExponential/idleConfig 2 0
+force -freeze sim:/ramp_withDivisionsAndExponential/doesNextRampWaitForTriggers 0 0
+force -freeze sim:/ramp_withDivisionsAndExponential/exp_SectionLengths 03030303 0
+force -freeze sim:/ramp_withDivisionsAndExponential/isExponentials f 0
+force -freeze sim:/ramp_withDivisionsAndExponential/exp_directions c 0
+force -freeze sim:/ramp_withDivisionsAndExponential/exp_initialShifts 7700 0
+run 500ps
+force -freeze sim:/ramp_withDivisionsAndExponential/reset 10 0
+run 500ps
+force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
+run
+force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
+run 80000ps
+
+
+
 force -freeze sim:/ramp_withDivisionsAndExponential/isExponentials 3 0
 run 500ps
 force -freeze sim:/ramp_withDivisionsAndExponential/reset 10 0
@@ -689,3 +762,231 @@ run 20000ps
 
 */
 
+
+
+
+module ramp_easy#(
+	parameter nOfRamps = 4,
+	parameter data_size = 8,
+	parameter time_size = 8
+)(
+	input clk,
+	input superFastClk,//we'll remove this in the final version
+	input reset,
+	input trigger,
+	
+	output reg [data_size-1:0] out,
+
+	input [(data_size+1)*nOfRamps -1:0] DVs,//needs an extra bit, because you can have a ramp that does the entire range, and it can also be negative
+	input [time_size*nOfRamps -1:0] DTs,
+	input [data_size -1:0] startValue//V0
+);
+
+reg isRunning;//will be 0 when waiting for a trigger
+
+reg [$clog2(nOfRamps) -1:0] currentRamp;// i
+wire [time_size -1:0] DT = DTs[(currentRamp+1)*time_size -1-:time_size];
+wire [data_size+1 -1:0] DV = DVs[(currentRamp+1)*(data_size+1) -1-:(data_size+1)];
+
+reg [time_size -1:0] n;//main counter. We'll go to the next ramp when n == DT
+reg [time_size+data_size+1 -1:0] DVn;//will store n*DV
+reg [data_size-1:0] V0;//=startValue + DV[0] + DV[1] + ... + DV[i-1]
+
+//for the division, I have a module that already does all the calculations and fixed-point register shifts. The actual implementation is not that important now
+wire [data_size+1 -1:0] DVn_DT;
+fractionalDivider #(//this divider takes 5 clock cycles to generate the output
+	.A_WIDTH			(time_size+data_size+1),
+	.B_WIDTH			(time_size+1),
+	.OUTPUT_WIDTH		(data_size+1),
+	.FRAC_BITS_A		(data_size),
+	.FRAC_BITS_B		(0),
+	.FRAC_BITS_OUT		(data_size),
+	.areSignalsSigned	(1),// numerator can be negative
+	.saturateOutput     (0)
+) divide(
+	.clk		(superFastClk),
+	.reset		(reset),
+	.a			(DVn),
+	.b			({1'b0, DT ? DT : -1}),//let's avoid divisions by 0, and let's add a 0 bit to avoid the number being treated as negative
+	.result		(DVn_DT)
+);
+
+always @(posedge clk)begin
+	if(reset)begin
+		isRunning <= 0;
+		DVn <= 0;
+		V0 <= 0;
+		n <= 0;
+		currentRamp <= 0;
+		out <= 0;
+	end else begin
+		out <= {V0[data_size-1], V0} + DVn_DT;//just a bit padding for V0
+
+		if(!isRunning)begin//waiting for a trigger?
+			if(trigger)begin//trigger recieved?
+				isRunning <= 1;
+				DVn <= {{time_size{DV[data_size+1-1]}},DV};//just a bit padding
+			end else begin//are we waiting to start the sequence?
+				V0 <= startValue;
+			end
+		end else begin
+			if(n==DT-1)begin//current ramp ended?
+				n <= 0;
+				DVn <= 0;
+				V0 <= {V0[data_size-1],V0} + DV;//update the offset, so that the next ramp starts from the last value of the previous one
+				if(currentRamp == nOfRamps - 1)begin//last ramp?
+					currentRamp <= 0;
+					isRunning <= 0;
+				end else begin
+					currentRamp <= currentRamp + 1;
+				end
+			end else begin
+				//let's continue the ramp
+				n <= n + 1;
+				DVn <= DVn + {{time_size{DV[data_size+1-1]}},DV};
+			end
+		end
+	end
+end
+endmodule
+
+/*
+vsim work.ramp_easy
+add wave -position insertpoint sim:/ramp_easy/*
+force -freeze sim:/ramp_easy/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/ramp_easy/superFastClk 1 0, 0 {5 ps} -r 10
+force -freeze sim:/ramp_easy/reset 1 0
+force -freeze sim:/ramp_easy/trigger z0 0
+force -freeze sim:/ramp_easy/DVs cfb6ae823 0
+force -freeze sim:/ramp_easy/DTs 04081305 0
+force -freeze sim:/ramp_easy/startValue f0 0
+run 100ps
+force -freeze sim:/ramp_easy/reset 0 0
+run 100ps
+force -freeze sim:/ramp_easy/trigger 1 0
+run 100ps
+force -freeze sim:/ramp_easy/trigger 0 0
+run 4ns
+noforce sim:/ramp_easy/superFastClk
+force -freeze sim:/ramp_easy/superFastClk  1 0, 0 {50 ps} -r 100
+force -freeze sim:/ramp_easy/reset 1 0
+run 100ps
+force -freeze sim:/ramp_easy/reset 0 0
+run 100ps
+force -freeze sim:/ramp_easy/trigger 1 0
+run 100ps
+force -freeze sim:/ramp_easy/trigger 0 0
+run 5ns
+
+*/
+
+
+module ramp_correctedDelays#(
+	parameter nOfRamps = 4,
+	parameter data_size = 8,
+	parameter time_size = 8
+)(
+	input clk,
+	// input superFastClk,//not needed anymore
+	input reset,
+	input trigger,
+	
+	output reg [data_size-1:0] out,
+
+	input [(data_size+1)*nOfRamps -1:0] DVs,//needs an extra bit, because you can have a ramp that does the entire range, and it can also be negative
+	input [time_size*nOfRamps -1:0] DTs,
+	input [data_size -1:0] startValue//V0
+);
+
+reg isRunning;//will be 0 when waiting for a trigger
+
+reg [$clog2(nOfRamps) -1:0] currentRamp;// i
+wire [$clog2(nOfRamps) -1:0] currentRamp_forSelectingDT;// i
+delayer#($clog2(nOfRamps), 1) delay_currentRamp(clk,reset, currentRamp, currentRamp_forSelectingDT);
+
+wire [time_size -1:0] DT = DTs[(currentRamp_forSelectingDT+1)*time_size -1-:time_size];
+wire [data_size+1 -1:0] DV = DVs[(currentRamp+1)*(data_size+1) -1-:(data_size+1)];
+
+reg [time_size -1:0] n;//main counter. We'll go to the next ramp when n == DT
+reg [time_size+data_size+1 -1:0] DVn;//will store n*DV
+reg [data_size-1:0] V0;//=startValue + DV[0] + DV[1] + ... + DV[i-1]
+wire [data_size-1:0] V0_forFinalSum;//=startValue + DV[0] + DV[1] + ... + DV[i-1]
+delayer#(data_size, 5) delay_V0(clk,reset, V0, V0_forFinalSum);
+
+//for the division, I have a module that already does all the calculations and fixed-point register shifts. The actual implementation is not that important now
+wire [data_size+1 -1:0] DVn_DT;
+fractionalDivider #(//this divider takes 5 clock cycles to generate the output
+	.A_WIDTH			(time_size+data_size+1),
+	.B_WIDTH			(time_size+1),
+	.OUTPUT_WIDTH		(data_size+1),
+	.FRAC_BITS_A		(data_size),
+	.FRAC_BITS_B		(0),
+	.FRAC_BITS_OUT		(data_size),
+	.areSignalsSigned	(1),// numerator can be negative
+	.saturateOutput     (0)
+) divide(
+	.clk		(clk),
+	.reset		(reset),
+	.a			(DVn),
+	.b			({1'b0, DT-1 ? DT-1 : -1}),//let's avoid divisions by 0, and let's add a 0 bit to avoid the number being treated as negative
+	.result		(DVn_DT)
+);
+
+always @(posedge clk)begin
+	if(reset)begin
+		isRunning <= 0;
+		DVn <= 0;
+		V0 <= 0;
+		n <= 0;
+		currentRamp <= 0;
+		out <= 0;
+	end else begin
+		out <= {V0_forFinalSum[data_size-1], V0_forFinalSum} + DVn_DT;//just a bit padding for V0_forFinalSum
+
+		if(!isRunning)begin//waiting for a trigger?
+			if(trigger)begin//trigger recieved?
+				isRunning <= 1;
+				DVn <= {{time_size{DV[data_size+1-1]}},DV};//just a bit padding
+			end else begin//are we waiting to start the sequence?
+				V0 <= startValue;
+			end
+		end else begin
+			if(n==DT-1)begin//current ramp ended?
+				n <= 0;
+				DVn <= 0;
+				V0 <= {V0[data_size-1],V0} + DV;//update the offset, so that the next ramp starts from the last value of the previous one
+				if(currentRamp == nOfRamps - 1)begin//last ramp?
+					currentRamp <= 0;
+					isRunning <= 0;
+				end else begin
+					currentRamp <= currentRamp + 1;
+				end
+			end else begin
+				//let's continue the ramp
+				n <= n + 1;
+				DVn <= DVn + {{time_size{DV[data_size+1-1]}},DV};
+			end
+		end
+	end
+end
+endmodule
+
+/*
+
+vsim work.ramp_correctedDelays
+add wave -position insertpoint sim:/ramp_correctedDelays/*
+force -freeze sim:/ramp_correctedDelays/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/ramp_correctedDelays/reset 1 0
+force -freeze sim:/ramp_correctedDelays/trigger z0 0
+force -freeze sim:/ramp_correctedDelays/DVs cfb6ae823 0
+force -freeze sim:/ramp_correctedDelays/DTs 04081305 0
+force -freeze sim:/ramp_correctedDelays/startValue f0 0
+run 100ps
+force -freeze sim:/ramp_correctedDelays/reset 0 0
+run 100ps
+force -freeze sim:/ramp_correctedDelays/trigger 1 0
+run 100ps
+force -freeze sim:/ramp_correctedDelays/trigger 0 0
+run 4ns
+
+*/
