@@ -342,7 +342,7 @@ localparam coefficientSize = data_size;//todo corretto?
 reg [section_size*nOfRamps -1:0] exp_SectionLengths;
 
 integer i;
-/*
+// /*
 //this code calculates the values of the halfExponents. Sadly, Vivado is a little crybaby (to not say something else), and it cannot do a few calculations by itself... 
 reg [coefficientSize*nOfStepsBeforeHalfing -1:0] halfExponents;
 real x,c;
@@ -488,7 +488,7 @@ fixedSumCoefficientShifter_oneAtATime #(
 	.reset						(reset | resetShifter),
 	.triggerNextCoeff			(calculateNextCoefficient),
 	.currentCoefficient			(exp_s_unshifted),
-	.areCoefficientsDecreasing	(exp_direction_forShift),
+	.areCoefficientsDecreasing	(!exp_direction_forShift),
 	.shift						({1'b0, exp_bitShift_forShift} + coefficientSize),
 	.shiftedCoefficient			(exp_s)
 );
@@ -643,10 +643,10 @@ if (reset) begin
 	exp_directions <= 0;
 	exp_initialShifts <= 0;
 end else if (wen) begin
-	if (addr==20'h100) {isExponentials, usedRamps, doesNextRampWaitForTriggers, idleConfig} <= wdata;
+	if (addr==20'h100) {usedRamps, idleConfig} <= wdata;
 	if (addr==20'h104) {defaultValue, startValue} <= wdata;
 	for(i = 0; i < nOfRamps; i = i + 1) begin
-		if (addr==20'h108 + i * 12) {exp_initialShifts[(i+1)*bitShift_size -1-:bitShift_size], exp_directions[i], DVs[(i+1)*(data_size+1) -1-:(data_size+1)]} <= wdata;
+		if (addr==20'h108 + i * 12) {exp_initialShifts[(i+1)*bitShift_size -1-:bitShift_size], doesNextRampWaitForTriggers[i],  exp_directions[i], isExponentials[i], DVs[(i+1)*(data_size+1) -1-:(data_size+1)]} <= wdata;
 		if (addr==20'h10C + i * 12) DTs[(i+1)*time_size -1-:time_size] <= wdata;
 		if (addr==20'h110 + i * 12) exp_SectionLengths[(i+1)*section_size -1-:time_size] <= wdata;
 	end
@@ -664,10 +664,10 @@ always @(posedge clk) begin
 		ack <= en;  
 		rdata <=  32'h0;
 
-		if (addr==20'h100) rdata <= {isExponentials, usedRamps, doesNextRampWaitForTriggers, idleConfig};
+		if (addr==20'h100) rdata <= {usedRamps, idleConfig};
 		if (addr==20'h104) rdata <= {defaultValue, startValue};
 		for(i = 0; i < nOfRamps; i = i + 1) begin
-			if (addr==20'h108 + i * 12) rdata <= {exp_initialShifts[(i+1)*bitShift_size -1-:bitShift_size], exp_directions[i], DVs[(i+1)*(data_size+1) -1-:(data_size+1)]};
+			if (addr==20'h108 + i * 12) rdata <= {exp_initialShifts[(i+1)*bitShift_size -1-:bitShift_size], doesNextRampWaitForTriggers[i], exp_directions[i], isExponentials[i], DVs[(i+1)*(data_size+1) -1-:(data_size+1)]};
 			if (addr==20'h10C + i * 12) rdata <= DTs[(i+1)*time_size -1-:time_size];
 			if (addr==20'h110 + i * 12) rdata <= exp_SectionLengths[(i+1)*section_size -1-:time_size];
 		end

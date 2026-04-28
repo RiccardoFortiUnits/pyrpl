@@ -1,10 +1,11 @@
-from ..attributes import IntRegister, IntProperty, ArrayRegister, FloatRegister, SelectRegister, IORegister, BoolProperty, BoolRegister, GainRegister, digitalPinRegister, ExpandableProperty, ArrayProperty
+from ..attributes import BaseProperty, DynamicInstanceProperty, IntRegister, IntProperty, ArrayRegister, FloatRegister, FloatProperty, SelectRegister, IORegister, BoolProperty, BoolRegister, GainRegister, digitalPinRegister, ExpandableProperty, ArrayProperty, dualProperty
 
-from ..widgets.module_widgets.ramp_widget import rampWidget
+from ..widgets.module_widgets.ramp_widget import rampWidget, segmentWidget
 import numpy as np
 from .dsp import DspModule, all_inputs, dsp_addr_base, InputSelectRegister
 from ..segmentedFunctionObject import segmentedFunctionObject
 from .hk import HK
+from ..modules import HardwareModule
 from ..module_attributes import SignalLauncher
 from qtpy import QtCore
 from .sensorFuser import sensor_fuser
@@ -12,18 +13,8 @@ from .sensorFuser import sensor_fuser
 class SignalLauncherRampModule(SignalLauncher):
 	""" class that takes care of emitting signals to update all possible
 	displays"""
-	updateRampCurve = QtCore.Signal(np.ndarray, np.ndarray)  # This signal is emitted when
+	updateRampCurve = QtCore.Signal()  # This signal is emitted when
 
-class idealRampFunction(ArrayProperty):
-	def __init__(self, realRamp : segmentedFunctionObject, pre_setting_function, **kwargs):
-		super().__init__(len, **kwargs)
-		self.realRamp = realRamp
-		self.pre_setting_function = pre_setting_function
-
-	def set_value(self, obj, val):
-		val = self.pre_setting_function(self, obj, val)
-		self.realRamp.set_value(obj, val)
-		return super().set_value(obj, val)
 
 class rampFunction(ArrayRegister):
 	def __init__(self, nOfSegments = 8, timeRegistersBitSize = 28, voltageRegistersBitSize = 14):
@@ -73,52 +64,116 @@ class rampFunction(ArrayRegister):
 		self.startPoint.set_value(obj, edges[0])
 		self.DVs.set_value(obj, edges[1:] - edges[:-1])
 		self.DTs.set_value(obj, times)
-		obj._emit_signal_by_name("updateRampCurve",np.array(x),np.array(y))
+		obj._emit_signal_by_name("updateRampCurve")
 
-def updateRealRamp(idealRamp, self, value):#declared outside of Ramp. Sometimes Python can be very stupid...
-	# if not self.followSensorFuser:
-	return value
-	ti, yi = value
-	sensorFuser : sensor_fuser= self.redpitaya.sensor_fuser
-	xs, ys = sensorFuser.o.points()
-	xs = np.array(xs)
-	ys = np.array(ys)
-	xs = (xs - xs[0]) / (xs[-1] - xs[0])
-	tr, yr = [0], [np.interp(yi[0], xs, ys)]
-	for i in range(len(ti)-1):
-		time = ti[i+1] - ti[i]
-		edges = yi[i:i+2]
-		valueAtEdges = np.interp(edges, xs, ys)
-		def positionInsideRange(x, a, b):
-			p = (x - a) / (b - a)
-			p[np.logical_or(p <= 0, p >= 1)] = -1
-			return p
-		p = positionInsideRange(xs, *edges)
-		indexes = np.where(p != -1)[0]
-		p = p[indexes]
-		tp = ti[i] + time * p
-		tr += list(np.sort(tp))
-		yr += list(ys[indexes[np.argsort(p)]])
-		tr.append(ti[i+1])
-		yr.append(valueAtEdges[1])
-	# unique, index = np.unique(tr, return_index=True)
-	# return tr[index], yr[index]
-	return tr, yr
+class voltageAndInitialBitShiftProperty(FloatProperty):
+	def __init__(self, min=-np.inf, max=np.inf, increment=0, log_increment=False, **kwargs):
+		super().__init__(min, max, increment, log_increment, **kwargs)
+		self.alreadyUpdating = False
+
+	def set_value(self, obj, val):
+		if self.alreadyUpdating:
+			return
+		self.alreadyUpdating = True
+		try:
+			ret = super().set_value(obj, val)
+			if obj.isExponential:
+				tau = obj.tau
+				DT = obj.DT
+				if obj.exponentialRampSign == "negative":
+					obj.normalized_DV = val / (1 - np.exp(-DT / tau))
+					obj.initialExponentialShift = 0
+				else:
+					#let's check how many orders of magnitude will be done
+					s = int(np.ceil(np.log2(np.e) * DT / tau))
+					obj.normalized_DV = val / (2**-(s+.25) * (np.exp(DT / tau) - 1))
+					obj.initialExponentialShift = s
+			else:
+				obj.normalized_DV = val
+			return ret
+		finally:
+			obj.parent._emit_signal_by_name("updateRampCurve")
+			self.alreadyUpdating = False
+	def get_value(self, obj):
+		return super().get_value(obj)
+	# def get_value(self, obj):
+	# 	obj : segment = obj
+	# 	# ret = super().get_value(obj)
+	# 	dv = obj.normalized_DV
+	# 	if obj.isExponential:
+	# 		tau = obj.tau
+	# 		DT = obj.DT
+	# 		s = obj.initialExponentialShift
+	# 		if obj.exponentialRampSign == "negative":
+	# 			return dv * 2**-s * (1 - np.exp(-DT / tau))
+	# 		else:
+	# 			return dv * (2**-s * (np.exp(DT / tau) - 1))
+	# 	else:
+	# 		return dv
+		
+
+class initialSegment:
+	T = 0
+	@property
+	def VVV(self):
+		return self.parent.startPoint
+	def __init__(self, parent):
+		self.parent = parent
+class segment(HardwareModule):	
+	'''submodule for the handling of a single segment of a ramp'''
+	_gui_attributes = [
+					"DV",
+					"VVV",
+					"DT",
+					"T",
+					"isExponential",
+					"exponentialRampSign",
+					"haltsSequence",
+					"tau",
+					]
+	_setup_attributes = _gui_attributes
+	_widget_class = segmentWidget
+
+	def __init__(self, parent, prevSegment = None, name=None, index = -1):
+		self.addr_base = parent.addr_base + 0x108 + 0xC*index
+		super().__init__(parent, name, index)
+		if prevSegment is None:
+			prevSegment = initialSegment(parent)
+		self.prevSegment = prevSegment
+	
+
+	#remember, all addreses are shifted accordingly to addr_base
+	normalized_DV = FloatRegister(0x0, 15, startBit= 0, norm=2**13, doc="difference between the end and start of the ramp")
+	DV = voltageAndInitialBitShiftProperty()
+	DV_V = dualProperty(DV, FloatProperty, lambda prop, instance, value : instance.prevSegment.VVV + value, lambda prop, instance, value : value - instance.prevSegment.VVV)
+	DV, VVV = DV_V.real, DV_V.virtual
+	DT = FloatRegister(0x4, 28, startBit= 0, norm=125e6, doc="difference between the end and start of the ramp")
+	DT_T = dualProperty(DT, FloatProperty, lambda prop, instance, value : instance.prevSegment.T + value, lambda prop, instance, value : value - instance.prevSegment.T)
+	DT, T = DT_T.real, DT_T.virtual
+
+
+	def updateDV(self):
+		self.DV = self.DV
+	isExponential = ExpandableProperty(BoolRegister(0x0, bit = 15), extraFunctionToDoAfterSettingValue=lambda prop, instance, value: instance.updateDV())
+	exponentialRampSign = ExpandableProperty(SelectRegister(0x0, startBit=16, options={"negative" : 0, "positive" : 1}), extraFunctionToDoAfterSettingValue=lambda prop, instance, value: instance.updateDV())
+	haltsSequence = BoolRegister(0x0, bit = 17)
+	initialExponentialShift = ExpandableProperty(IntRegister(0x0, startBit=18, bits = 4, signed= False), extraFunctionToDoAfterSettingValue=lambda prop, instance, value: instance.updateDV())
+	tau = ExpandableProperty(FloatRegister(0x8, bits=28, norm=1/4.6e-8, signed = False, doc="timing constant of the exponential ramp"), extraFunctionToDoAfterSettingValue=lambda prop, instance, value: instance.updateDV())
+	DT = ExpandableProperty(DT, extraFunctionToDoAfterSettingValue=lambda prop, instance, value: instance.updateDV())
+	T = ExpandableProperty(T, extraFunctionToDoAfterSettingValue=lambda prop, instance, value: instance.updateDV())
+
+
+
 class Ramp(DspModule, segmentedFunctionObject):
 	_widget_class = rampWidget
 	_signal_launcher = SignalLauncherRampModule
 	_setup_attributes = \
-					["output_direct",
-					"idleConfiguration",
-					"useMultipleTriggers",
-					"isRampExponential",
-					"exp_taus",
-					"defaultValue",
+					["startPoint",
 					"usedRamps",
+					"output_direct",
+					"idleConfiguration",
+					"defaultValue",
 					"external_trigger_pin",
-					"rampValues",
-					"exponentialDirection",
-					"initialExponentialShift",
 					]
 						
 	_gui_attributes =  _setup_attributes
@@ -130,63 +185,70 @@ class Ramp(DspModule, segmentedFunctionObject):
 			"either use property defaultValue, the value at the start of the function, keep the final value of the function, "
 			"or execute a mirror version of the function (finishing at the starting value)")
 	
-	useMultipleTriggers = IntRegister(0x100, startBit=2, bits=8, doc="if any bit is 1, at the end the corresponding ramp the sequence will be halted, and it will continue only after a new trigger is received."
-			"If the trigger arrives before that ramp has ended, the next section will be started immediately.")
+	# useMultipleTriggers = IntRegister(0x100, startBit=2, bits=8, doc="if any bit is 1, at the end the corresponding ramp the sequence will be halted, and it will continue only after a new trigger is received."
+			# "If the trigger arrives before that ramp has ended, the next section will be started immediately.")
 	
-	defaultValue = FloatRegister(0x104, startBit=14, bits=14, norm= 2 **13, min=-1, max=1, doc="value that the output will keep at the end of the function, if idleConfiguration is set to 'defaultValue'")
-	usedRamps = IntRegister(0x100, startBit=2+8, bits = int(np.ceil(np.log2(nOfSegments) + 1)), min=0, max=nOfSegments, default=0, 
+	defaultValue = FloatRegister(0x104, startBit=14, bits=14, norm= 2**13, min=-1, max=1, doc="value that the output will keep at the end of the function, if idleConfiguration is set to 'defaultValue'")
+	usedRamps = IntRegister(0x100, startBit=2, bits = int(np.ceil(np.log2(nOfSegments) + 1)), min=0, max=nOfSegments, default=0, 
 			doc="number of ramps used by the function. The values set for the 'exceding' ramps will not be used. If 0, it effectively disables the ramp")
-	isRampExponential = IntRegister(0x100, startBit=2+8+int(np.ceil(np.log2(nOfSegments) + 1)), bits=8, doc="if any bit is 1, the corresponding ramp will be exponential, with timing constant given by the corresponding value in ")
-	exponentialDirection = ArrayRegister(
-						BoolRegister,
-						[0x108 + 0xC*i for i in range(nOfSegments)], 
-						[15] * nOfSegments
-						)
 	
-	initialExponentialShift = ArrayRegister(
-						IntRegister,
-						[0x108 + 0xC*i for i in range(nOfSegments)], 
-						[16] * nOfSegments,
-						4
-						)
-
-	exp_taus = ArrayRegister(
-						FloatRegister, 
-						[0x110 + 0xC*i for i in range(nOfSegments)], 
-						[0] * nOfSegments, 
-						28, 
-						norm=1/4.6e-8,
-						signed = False,
-						doc="timing constant of the exponential ramp"
-						)
+	startPoint = FloatRegister(0x104, bits=14, norm=2**13, signed = True, doc="initial value of the sequence")
+	# isRampExponential = IntRegister(0x100, startBit=2+8+int(np.ceil(np.log2(nOfSegments) + 1)), bits=8, doc="if any bit is 1, the corresponding ramp will be exponential, with timing constant given by the corresponding value in ")
+	# exponentialDirection = ArrayRegister(
+	# 					BoolRegister,
+	# 					[0x108 + 0xC*i for i in range(nOfSegments)], 
+	# 					[15] * nOfSegments
+	# 					)
 	
+	# initialExponentialShift = ArrayRegister(
+	# 					IntRegister,
+	# 					[0x108 + 0xC*i for i in range(nOfSegments)], 
+	# 					[16] * nOfSegments,
+	# 					4
+	# 					)
+
+	# exp_taus = ArrayRegister(
+	# 					FloatRegister, 
+	# 					[0x110 + 0xC*i for i in range(nOfSegments)], 
+	# 					[0] * nOfSegments, 
+	# 					28, 
+	# 					norm=1/4.6e-8,
+	# 					signed = False,
+	# 					doc="timing constant of the exponential ramp"
+	# 					)
 	
+	def __init__(self, rp, name, index=0):
+		super().__init__(rp, name, index)
+		self.client = self._client
+		prevSegment = None
+		self.segments = []
+		for i in range(Ramp.nOfSegments):
+			prevSegment = segment(self, prevSegment, f"segment_{i}", i)
+			self.segments.append(prevSegment)
 
-
-
-
-
-	# followSensorFuser = BoolProperty(default=False, doc="select if the ramps should follow the ramps defined in the sensorFuser module. If this property "
-	#"is set, each ramp will be divided in multiple ramps, so that, if used in tandem with the sensorFuser module, the output will be linear.")
-	def __init__(self, *args, **kwargs):        
-		super(Ramp, self).__init__(*args, **kwargs)
-# 		self.rampValues = "[[0,1e-3,2e-3,2.5e-3],[0.5,-0.5,0,0.5]]"
 	external_trigger_pin = digitalPinRegister(HK.addr_base + 0x28, startBit=8, isAddressStatic = True)
 
-	rampValues = rampFunction(nOfSegments)
-
-
 	def points(self):
-		return self.rampValues
+		DVs = [s.DV for s in self.segments[:self.nOfSegments]]
+		DTs = [s.DT for s in self.segments[:self.nOfSegments]]
+		T = np.cumsum([0]+DTs)
+		VVV = np.cumsum([self.startPoint]+DVs)
+		return T, VVV
 		
 	def updateFromInterface(self, x, y):
-		self.rampValues = (x,y)
+		DV = np.diff(y)
+		DT = np.diff(x)
+		self.startPoint = y[0]
+		self.usedRamps = len(DV)
+		for i in range(len(DV)):
+			self.segments[i].DV = DV[i]
+			self.segments[i].DT = DT[i]
 
 	def addRampToEnd(self, rampDuration, rampEndValue):
-		t, y = self.rampValues
-		t = np.concatenate((t, [t[-1] + rampDuration]))
-		y = np.concatenate((y, [rampEndValue]))
-		self.rampValues = [t, y]
+		l = self.usedRamps
+		seg = self.segments[l]
+		seg.DT = rampDuration
+		seg.VVV = rampEndValue
+		self.usedRamps = l + 1
 	def addHoldToEnd(self, holdDuration):
-		self.addRampToEnd(holdDuration, self.rampValues[1][-1])
-
+		self.addRampToEnd(holdDuration, self.segments[self.usedRamps-1])

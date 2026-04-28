@@ -453,6 +453,8 @@ class BoolRegister(BaseRegister, BoolProperty):
 	"""Inteface for boolean values, 1: True, 0: False.
 	invert=True inverts the mapping"""
 	def __init__(self, address, bit=0, useBitMask=True, invert=False, **kwargs):
+		if "startBit" in kwargs.keys():
+			bit = kwargs["startBit"]
 		self.bit = bit
 		assert type(invert) == bool
 		self.invert = invert
