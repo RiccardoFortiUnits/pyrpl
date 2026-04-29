@@ -50,7 +50,8 @@ requirements = ['scp',
                 'qtpy<=1.9',  # qtpy 1.11 contains breaking API changes related to pyqtSignals
                 'ipykernel>=5,<6',  # otherwise jupyter breaks
                 'nbconvert',
-                'jupyter-client']
+                'jupyter-client',
+				'networkx']
 if sys.version_info >= (3,4):  # python version dependencies
     requirements += ['quamash']
 else:  # python 2.7

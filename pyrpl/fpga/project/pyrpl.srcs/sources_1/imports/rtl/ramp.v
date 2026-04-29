@@ -255,6 +255,116 @@ force -freeze sim:/ramp/trigger z0 0
 
 
 */
+module enablersForDelayedProcedures#(
+	parameter delay = 5
+)(
+	input clk,
+	input reset,
+	input restartCalculations,
+	input trigger,
+	input procedureEnding,
+	output reg continue
+);
+	/*
+	This module generates an enable signal for an external procedure that implements 
+	a triggerable signal generator (or something similar), so that the output of the 
+	module starts at the trigger, instead of having to wait for the delay in the 
+	calculations of the module. 
+	Essentially, at the start, the module is enabled for an amount of clock cycles, 
+	so that at the next clock cycle you would have the first valid output. Then, the 
+	module is disabled until a trigger is received. At that point, the module is 
+	enabled again, and the first valid output is outputted. When the module signals 
+	that it is about to finish the sequence (when it just started generating the last 
+	output value), the enable is kept a few clock cycles more, so that all the output 
+	values are outputted, and the first outputs of the next sequence are computed, 
+	ready for the next trigger
+
+	restartCalculations: starts the initial preparation. You should set it to 1 for 
+	one clock cycle, every time the parameterss of the external module are changed, 
+	so that the correct output can be re-calculated
+	
+	trigger: actual trigger, at which you want to enable the output
+
+	procedureEnding: sent from the external module, set to 1 when it is about to 
+	finish the sequence (it just started calculating the last output)
+
+	continue: enable of the external module. You can consider it as if it was a 
+	clock enable
+	*/
+	reg [$clog2(delay) -1:0] counter;
+
+	localparam	s_idle = 0,
+				s_prepare = 1,
+				s_run = 2;
+	reg [1:0] state;
+
+	always @(posedge clk) begin
+		if (reset) begin
+			counter <= 0;
+			continue <= 0;
+			state <= 0;
+		end else begin
+			case (state)
+				s_idle: begin
+					continue <= 0;
+					if (restartCalculations) begin
+						state <= s_prepare;
+						counter <= delay - 1;
+					end else if(trigger) begin
+						state <= s_run;
+					end
+				end
+				s_prepare: begin
+					continue <= 1;
+					if (counter > 0) begin
+						counter <= counter - 1;
+						//the trigger is not considered valid until 
+							//the module is done preparing
+					end else begin
+						state <= s_idle;
+					end
+				end
+				s_run: begin
+					continue <= 1;
+					if (procedureEnding) begin
+						//let's prepare the start of the next sequence
+						state <= s_prepare;
+						counter <= delay - 1;
+					end
+				end
+				default: state <= s_idle;
+			endcase
+		end
+	end
+endmodule
+/*
+vsim work.enablersForDelayedProcedures
+add wave -position insertpoint sim:/enablersForDelayedProcedures/*
+force -freeze sim:/enablersForDelayedProcedures/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/enablersForDelayedProcedures/reset z1 0
+force -freeze sim:/enablersForDelayedProcedures/restartCalculations z0 0
+force -freeze sim:/enablersForDelayedProcedures/trigger z0 0
+force -freeze sim:/enablersForDelayedProcedures/procedureEnding z0 0
+run
+force -freeze sim:/enablersForDelayedProcedures/reset 10 0
+run
+force -freeze sim:/enablersForDelayedProcedures/restartCalculations 01 0
+run
+force -freeze sim:/enablersForDelayedProcedures/restartCalculations 10 0
+run
+run
+run
+run
+run
+run
+run
+run
+force -freeze sim:/enablersForDelayedProcedures/trigger 01 0
+run
+force -freeze sim:/enablersForDelayedProcedures/trigger 10 0
+run
+run
+run*/
 
 module ramp_withDivisionsAndExponential#(
 	parameter nOfRamps = 4,
@@ -342,7 +452,7 @@ localparam coefficientSize = data_size;//todo corretto?
 reg [section_size*nOfRamps -1:0] exp_SectionLengths;
 
 integer i;
-// /*
+/*
 //this code calculates the values of the halfExponents. Sadly, Vivado is a little crybaby (to not say something else), and it cannot do a few calculations by itself... 
 reg [coefficientSize*nOfStepsBeforeHalfing -1:0] halfExponents;
 real x,c;
@@ -357,7 +467,7 @@ end
 wire [coefficientSize*nOfStepsBeforeHalfing -1:0] halfExponents = 56'h18387332240a2f;
 //*/
 
-reg isRunning;//will be 0 when waiting for a trigger, even if we're in the middle of the sequence (if the current bit in doesNextRampWaitForTrigger is 1)
+wire isRunning;//will be 0 when waiting for a trigger, even if we're in the middle of the sequence (if the current bit in doesNextRampWaitForTrigger is 1)
 
 
 localparam delay_expShifter = 1;//green to cyan
@@ -375,23 +485,17 @@ localparam delay_123 = delay_12 + delay_3;
 `define delayedRegister(registerSize, inputName, outputName, delayCycles) 			\
 	reg [registerSize -1:0] inputName;													\
 	wire [registerSize -1:0] outputName;												\
-	delayer#(registerSize, delayCycles) delay_``inputName(clk,reset, inputName, outputName);
+	delayer#(registerSize, delayCycles) delay_``inputName(clk, isRunning, reset, inputName, outputName);
 
 `define delayedWire(registerSize, inputName, outputName, delayCycles, assignedValue)\
 	wire [registerSize -1:0] inputName = assignedValue;									\
 	wire [registerSize -1:0] outputName;												\
-	delayer#(registerSize, delayCycles) delay_``inputName(clk,reset, inputName, outputName);
+	delayer#(registerSize, delayCycles) delay_``inputName(clk, isRunning, reset, inputName, outputName);
 
 `define delayedWire_noAssignment(registerSize, inputName, outputName, delayCycles)	\
 	wire [registerSize -1:0] inputName;													\
 	wire [registerSize -1:0] outputName;												\
-	delayer#(registerSize, delayCycles) delay_``inputName(clk,reset, inputName, outputName);
-
-`define delayedIntermediatedRegister(registerSize, inputName, outputName, intermediateIndexName, delayCycles, intermediateDelay) 			\
-	reg [registerSize -1:0] inputName;													\
-	wire [registerSize -1:0] outputName;												\
-	reg intermediateIndexName;												\
-	delayer_withIntermediateSet#(registerSize, delayCycles, intermediateDelay) delay_``inputName(clk,reset, inputName, intermediateIndexName, outputName);
+	delayer#(registerSize, delayCycles) delay_``inputName(clk, isRunning, reset, inputName, outputName);
 
 
 reg [$clog2(nOfRamps+1) -1:0] currentRamp;
@@ -505,20 +609,40 @@ fractionalDivider #(//dividers take 5 clock cycles to generate the output
 	.saturateOutput     (0)
 ) create_mt(
 	.clk		(clk),
+	.clkEnable	(isRunning),
 	.reset		(reset),
 	.a			(ns),
 	.b			({1'b0, denominator ? denominator : -1}),//let's avoid divisions by 0, though they should only occurr during reset (I hope)
 	.result		(mt)
 );
 
+reg restartCalculations;
+wire shouldStopSoon = endOfRamp & (isLastRamp | doesNextRampWaitForTrigger);
+// always @(posedge clk) begin
+// 	if (reset) begin
+// 		restartCalculations <= 0;
+// 	end else begin
+// 		if(restartCalculations)begin
+// 			restartCalculations <= 0;
+// 		end
+// 	end
+// end
 
-// wire [time_size+data_size+1 -1:0] ns_startValue = 0;//{{time_size{s[data_size+1-1]}},s}
-
+enablersForDelayedProcedures#(
+	.delay 					(delay_123-1)
+)efdp(
+	.clk					(clk),
+	.reset					(reset),
+	.restartCalculations	(restartCalculations),
+	.trigger				(cleanTrigger),
+	.procedureEnding		(shouldStopSoon),
+	.continue				(isRunning)
+);
 
 
 always @(posedge clk)begin
 	if(reset)begin
-		isRunning <= 0;
+		// isRunning <= 0;
 		ns <= 0;
 		V0 <= 0;
 		n <= 0;
@@ -534,7 +658,7 @@ always @(posedge clk)begin
 		reversed <= 0;
 		selectWhichV0 <= 0;
 		overrideV0 <= 0;
-	end else begin
+	end else if (isRunning) begin
 		out <= {V0[data_size-1], V0} + mt;
 		ns <= override_ns ? newValueFor_ns : ns + {{time_size{s[data_size+1-1]}},s};
 		case (selectWhichV0_blue)
@@ -543,36 +667,32 @@ always @(posedge clk)begin
 			swv0_overrideValue: V0 <= overrideV0_blue; 
 			default: V0 <= 0;
 		endcase
-		if(!isRunning)begin//waiting for a trigger?
-			if(triggerReceived)begin
-				isRunning <= 1;
-				n <= 1;
-				m <= 1;
-				newValueFor_ns <= 0;
-				override_ns <= 1;
-				if(currentRamp == 0 && !reversed)begin//are we waiting to start the sequence?
-					//add exception for inverseRamp, and save start value
-					selectWhichV0 <= swv0_overrideValue;
-					overrideV0 <= startValue;
-					exp_bitShift <= exp_initialShift;
-				end
-				resetShifter <= 1;
-			end
+		if(n == 0 || restartCalculations)begin
+			n <= 1;
+			m <= 1;
+			newValueFor_ns <= 0;
+			override_ns <= 1;	
+			selectWhichV0 <= swv0_overrideValue;
+			overrideV0 <= startValue;
+			exp_bitShift <= exp_initialShift;	
+			resetShifter <= 1;	
 		end else begin
 			if(endOfRamp)begin
+				n <= 1;
+				m <= 1;
 				exp_bitShift <= exp_nextInitialShift;
 				exp_coeffIndex <= exp_nextdirection ? nOfStepsBeforeHalfing - 1 : 0;
 				resetShifter <= 1;
 				override_ns <= 1;
 				newValueFor_ns <= 0;
+
 				if(needToReverse)begin
 					reversed <= 1;
 				end
+
 				if(isLastRamp)begin//last ramp?
 					currentRamp <= 0;
-					isRunning <= 0;
 					n <= 0;
-					m <= 0;
 					case(modifiedIdleConfig)
 						c_defaultValue:	begin	selectWhichV0 <= swv0_overrideValue; overrideV0 <= defaultValue;end
 						c_start:		begin	selectWhichV0 <= swv0_overrideValue; overrideV0 <= startValue;end
@@ -582,15 +702,6 @@ always @(posedge clk)begin
 				end else begin
 					selectWhichV0 <= swv0_outputValue;
 					currentRamp <= nextRamp;
-					if(doesNextRampWaitForTrigger)begin//do we have to wait for a new trigger?
-						isRunning <= 0;
-						n <= 0;
-						m <= 0;
-					end else begin
-						isRunning <= 1;
-						n <= 1;
-						m <= 1;
-					end
 				end
 			end else begin
 				//let's continue the ramp
@@ -639,10 +750,11 @@ if (reset) begin
 	doesNextRampWaitForTriggers <= 0;
 	isExponentials <= 0;
 	exp_SectionLengths <= 0;
-
 	exp_directions <= 0;
 	exp_initialShifts <= 0;
+	restartCalculations <= 0;
 end else if (wen) begin
+	restartCalculations <= 1;
 	if (addr==20'h100) {usedRamps, idleConfig} <= wdata;
 	if (addr==20'h104) {defaultValue, startValue} <= wdata;
 	for(i = 0; i < nOfRamps; i = i + 1) begin
@@ -650,6 +762,8 @@ end else if (wen) begin
 		if (addr==20'h10C + i * 12) DTs[(i+1)*time_size -1-:time_size] <= wdata;
 		if (addr==20'h110 + i * 12) exp_SectionLengths[(i+1)*section_size -1-:time_size] <= wdata;
 	end
+end else begin
+	restartCalculations <= 0;
 end
 
 wire en;
@@ -697,23 +811,31 @@ force -freeze sim:/ramp_withDivisionsAndExponential/clk 1 0, 0 {50 ps} -r 100
 force -freeze sim:/ramp_withDivisionsAndExponential/reset z1 0
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger z0 0
 force -freeze sim:/ramp_withDivisionsAndExponential/DVs cfb6ae823 0
-force -freeze sim:/ramp_withDivisionsAndExponential/DTs 25060371 0
+force -freeze sim:/ramp_withDivisionsAndExponential/DTs 25063007 0
 force -freeze sim:/ramp_withDivisionsAndExponential/startValue 0 0
 force -freeze sim:/ramp_withDivisionsAndExponential/usedRamps 4 0
 force -freeze sim:/ramp_withDivisionsAndExponential/defaultValue aa 0
 force -freeze sim:/ramp_withDivisionsAndExponential/idleConfig 2 0
-force -freeze sim:/ramp_withDivisionsAndExponential/doesNextRampWaitForTriggers 0 0
+force -freeze sim:/ramp_withDivisionsAndExponential/doesNextRampWaitForTriggers 2 0
 force -freeze sim:/ramp_withDivisionsAndExponential/exp_SectionLengths 10080404 0
 force -freeze sim:/ramp_withDivisionsAndExponential/isExponentials 0 0
 force -freeze sim:/ramp_withDivisionsAndExponential/exp_directions 1 0
 force -freeze sim:/ramp_withDivisionsAndExponential/exp_initialShifts 0205 0
-run 500ps
+run 100ps
 force -freeze sim:/ramp_withDivisionsAndExponential/reset 10 0
-run 500ps
+run 100ps
+force -freeze sim:/ramp_withDivisionsAndExponential/restartCalculations 1 0
+run 100ps
+force -freeze sim:/ramp_withDivisionsAndExponential/restartCalculations 0 0
+run 4500ps
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
 run
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
-run 80000ps
+run 15000ps
+force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
+run
+force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
+run 10000ps
 
 vsim work.ramp_withDivisionsAndExponential
 add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/clk 

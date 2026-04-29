@@ -25,6 +25,7 @@ module delayer#(
 				nOfDelays = 3
 )(
     input clk,
+    input clkEnable,
 	input reset,
 	input [data_size -1:0] newValue,	
 	output [data_size -1:0] delayedValue	
@@ -36,7 +37,7 @@ always @(posedge clk) begin
 		for(i=0;i<nOfDelays;i=i+1)begin
 			delays[i] <= 0;
 		end
-	end else begin
+	end else if (clkEnable) begin
 		for(i=1;i<nOfDelays;i=i+1)begin
 			delays[i] <= delays[i-1];
 		end

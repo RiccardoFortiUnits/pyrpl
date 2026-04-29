@@ -12,6 +12,7 @@ module fractionalDivider#(
 	parameter saturateOutput = 0
 )(
 	input wire clk,
+	input wire clkEnable,
 	input wire reset,
 	input wire signed [A_WIDTH-1:0] a,
 	input wire signed [B_WIDTH-1:0] b,
@@ -68,14 +69,14 @@ generate
 	reg [rawQuotient_WIDTH -1:0] rawRemain_nonDelayed;
 	wire [rawQuotient_WIDTH -1:0] rawQuotient;
 	wire [rawQuotient_WIDTH -1:0] rawRemain;
-	delayer#(rawQuotient_WIDTH, delay-1) delayquot(clk,reset, rawQuotient_nonDelayed, rawQuotient);
-	delayer#(rawQuotient_WIDTH, delay-1) delayrem(clk,reset, rawRemain_nonDelayed, rawRemain);
+	delayer#(rawQuotient_WIDTH, delay-1) delayquot(clk, clkEnable, reset, rawQuotient_nonDelayed, rawQuotient);
+	delayer#(rawQuotient_WIDTH, delay-1) delayrem(clk, clkEnable, reset, rawRemain_nonDelayed, rawRemain);
 	if(areSignalsSigned)begin
 		always @(posedge clk) begin
 			if(reset) begin
 				rawQuotient_nonDelayed <= 0;
 				rawRemain_nonDelayed <= 0;
-			end else begin
+			end else if(clkEnable) begin
 				rawQuotient_nonDelayed <= $signed(a_shifted) / $signed(b_shifted);
 				rawRemain_nonDelayed <= $signed(a_shifted) % $signed(b_shifted);
 			end
@@ -85,7 +86,7 @@ generate
 			if(reset) begin
 				rawQuotient_nonDelayed <= 0;
 				rawRemain_nonDelayed <= 0;
-			end else begin
+			end else if(clkEnable) begin
 				rawQuotient_nonDelayed <= $unsigned(a_shifted) / $unsigned(b_shifted);
 				rawRemain_nonDelayed <= $unsigned(a_shifted) % $unsigned(b_shifted);
 			end
@@ -99,7 +100,7 @@ generate
 	if(num_WIDTH == 29 && den_WIDTH == 14 && !areSignalsSigned)begin:div29_29
 		wire [47:0]m_axis_dout_tdata;
 		div_gen_u_29_14 d29_14(
-			.aclk					(clk),
+			.aclk					(clk),//doesn't have clock enabler, because when making the IP core I didn't think it would be necessary
 			.aresetn				(!reset),	
 			.s_axis_divisor_tvalid	(1),				
 			.s_axis_divisor_tdata	(b_shifted),					
@@ -113,7 +114,8 @@ generate
 		wire [79:0]m_axis_dout_tdata;
 		div_gen_s_44_29 d44_29(
 			.aclk					(clk),
-			.aresetn				(!reset),	
+			.aresetn				(!reset),
+			.aclken					(clkEnable),		
 			.s_axis_divisor_tvalid	(1),				
 			.s_axis_divisor_tdata	(b_shifted),					
 			.s_axis_dividend_tvalid	(1),				
