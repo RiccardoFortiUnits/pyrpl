@@ -1990,3 +1990,26 @@ class rangeProperty(BaseProperty):
 					self.right.__set__(instance, center + ampl)
 			finally:
 				self.alreadyUpdated = False
+
+class dualProperty(BaseProperty):
+	_widget_class = GroupedAttributeWidget
+	def __init__(self, realProperty, virtualPropertyType, realToVirtual = lambda prop, instance, value: value + 1, 
+			  											virtualToReal = lambda prop, instance, value: value - 1, **kwargs):
+		super().__init__(**kwargs) 
+		self.virtualToReal = virtualToReal
+		self.realToVirtual = realToVirtual
+		virt = virtualPropertyType(**kwargs)
+		self.real = ExpandableProperty(realProperty, 			extraFunctionToDoAfterSettingValue= lambda prop, instance, value : self.updateOtherPoperty(prop, instance, value, True))
+		self.virtual = ExpandableProperty(virt, 				extraFunctionToDoAfterSettingValue= lambda prop, instance, value : self.updateOtherPoperty(prop, instance, value, False))
+		self.alreadyUpdated = False
+	def updateOtherPoperty(self, prop, instance, value, isReal):
+		if self.alreadyUpdated:
+			return
+		self.alreadyUpdated = True
+		try:
+			if isReal:
+				self.virtual.__set__(instance, self.realToVirtual(prop, instance, value))
+			else:
+				self.real.__set__(instance, self.virtualToReal(prop, instance, value))
+		finally:
+			self.alreadyUpdated = False
