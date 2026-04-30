@@ -23,7 +23,7 @@ def addWidgets(self, names, newLayout):
 	return widgets
 class segmentWidget(ModuleWidget):
 	def init_gui(self):
-		super().init_gui("vertical")
+		super().init_gui()
 		self.vlayout = QtWidgets.QVBoxLayout()
 		self.main_layout.addLayout(self.vlayout)
 		(self.DV, self.VVV, self.DT, self.T, self.isExponential, self.exponentialRampSign, self.haltsSequence, self.tau,

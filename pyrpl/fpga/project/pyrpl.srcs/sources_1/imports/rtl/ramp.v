@@ -290,8 +290,21 @@ module enablersForDelayedProcedures#(
 
 	continue: enable of the external module. You can consider it as if it was a 
 	clock enable
+
+	internally, the module includes a buffer for the procedureEnding events, so that 
+	we can handle very short sequences that last less than the calculation delay. 
+	Careful, there's only one buffer, so you won't be able to handle more than 2 
+	procedureEnding events "at the same time". This means that if you receive 3 
+	procedureEnding triggers in a timing smaller than "delay", one of these triggers 
+	will be lost. If you want to add more than one buffer, you'll have to implement 
+	something like a queue to handle the various timings of each event
+
 	*/
 	reg [$clog2(delay) -1:0] counter;
+	reg [$clog2(delay) -1:0] distanceFromNextEnd;//if a second procedureEnding is found 
+		//while in the s_prepare state, we'll store the number of clock cycles between 
+		//the two events (the new one and the one that we are preparing), so that when 
+		//we're done preparing the first, 
 
 	localparam	s_idle = 0,
 				s_prepare = 1,
@@ -303,37 +316,65 @@ module enablersForDelayedProcedures#(
 			counter <= 0;
 			continue <= 0;
 			state <= 0;
+			distanceFromNextEnd <= 0;
 		end else begin
-			case (state)
-				s_idle: begin
-					continue <= 0;
-					if (restartCalculations) begin
-						state <= s_prepare;
-						counter <= delay - 1;
-					end else if(trigger) begin
-						state <= s_run;
+			
+			if (restartCalculations) begin
+				continue <= 1;
+				state <= s_prepare;
+				counter <= delay - 1;
+			end else begin
+				case (state)
+					s_idle: begin
+						if(trigger) begin
+							continue <= 1;
+							if(counter)begin//counter is != 0 only if we had a second procedureEnding during the last preparation
+								state <= s_prepare;	
+							end else begin
+								state <= s_run;							
+							end
+						end else begin
+							continue <= 0;
+						end
 					end
-				end
-				s_prepare: begin
-					continue <= 1;
-					if (counter > 0) begin
-						counter <= counter - 1;
-						//the trigger is not considered valid until 
-							//the module is done preparing
-					end else begin
-						state <= s_idle;
+					s_prepare: begin
+						if (counter > 0) begin
+							counter <= counter - 1;
+							continue <= 1;
+
+							//the trigger is not considered valid until 
+								//the module is done preparing, so let's ignore what the trigger is doing
+								
+							if (procedureEnding) begin
+								//let's record the timing of this second procedureEnding, so that later we can start a preparation shorter than delay
+								distanceFromNextEnd <= delay - 1 - counter;
+							end
+						end else begin
+							continue <= 0;
+							state <= s_idle;
+							if(procedureEnding || distanceFromNextEnd)begin
+								//let's set the counter, so that at the next trigger we'll start a new preparation, possibly shorter than delay
+
+								//if we found the procedureEnding just now (procedureEnding==1), there's no time to register the timing to 
+									//distanceFromNextEnd and then set the counter in the next cycle, let's just bypass the value in distanceFromNextEnd
+									//(which should be 0 anyway)
+								counter <= procedureEnding ? delay - 1 : distanceFromNextEnd;
+								distanceFromNextEnd <= 0;
+							end
+							
+						end
 					end
-				end
-				s_run: begin
-					continue <= 1;
-					if (procedureEnding) begin
-						//let's prepare the start of the next sequence
-						state <= s_prepare;
-						counter <= delay - 1;
+					s_run: begin
+						continue <= 1;
+						if (procedureEnding) begin
+							//let's prepare the start of the next sequence
+							state <= s_prepare;
+							counter <= delay - 1;
+						end
 					end
-				end
-				default: state <= s_idle;
-			endcase
+					default: state <= s_idle;
+				endcase
+			end
 		end
 	end
 endmodule
@@ -353,7 +394,9 @@ run
 force -freeze sim:/enablersForDelayedProcedures/restartCalculations 10 0
 run
 run
+force -freeze sim:/enablersForDelayedProcedures/procedureEnding 1 0
 run
+force -freeze sim:/enablersForDelayedProcedures/procedureEnding 0 0
 run
 run
 run
@@ -364,7 +407,8 @@ run
 force -freeze sim:/enablersForDelayedProcedures/trigger 10 0
 run
 run
-run*/
+run
+*/
 
 module ramp_withDivisionsAndExponential#(
 	parameter nOfRamps = 4,
@@ -505,7 +549,6 @@ reg reversed;
 
 wire [1:0] modifiedIdleConfig = reversed ? c_start : idleConfig;
 wire needToReverse = idleConfig == c_inverseRamp && currentRamp == usedRamps - 1;
-wire isLastRamp = reversed || needToReverse ? currentRamp == 0 : currentRamp == usedRamps - 1;
 wire [$clog2(nOfRamps+1) -1:0] nextRamp = currentRamp + (
 											reversed ?
 												-1 : 
@@ -529,6 +572,7 @@ wire [$clog2(nOfStepsBeforeHalfing+1) -1:0] exp_startingCoeffIndex = exp_directi
 
 `delayedRegister(bitShift_size, exp_bitShift, exp_bitShift_forShift, delay_1)// reg[bitShift_size -1:0] exp_bitShift;
 `delayedWire(time_size, DT_forEndOfRamp, DT, delay_12, DTs[(currentRamp+1)*time_size -1-:time_size])//wire[time_size -1:0] DT = DTs[(currentRamp_blue+1)*time_size -1-:time_size];
+wire [time_size -1:0] next_DT = DTs[(nextRamp+1)*time_size -1-:time_size];
 `delayedWire(1, endOfRamp, endOfRamp_cyan, delay_1, n==DT_forEndOfRamp)	//current ramp ended?  //wire endOfRamp = (doesNextRampWaitForTrigger && cleanTrigger	) ||//should we start prematurely the next ramp?\				 (					n==DT						);//current ramp ended?
 `delayedWire($clog2(nOfRamps+1), currentRamp_green, currentRamp_cyan, delay_1, currentRamp)
 `delayedRegister(data_size, overrideV0, overrideV0_blue, delay_123-2)
@@ -558,6 +602,7 @@ reg [data_size -1:0] V0;
 
 
 
+wire isLastRamp = next_DT == 0 || ((reversed || needToReverse) ? currentRamp == 0 : currentRamp == usedRamps - 1);
 wire doesNextRampWaitForTrigger = doesNextRampWaitForTriggers[currentRamp];//this bit tells us if the next ramp wants a trigger, not the current one
 
 // wire[data_size+1 -1:0] DV_next = DVs[(currentRamp+2)*(data_size+1) -1-:(data_size+1)];
@@ -816,7 +861,7 @@ force -freeze sim:/ramp_withDivisionsAndExponential/startValue 0 0
 force -freeze sim:/ramp_withDivisionsAndExponential/usedRamps 4 0
 force -freeze sim:/ramp_withDivisionsAndExponential/defaultValue aa 0
 force -freeze sim:/ramp_withDivisionsAndExponential/idleConfig 2 0
-force -freeze sim:/ramp_withDivisionsAndExponential/doesNextRampWaitForTriggers 2 0
+force -freeze sim:/ramp_withDivisionsAndExponential/doesNextRampWaitForTriggers 3 0
 force -freeze sim:/ramp_withDivisionsAndExponential/exp_SectionLengths 10080404 0
 force -freeze sim:/ramp_withDivisionsAndExponential/isExponentials 0 0
 force -freeze sim:/ramp_withDivisionsAndExponential/exp_directions 1 0
@@ -835,7 +880,12 @@ run 15000ps
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
 run
 force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
+run 15000ps
+force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
+run
+force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
 run 10000ps
+
 
 vsim work.ramp_withDivisionsAndExponential
 add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/clk 

@@ -322,13 +322,6 @@ class Scope(HardwareModule, AcquisitionModule):
 
     def _from_raw_data_to_numbers(self,data : np.ndarray):
         inputs = [self.input1, self.input2]
-        modifications = {
-            "out1" : lambda x: x + 1 if self.isDac1Modified else x,
-            "out2" : lambda x: x + 1 if self.isDac2Modified else x,
-        }
-        for ch in [0,1]:
-            if inputs[ch] in modifications.keys():
-                data[ch] = modifications[inputs[ch]](data[ch])
         #let's save the inputs used for the last data acquisition, in case they are changed later
         Scope.lastInputs = inputs
 
