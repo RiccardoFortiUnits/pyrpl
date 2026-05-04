@@ -19,12 +19,12 @@ class SignalLauncherSensorFuserModule(SignalLauncher):
 
 class updateSensorFuserProperty(ExpandableProperty):
 	'''whenever this property is updated, the FPGA values of the sensorFuser module are updated'''
-	alreadyUpdating = False
+	alreadyUpdating = True#let's set it to true at the start, so that we can set all the parameters one at a time from the configuration file, without them interacting with one another (we don't have any calibration acquisition at the start). We will set it to false when a new calibration acquisition is executed
 	@staticmethod
 	def updateSensorFuser(self, sensorToBeFused, value):
+		if updateSensorFuserProperty.alreadyUpdating:
+			return
 		try:
-			if updateSensorFuserProperty.alreadyUpdating:
-				return
 			updateSensorFuserProperty.alreadyUpdating = True
 			other = sensorToBeFused.getOtherProperty(self)
 			if other is not None:

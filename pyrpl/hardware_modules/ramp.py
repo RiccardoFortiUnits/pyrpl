@@ -252,3 +252,11 @@ class Ramp(DspModule, segmentedFunctionObject):
 		self.usedRamps = l + 1
 	def addHoldToEnd(self, holdDuration):
 		self.addRampToEnd(holdDuration, self.segments[self.usedRamps-1])
+
+
+	#let's overwrite _load_setup_attributes, so that we also load the submodules
+	def _load_setup_attributes(self):
+		ret = super()._load_setup_attributes()
+		for s in self.segments:
+			s._load_setup_attributes()
+		return ret

@@ -140,6 +140,7 @@ class sensor_fuser_widget(ModuleWidget):
 		self.sensors_layout.addWidget(self.sensor_b)
 		
 		self.win = pg.GraphicsLayoutWidget(title="sensor calibration")
+		self.win.setHidden(True)
 		self.plot_item = self.win.addPlot(title="sensor calibration")
 		self.plot_item.showGrid(y=True, alpha=1.)
 		self.viewBox = self.plot_item.getViewBox()
@@ -173,6 +174,9 @@ class sensor_fuser_widget(ModuleWidget):
 		self.curves[0].setData(t, a)
 		t, b = b
 		self.curves[1].setData(t, b)
+		from ...hardware_modules.sensorFuser import updateSensorFuserProperty
+		updateSensorFuserProperty.alreadyUpdating = False 		
+		self.win.setHidden(False)
 
 	def updateExpectedCurves(self):
 		self.line_a.updateLines()
