@@ -322,7 +322,7 @@ class Pyrpl(object):
                 if hasattr(self.c[device], "redpitaya"):
                     self.addRedPitaya(device, reloadGUI = False)
         if len(self.rps) == 0:
-            self.addRedPitaya(None, reloadGUI = False)
+            self.addRedPitaya(None, reloadGUI = False, **kwargs)
             
         self.load_software_modules()
         for module in self.software_modules:
@@ -366,6 +366,9 @@ class Pyrpl(object):
         if reloadGUI:
             self._reloadGUI()
         
+    @property
+    def rp(self):
+        return list(self.rps.values())[0]
         
     def show_gui(self):
         if len(self.widgets) == 0:
