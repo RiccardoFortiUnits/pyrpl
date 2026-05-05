@@ -2013,3 +2013,22 @@ class dualProperty(BaseProperty):
 				self.real.__set__(instance, self.virtualToReal(prop, instance, value))
 		finally:
 			self.alreadyUpdated = False
+
+class extractPropertiesFromSubModules(ArrayProperty):
+	def __init__(self, listOfSubmodules, propertyName, len=1, **kwargs):
+		super().__init__(len, fixedLength=False, **kwargs)
+		self.listOfSubmodules = listOfSubmodules
+		self.propertyName = propertyName
+	def set_value(self, obj, val):			
+		if isinstance(val, str):
+			if "array" in val:
+				val = val.replace("array(", "").replace(")", "")
+			value = ast.literal_eval(value)
+		for i, v in enumerate(val):
+			setattr(getattr(obj, self.listOfSubmodules)[i], self.propertyName, v)
+		return super().set_value(obj, val)
+	def get_value(self, obj):
+		ret = []
+		for i in range(len(self.listOfSubmodules)):
+			ret.append(getattr(getattr(obj, self.listOfSubmodules)[i], self.propertyName))
+		return ret

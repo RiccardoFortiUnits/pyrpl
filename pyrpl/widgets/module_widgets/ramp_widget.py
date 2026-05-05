@@ -26,9 +26,9 @@ class segmentWidget(ModuleWidget):
 		super().init_gui()
 		self.vlayout = QtWidgets.QVBoxLayout()
 		self.main_layout.addLayout(self.vlayout)
-		(self.DV, self.VVV, self.DT, self.T, self.isExponential, self.exponentialRampSign, self.haltsSequence, self.tau,
+		(self.DV, self.V, self.DT, self.T, self.isExponential, self.exponentialRampSign, self.haltsSequence, self.tau,
 			) = addWidgets(self, 
-		["DV", "VVV", "DT", "T", "isExponential", "exponentialRampSign", "haltsSequence", "tau", ], self.vlayout)
+		["DV", "V", "DT", "T", "isExponential", "exponentialRampSign", "haltsSequence", "tau", ], self.vlayout)
 class rampWidget(ModuleWidget):
 	"""
 	Widget for the ramp module

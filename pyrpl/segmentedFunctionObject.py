@@ -9,3 +9,11 @@ class segmentedFunctionObject:
 		return [0],[0]
 	def updateFromInterface(self, x, y):
 		pass
+
+	@property
+	def rampValues(self):
+		return self.points()
+	
+	@rampValues.setter
+	def rampValues(self, val):
+		self.updateFromInterface(*val)

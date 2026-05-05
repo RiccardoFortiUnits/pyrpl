@@ -1,4 +1,4 @@
-from ..attributes import BaseProperty, DynamicInstanceProperty, IntRegister, IntProperty, ArrayRegister, FloatRegister, FloatProperty, SelectRegister, IORegister, BoolProperty, BoolRegister, GainRegister, digitalPinRegister, ExpandableProperty, ArrayProperty, dualProperty
+from ..attributes import BaseProperty, DynamicInstanceProperty, extractPropertiesFromSubModules, IntRegister, IntProperty, ArrayRegister, FloatRegister, FloatProperty, SelectRegister, IORegister, BoolProperty, BoolRegister, GainRegister, digitalPinRegister, ExpandableProperty, ArrayProperty, dualProperty
 
 from ..widgets.module_widgets.ramp_widget import rampWidget, segmentWidget
 import numpy as np
@@ -86,7 +86,7 @@ class voltageAndInitialBitShiftProperty(FloatProperty):
 				else:
 					#let's check how many orders of magnitude will be done
 					s = int(np.ceil(np.log2(np.e) * DT / tau))
-					obj.normalized_DV = val / (2**-(s+.25) * (np.exp(DT / tau) - 1))
+					obj.normalized_DV = val / (2**-(s) * (np.exp(DT / tau) - 1))
 					obj.initialExponentialShift = s
 			else:
 				obj.normalized_DV = val
@@ -115,15 +115,17 @@ class voltageAndInitialBitShiftProperty(FloatProperty):
 class initialSegment:
 	T = 0
 	@property
-	def VVV(self):
+	def V(self):
 		return self.parent.startPoint
 	def __init__(self, parent):
 		self.parent = parent
+
+
 class segment(HardwareModule):	
 	'''submodule for the handling of a single segment of a ramp'''
 	_gui_attributes = [
 					"DV",
-					"VVV",
+					"V",
 					"DT",
 					"T",
 					"isExponential",
@@ -145,8 +147,8 @@ class segment(HardwareModule):
 	#remember, all addreses are shifted accordingly to addr_base
 	normalized_DV = FloatRegister(0x0, 15, startBit= 0, norm=2**13, doc="difference between the end and start of the ramp")
 	DV = voltageAndInitialBitShiftProperty()
-	DV_V = dualProperty(DV, FloatProperty, lambda prop, instance, value : instance.prevSegment.VVV + value, lambda prop, instance, value : value - instance.prevSegment.VVV)
-	DV, VVV = DV_V.real, DV_V.virtual
+	DV_V = dualProperty(DV, FloatProperty, lambda prop, instance, value : instance.prevSegment.V + value, lambda prop, instance, value : value - instance.prevSegment.V)
+	DV, V = DV_V.real, DV_V.virtual
 	DT = FloatRegister(0x4, 28, startBit= 0, norm=125e6, doc="difference between the end and start of the ramp")
 	DT_T = dualProperty(DT, FloatProperty, lambda prop, instance, value : instance.prevSegment.T + value, lambda prop, instance, value : value - instance.prevSegment.T)
 	DT, T = DT_T.real, DT_T.virtual
@@ -193,29 +195,11 @@ class Ramp(DspModule, segmentedFunctionObject):
 			doc="number of ramps used by the function. The values set for the 'exceding' ramps will not be used. If 0, it effectively disables the ramp")
 	
 	startPoint = FloatRegister(0x104, bits=14, norm=2**13, signed = True, doc="initial value of the sequence")
-	# isRampExponential = IntRegister(0x100, startBit=2+8+int(np.ceil(np.log2(nOfSegments) + 1)), bits=8, doc="if any bit is 1, the corresponding ramp will be exponential, with timing constant given by the corresponding value in ")
-	# exponentialDirection = ArrayRegister(
-	# 					BoolRegister,
-	# 					[0x108 + 0xC*i for i in range(nOfSegments)], 
-	# 					[15] * nOfSegments
-	# 					)
-	
-	# initialExponentialShift = ArrayRegister(
-	# 					IntRegister,
-	# 					[0x108 + 0xC*i for i in range(nOfSegments)], 
-	# 					[16] * nOfSegments,
-	# 					4
-	# 					)
 
-	# exp_taus = ArrayRegister(
-	# 					FloatRegister, 
-	# 					[0x110 + 0xC*i for i in range(nOfSegments)], 
-	# 					[0] * nOfSegments, 
-	# 					28, 
-	# 					norm=1/4.6e-8,
-	# 					signed = False,
-	# 					doc="timing constant of the exponential ramp"
-	# 					)
+	areRampsExponential = extractPropertiesFromSubModules("segments", "isExponential")
+	exponentialRampSigns = extractPropertiesFromSubModules("segments", "exponentialRampSign")
+	haltSequence = extractPropertiesFromSubModules("segments", "haltsSequence")
+	taus = extractPropertiesFromSubModules("segments", "tau")
 	
 	def __init__(self, rp, name, index=0):
 		super().__init__(rp, name, index)
@@ -232,8 +216,8 @@ class Ramp(DspModule, segmentedFunctionObject):
 		DVs = [s.DV for s in self.segments[:self.nOfSegments]]
 		DTs = [s.DT for s in self.segments[:self.nOfSegments]]
 		T = np.cumsum([0]+DTs)
-		VVV = np.cumsum([self.startPoint]+DVs)
-		return T, VVV
+		V = np.cumsum([self.startPoint]+DVs)
+		return T, V
 		
 	def updateFromInterface(self, x, y):
 		DV = np.diff(y)
@@ -248,7 +232,7 @@ class Ramp(DspModule, segmentedFunctionObject):
 		l = self.usedRamps
 		seg = self.segments[l]
 		seg.DT = rampDuration
-		seg.VVV = rampEndValue
+		seg.V = rampEndValue
 		self.usedRamps = l + 1
 	def addHoldToEnd(self, holdDuration):
 		self.addRampToEnd(holdDuration, self.segments[self.usedRamps-1])
