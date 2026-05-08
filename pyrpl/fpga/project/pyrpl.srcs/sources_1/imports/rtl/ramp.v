@@ -622,12 +622,13 @@ clocked_FractionalMultiplier #(
   .areSignalsSigned (1)
 ) generate_expSlope (
   .clk(clk),
+  .clkEnable(isRunning),
   .a(DV_forExpMult),
   .b(exp_coeff),
   .result(exp_s_unshifted)
 );
 
-wire calculateNextCoefficient = m == 1;
+wire calculateNextCoefficient = isRunning && m == 1;
 reg resetShifter;
 fixedSumCoefficientShifter_oneAtATime #(
 	.coefficientSize	(coefficientSize+data_size+1),
@@ -840,50 +841,86 @@ endmodule
 /*
 
 
-vsim work.ramp_withDivisionsAndExponential
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/clk 
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/out
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/V0_forOutSum
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/V0
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/ns
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/mt
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/s
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/s_next
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/exp_coeff
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/exp_bitShift
-add wave -position insertpoint sim:/ramp_withDivisionsAndExponential/*
-force -freeze sim:/ramp_withDivisionsAndExponential/clk 1 0, 0 {50 ps} -r 100
-force -freeze sim:/ramp_withDivisionsAndExponential/reset z1 0
-force -freeze sim:/ramp_withDivisionsAndExponential/trigger z0 0
-force -freeze sim:/ramp_withDivisionsAndExponential/DVs cfb6ae823 0
-force -freeze sim:/ramp_withDivisionsAndExponential/DTs 25063007 0
-force -freeze sim:/ramp_withDivisionsAndExponential/startValue 0 0
-force -freeze sim:/ramp_withDivisionsAndExponential/usedRamps 4 0
-force -freeze sim:/ramp_withDivisionsAndExponential/defaultValue aa 0
-force -freeze sim:/ramp_withDivisionsAndExponential/idleConfig 2 0
-force -freeze sim:/ramp_withDivisionsAndExponential/doesNextRampWaitForTriggers 3 0
-force -freeze sim:/ramp_withDivisionsAndExponential/exp_SectionLengths 10080404 0
-force -freeze sim:/ramp_withDivisionsAndExponential/isExponentials 0 0
-force -freeze sim:/ramp_withDivisionsAndExponential/exp_directions 1 0
-force -freeze sim:/ramp_withDivisionsAndExponential/exp_initialShifts 0205 0
+vsim work.red_pitaya_dsp
+
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/clk} 
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/out}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/V0}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/ns}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/mt}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/s}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_coeff}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_bitShift}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/*}
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/clk} 1 0, 0 {50 ps} -r 100
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/reset} z1 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} z0 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DTs} 0000075000007500001510000151 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DVs} e00040038001000 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_SectionLengths} 0000004000000400000040000004 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/startValue} 0 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/usedRamps} 4 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/defaultValue} aa 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/idleConfig} 2 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/doesNextRampWaitForTriggers} 0 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/isExponentials} f 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_directions} c 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_initialShifts} 7700 0
 run 100ps
-force -freeze sim:/ramp_withDivisionsAndExponential/reset 10 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/reset} 10 0
 run 100ps
-force -freeze sim:/ramp_withDivisionsAndExponential/restartCalculations 1 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/restartCalculations} 1 0
 run 100ps
-force -freeze sim:/ramp_withDivisionsAndExponential/restartCalculations 0 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/restartCalculations} 0 0
 run 4500ps
-force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 01 0
 run
-force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 10 0
+run 80000ps
 run 15000ps
-force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/clk} 
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/out}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/V0_forOutSum}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/V0}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/ns}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/mt}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/s}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/s_next}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_coeff}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_bitShift}
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/*}
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/clk} 1 0, 0 {50 ps} -r 100
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/reset} z1 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} z0 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DVs} cfb6ae823 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DTs} 25063007 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/startValue} 0 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/usedRamps} 4 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/defaultValue} aa 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/idleConfig} 2 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/doesNextRampWaitForTriggers} 0 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_SectionLengths} 10080404 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/isExponentials} f 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_directions} c 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_initialShifts} 7700 0
+run 100ps
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/reset} 10 0
+run 100ps
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/restartCalculations} 1 0
+run 100ps
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/restartCalculations} 0 0
+run 4500ps
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 01 0
 run
-force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 10 0
 run 15000ps
-force -freeze sim:/ramp_withDivisionsAndExponential/trigger 01 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 01 0
 run
-force -freeze sim:/ramp_withDivisionsAndExponential/trigger 10 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 10 0
+run 15000ps
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 01 0
+run
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 10 0
 run 10000ps
 
 

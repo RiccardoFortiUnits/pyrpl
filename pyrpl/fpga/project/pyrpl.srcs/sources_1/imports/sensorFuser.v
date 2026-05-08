@@ -121,6 +121,7 @@ clocked_FractionalMultiplier #(
   .areSignalsSigned (0)
 ) valMinusOffset_by_gain[1:0] (
   .clk(clk),
+  .clkEnable(1'b1),
   .a(`longRegisterFromDouble(valMinusOffset)),
   .b(`longRegisterFromDouble(gain[delay_2-1])),
   .result(`longRegisterFromDouble(valMinusOffsetByGain))

@@ -125,6 +125,7 @@ clocked_FractionalMultiplier #(
   .areSignalsSigned (1)//the coefficient can always be negative
 ) mult (
   .clk(clk),
+  .clkEnable(1'b1),
   .a({in_r_signBit,in_r[nOfInputDelays-1]} - {current_Edge_signBit,current_Edge}),
   .b(current_m),
   .result(mx)

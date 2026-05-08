@@ -93,7 +93,7 @@ wire [coefficientSize -1:0] nextSum = sum + abs;
 wire signed [coefficientSize -1:0] shiftedSum;
 wire signed [coefficientSize -1:0] shiftedNextSum;
 assign shiftedSum = (sum >> shift) + (areCoefficientsDecreasing & sum[shift-1]);
-assign shiftedNextSum = (nextSum >> shift) + (areCoefficientsDecreasing && (coefficientIndex != nOfCoefficients-1) & nextSum[shift - 1]);
+assign shiftedNextSum = (nextSum >> shift) + ((areCoefficientsDecreasing || (coefficientIndex == nOfCoefficients-1)) & nextSum[shift - 1]);
 
 
 always @(posedge clk) begin

@@ -30,6 +30,7 @@ module clocked_FractionalMultiplier #(
           parameter FRAC_BITS_OUT = 8,
           parameter areSignalsSigned = 1) (
   input wire clk,
+  input wire clkEnable,
   input wire signed [A_WIDTH-1:0] a,
   input wire signed [B_WIDTH-1:0] b,
   output wire signed [OUTPUT_WIDTH-1:0] result
@@ -51,12 +52,17 @@ reg signed [A_WIDTH + B_WIDTH - 1:0] full_aByb;
 
 generate
     if(areSignalsSigned)begin
-        always @(posedge clk)
-            full_aByb <= $signed(a) * $signed(b);
+        always @(posedge clk)begin
+			if(clkEnable)begin
+            	full_aByb <= $signed(a) * $signed(b);				
+			end
+		end
     end else begin
-        always @(posedge clk)
-            full_aByb <= $unsigned(a) * $unsigned(b);
-        
+        always @(posedge clk)begin
+			if(clkEnable)begin
+            	full_aByb <= $unsigned(a) * $unsigned(b);			
+			end
+		end
     end
 
 endgenerate
