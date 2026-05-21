@@ -421,7 +421,7 @@ module ramp_withDivisionsAndExponential#(
 	input reset,
 	input trigger,
 	
-	output reg [data_size-1:0] out,
+	output [data_size-1:0] out,
 	// System bus
 	input      [ 16-1:0] addr   ,  // bus address
 	input      [ 32-1:0] wdata  ,  // bus write data
@@ -495,6 +495,7 @@ localparam section_size = time_size;//todo put a smaller register size, time_siz
 localparam coefficientSize = data_size;//todo corretto?
 reg [section_size*nOfRamps -1:0] exp_SectionLengths;
 
+reg softwareReset;
 integer i;
 /*
 //this code calculates the values of the halfExponents. Sadly, Vivado is a little crybaby (to not say something else), and it cannot do a few calculations by itself... 
@@ -685,6 +686,7 @@ enablersForDelayedProcedures#(
 	.continue				(isRunning)
 );
 
+reg [data_size+2 -1:0] out_uncropped;//let's crop the output, in case the calculation overflows
 
 always @(posedge clk)begin
 	if(reset)begin
@@ -695,7 +697,7 @@ always @(posedge clk)begin
 		m <= 0;
 		exp_bitShift <= 0;
 		currentRamp <= 0;
-		out <= 0;
+		out_uncropped <= 0;
 		exp_coeffIndex <= 0;
 		resetShifter <= 0;
 		newValueFor_ns <= 0;
@@ -704,81 +706,98 @@ always @(posedge clk)begin
 		reversed <= 0;
 		selectWhichV0 <= 0;
 		overrideV0 <= 0;
-	end else if (isRunning) begin
-		out <= {V0[data_size-1], V0} + mt;
-		ns <= override_ns ? newValueFor_ns : ns + {{time_size{s[data_size+1-1]}},s};
-		case (selectWhichV0_blue)
-			swv0_noChange: V0 <= V0;
-			swv0_outputValue: V0 <= {V0[data_size-1], V0} + mt;
-			swv0_overrideValue: V0 <= overrideV0_blue; 
-			default: V0 <= 0;
-		endcase
-		if(n == 0 || restartCalculations)begin
-			n <= 1;
-			m <= 1;
-			newValueFor_ns <= 0;
-			override_ns <= 1;	
-			selectWhichV0 <= swv0_overrideValue;
-			overrideV0 <= startValue;
-			exp_bitShift <= exp_initialShift;	
-			resetShifter <= 1;	
-		end else begin
-			if(endOfRamp)begin
+	end else begin
+		if (softwareReset) begin
+			out_uncropped <= {defaultValue[data_size-1],defaultValue};
+			n <= 0;
+			V0 <= 0;
+			ns <= 0;
+		end else if (isRunning) begin
+			out_uncropped <= {{2{V0[data_size-1]}}, V0} + {mt[data_size-1], mt};
+			ns <= override_ns ? newValueFor_ns : ns + {{time_size{s[data_size+1-1]}},s};
+			case (selectWhichV0_blue)
+				swv0_noChange: V0 <= V0;
+				swv0_outputValue: V0 <= {V0[data_size-1], V0} + mt;
+				swv0_overrideValue: V0 <= overrideV0_blue; 
+				default: V0 <= 0;
+			endcase
+			if(n == 0 || restartCalculations)begin
 				n <= 1;
 				m <= 1;
-				exp_bitShift <= exp_nextInitialShift;
-				exp_coeffIndex <= exp_nextdirection ? nOfStepsBeforeHalfing - 1 : 0;
-				resetShifter <= 1;
-				override_ns <= 1;
 				newValueFor_ns <= 0;
-
-				if(needToReverse)begin
-					reversed <= 1;
-				end
-
-				if(isLastRamp)begin//last ramp?
-					currentRamp <= 0;
-					n <= 0;
-					case(modifiedIdleConfig)
-						c_defaultValue:	begin	selectWhichV0 <= swv0_overrideValue; overrideV0 <= defaultValue;end
-						c_start:		begin	selectWhichV0 <= swv0_overrideValue; overrideV0 <= startValue;end
-						c_current:		begin	selectWhichV0 <= swv0_outputValue;end
-						default: begin end
-					endcase
-				end else begin
-					selectWhichV0 <= swv0_outputValue;
-					currentRamp <= nextRamp;
-				end
+				override_ns <= 1;	
+				selectWhichV0 <= swv0_overrideValue;
+				overrideV0 <= startValue;
+				exp_bitShift <= exp_initialShift;	
+				resetShifter <= 1;	
 			end else begin
-				//let's continue the ramp
-				n <= n + 1;
-				override_ns <= 0;
-				selectWhichV0 <= swv0_noChange;
-				if (exp_nextSectionLength) begin
+				if(endOfRamp)begin
+					n <= 1;
 					m <= 1;
-					if (exp_nextShift) begin
-						exp_coeffIndex <= exp_startingCoeffIndex;
-						exp_bitShift <= exp_direction ? 
-											(exp_bitShift > 0 ?
-												exp_bitShift - 1 : 
-												exp_bitShift)
-											:
-											(exp_bitShift < data_size ?
-												exp_bitShift + 1 :
-												exp_bitShift);
+					exp_bitShift <= exp_nextInitialShift;
+					exp_coeffIndex <= exp_nextdirection ? nOfStepsBeforeHalfing - 1 : 0;
+					resetShifter <= 1;
+					override_ns <= 1;
+					newValueFor_ns <= 0;
+
+					if(needToReverse)begin
+						reversed <= 1;
+					end
+
+					if(isLastRamp)begin//last ramp?
+						currentRamp <= 0;
+						n <= 0;
+						case(modifiedIdleConfig)
+							c_defaultValue:	begin	selectWhichV0 <= swv0_overrideValue; overrideV0 <= defaultValue;end
+							c_start:		begin	selectWhichV0 <= swv0_overrideValue; overrideV0 <= startValue;end
+							c_current:		begin	selectWhichV0 <= swv0_outputValue;end
+							default: begin end
+						endcase
 					end else begin
-						exp_coeffIndex <= exp_coeffIndex + (exp_direction ? -1 : 1);
+						selectWhichV0 <= swv0_outputValue;
+						currentRamp <= nextRamp;
 					end
 				end else begin
-					m <= m + 1;
+					//let's continue the ramp
+					n <= n + 1;
+					override_ns <= 0;
+					selectWhichV0 <= swv0_noChange;
+					if (exp_nextSectionLength) begin
+						m <= 1;
+						if (exp_nextShift) begin
+							exp_coeffIndex <= exp_startingCoeffIndex;
+							exp_bitShift <= exp_direction ? 
+												(exp_bitShift > 0 ?
+													exp_bitShift - 1 : 
+													exp_bitShift)
+												:
+												(exp_bitShift < data_size ?
+													exp_bitShift + 1 :
+													exp_bitShift);
+						end else begin
+							exp_coeffIndex <= exp_coeffIndex + (exp_direction ? -1 : 1);
+						end
+					end else begin
+						m <= m + 1;
+					end
+					resetShifter <= 0;
 				end
-				resetShifter <= 0;
 			end
 		end
 	end
 end
 
-
+fixedPointShifter#(
+	.inputBitSize		(data_size+2),
+	.inputFracSize		(0),
+	.outputBitSize		(data_size),
+	.outputFracSize		(0),
+	.isSigned			(1),
+	.saturateOutput		(1)
+)saturateOut(
+	.in		(out_uncropped),
+	.out	(out)
+);
 
 
 // ---------------------------------------------------------------------------------
@@ -799,9 +818,13 @@ if (reset) begin
 	exp_directions <= 0;
 	exp_initialShifts <= 0;
 	restartCalculations <= 0;
+	softwareReset <= 0;
 end else if (wen) begin
 	restartCalculations <= 1;
-	if (addr==20'h100) {usedRamps, idleConfig} <= wdata;
+	
+	if (addr==20'h100) {softwareReset, usedRamps, idleConfig} <= wdata;
+	else softwareReset <= 0;
+
 	if (addr==20'h104) {defaultValue, startValue} <= wdata;
 	for(i = 0; i < nOfRamps; i = i + 1) begin
 		if (addr==20'h108 + i * 12) {exp_initialShifts[(i+1)*bitShift_size -1-:bitShift_size], doesNextRampWaitForTriggers[i],  exp_directions[i], isExponentials[i], DVs[(i+1)*(data_size+1) -1-:(data_size+1)]} <= wdata;
@@ -844,6 +867,7 @@ endmodule
 vsim work.red_pitaya_dsp
 
 add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/clk} 
+add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/currentRamp} 
 add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/out}
 add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/V0}
 add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/ns}
@@ -855,8 +879,9 @@ add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/*}
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/clk} 1 0, 0 {50 ps} -r 100
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/reset} z1 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} z0 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DTs} 0000075000007500001510000151 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DVs} e00040038001000 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DTs} 00000f100000f100001510000151 0
+#force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DVs} e00040038001000 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DVs} c94e6d672539b59 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_SectionLengths} 0000004000000400000040000004 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/startValue} 0 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/usedRamps} 4 0
@@ -865,7 +890,7 @@ force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/idleConfig} 2 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/doesNextRampWaitForTriggers} 0 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/isExponentials} f 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_directions} c 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_initialShifts} 7700 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_initialShifts} ee00 0
 run 100ps
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/reset} 10 0
 run 100ps
@@ -876,52 +901,14 @@ run 4500ps
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 01 0
 run
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 10 0
-run 80000ps
-run 15000ps
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/clk} 
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/out}
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/V0_forOutSum}
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/V0}
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/ns}
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/mt}
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/s}
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/s_next}
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_coeff}
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_bitShift}
-add wave -position insertpoint {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/*}
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/clk} 1 0, 0 {50 ps} -r 100
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/reset} z1 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} z0 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DVs} cfb6ae823 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/DTs} 25063007 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/startValue} 0 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/usedRamps} 4 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/defaultValue} aa 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/idleConfig} 2 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/doesNextRampWaitForTriggers} 0 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_SectionLengths} 10080404 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/isExponentials} f 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_directions} c 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_initialShifts} 7700 0
-run 100ps
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/reset} 10 0
-run 100ps
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/restartCalculations} 1 0
-run 100ps
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/restartCalculations} 0 0
-run 4500ps
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 01 0
-run
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 10 0
-run 15000ps
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 01 0
-run
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 10 0
-run 15000ps
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 01 0
-run
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/trigger} 10 0
-run 10000ps
+run 200000ps
+
+
+
+
+
+
+
 
 
 vsim work.ramp_withDivisionsAndExponential

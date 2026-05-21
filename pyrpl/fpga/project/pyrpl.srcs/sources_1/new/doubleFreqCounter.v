@@ -71,6 +71,82 @@ assign out = rising ^ falling;
 endmodule
 
 
+module multiTimingCounter#(
+	parameter nOfTimings = 5,
+	parameter nofOutputs = 2,
+	parameter timingSizes = 8
+)(
+    input clk,
+    input reset,
+	input trigger,
+	input [timingSizes * nOfTimings -1:0] timings,
+	input [nofOutputs * nOfTimings -1:0] requestedOutputValues,
+	input [nofOutputs -1:0] defaultOutputValue,
+	output reg [nofOutputs -1:0] outputs
+);
+/*
+	module that sets a certain amount of output pins to specified values at some specified time intervals. 
+
+	When the module recieves a trigger, outputs will be set to the first value specified in requestedOutputValues. 
+	Then, after waiting the number of clock cycles specified in the first value of timings, outputs will be updated 
+	to the second value contained in requestedOutputValues. And so on...
+
+	Before the trigger, and after all the timings are done, outputs will be set to defaultOutputValue. So, the 
+	initial and final values will have to be the same if you want to use this module
+
+	If the trigger is high when the sequence finishes, the sequence will be repeated immediately
+*/
+`define time(i) (timings[(i+1) * timingSizes -1-:timingSizes])
+`define val(i) (requestedOutputValues[(i+1) * nofOutputs -1-:nofOutputs])
+
+reg [timingSizes + 1 -1:0] counter;
+reg [$clog2(nOfTimings+1) -1:0] currentIndex;
+reg running;
+
+always @(posedge clk) begin
+	if (reset) begin
+		counter <= 0;
+		outputs <= 0;
+		currentIndex <= 0;
+		running <= 0;
+	end else begin
+		if(!running)begin
+			if(trigger) begin
+				running <= 1;
+				counter <= `time(0) - 1;
+				currentIndex <= 1;
+				outputs <= `val(0);
+			end else begin
+				counter <= 0;
+			end
+		end else begin
+			if(counter == 0) begin
+				if(currentIndex == nOfTimings && !trigger)begin
+					currentIndex <= 0;
+					running <= 0;
+					if(counter == 0)begin
+						outputs <= defaultOutputValue;
+					end
+				end else begin
+					if(currentIndex == nOfTimings)begin
+						outputs <= `val(0);
+						counter <= counter + `time(0) - 1;
+						currentIndex <= 1;
+					end else begin
+						outputs <= `val(currentIndex);
+						counter <= counter + `time(currentIndex) - 1;
+						currentIndex <= currentIndex + 1;						
+					end
+				end
+			end else begin
+				counter <= counter - 1;
+			end
+		end
+	end
+end
+endmodule
+
+
 module multiTimingDoubleFreqCounter#(
 	parameter nOfTimings = 5,
 	parameter nofOutputs = 2,
@@ -105,7 +181,7 @@ module multiTimingDoubleFreqCounter#(
 `define val(i) (requestedOutputValues[(i+1) * nofOutputs -1-:nofOutputs])
 
 /*
-	we have two always statement, one on the positive edge of the clock, and the other on the negative one. The positive 
+	we have two always blocks, one on the positive edge of the clock, and the other on the negative one. The positive 
 	block is the main one, and it handles the trigger detection, and updating the counter. The counter is decreased of 2 
 	at each clock cycle (1 equals a half cycle), and if it reaches 0, the rising edge block will update the output, while 
 	if it reaches 1, the falling edge block will update it. Actually, the effects of the falling block are delayed of one 
@@ -131,7 +207,7 @@ always @(posedge clk) begin
 		rising <= defaultOutputValue;
 	end else begin
 		running_delayed <= running;
-		if(!running)begin
+		if(!running)begin//still waiting for a trigger?
 			if(trigger) begin
 				running <= 1;
 				counter <= `time(0) - 2;
@@ -145,9 +221,9 @@ always @(posedge clk) begin
 				rising <= defaultOutputValue;
 			end
 		end else begin
-			if(counter <= 1) begin
+			if(counter <= 1) begin//is the current timing ending?
 				prevCounterParity_pos <= counter;
-				if(currentIndex == nOfTimings && !trigger)begin
+				if(currentIndex == nOfTimings && !trigger)begin//should we restart the sequence?
 					currentIndex <= 0;
 					running <= 0;
 					if(counter == 0)begin
@@ -157,7 +233,7 @@ always @(posedge clk) begin
 					if(counter == 0)begin
 						rising <= currentIndex == nOfTimings ? `val(0) : `val(currentIndex);
 					end
-					if(currentIndex == nOfTimings)begin
+					if(currentIndex == nOfTimings)begin//end of the sequence?
 						counter <= counter + `time(0) - 2;
 						currentIndex <= 1;
 					end else begin
@@ -179,7 +255,7 @@ always @(negedge clk) begin
 		prevCounterParity_neg_delayed <= 0;
 	end else begin
 		prevCounterParity_neg_delayed <= prevCounterParity_neg;
-		if (!running_delayed && !running) begin
+		if (!running_delayed && !running) begin//still waiting for a trigger?
 			preDelayed_falling <= defaultOutputValue;
 			falling <= defaultOutputValue;
 			prevCounterParity_neg <= 0;

@@ -311,7 +311,7 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
 	//first pin: Half active period, inactive period, other half of active period
 	wire [(timingSize * 3) -1:0] pin1_loopTimings = {a_2p, i, a_2};
 	wire [(valueSize * 3) -1:0] pin1_loopValues = 4'b101;
-	multiTimingDoubleFreqCounter#(
+	multiTimingCounter#(
 		.nOfTimings		(3),
 		.nofOutputs		(1),
 		.timingSizes	(timingSize)
@@ -329,7 +329,7 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
 		//slightly the length of the 2 inactive periods	
 	wire [(timingSize * 3) -1:0] pin2_loopTimings = {i_2p - d, a, i_2 + d};
 	wire [(valueSize * 3) -1:0] pin2_loopValues = 4'b010;
-	multiTimingDoubleFreqCounter#(
+	multiTimingCounter#(
 		.nOfTimings		(3),
 		.nofOutputs		(1),
 		.timingSizes	(timingSize)

@@ -21,12 +21,12 @@
 
 
 module segmentedFunction#(
-    parameter     nOfEdges = -1         ,
-    parameter     totalBits_IO = 14     ,
-    parameter     fracBits_IO = 0       ,
-    parameter     totalBits_m = totalBits_IO ,
-    parameter     fracBits_m = fracBits_IO,
-    parameter     areSignalsSigned = 1
+    parameter     nOfEdges 			= 4,
+    parameter     totalBits_IO 		= 8,
+    parameter     fracBits_IO 		= 0,
+    parameter     totalBits_m 		= 2*totalBits_IO,
+    parameter     fracBits_m 		= totalBits_m-1,
+    parameter     areSignalsSigned 	= 1
 )(
     input                                       clk   ,
     input                                       reset ,
@@ -41,10 +41,14 @@ module segmentedFunction#(
     output reg           err    ,  // bus error indicator
     output reg           ack       // bus acknowledge signal
 );
+reg [nOfEdges*totalBits_IO -1:0] edgePoints;
+reg [nOfEdges*totalBits_IO -1:0] qs;
+reg [nOfEdges*totalBits_m -1:0]  ms;
 
-reg [totalBits_IO-1:0] edgePoints [nOfEdges-1:0];
-reg [totalBits_IO-1:0] qs         [nOfEdges-1:0];
-reg [totalBits_m-1:0]  ms         [nOfEdges-1:0];
+`define valueOfArray(array, index, registerSize) array[((index) + 1) * (registerSize) -1-:(registerSize)]
+`define edgePoint(index) 	`valueOfArray(edgePoints, index, totalBits_IO)
+`define q(index) 			`valueOfArray(qs, index, totalBits_IO)
+`define m(index) 			`valueOfArray(ms, index, totalBits_m)
 
 //applies to the input a segmented function. The values for edgePoints, qs and 
     //ms can be found for any segmented function as follows
@@ -65,42 +69,69 @@ reg [totalBits_m-1:0]  ms         [nOfEdges-1:0];
     //or -(2^(totalBits_IO-1)), depending on if the signals are signed or not)
 
 
-localparam nOfInputDelays = 3;//we'll need a bunch of delays to "synchronize" with all the operations
+localparam 	delay_0 = 1,
+			delay_1 = 1,
+			delay_2 = 1,
+			delay_01 = delay_0 + delay_1;
 
-reg [totalBits_IO-1:0]      in_r            [nOfInputDelays-1:0];
 
+`define delayedRegister(registerSize, inputName, outputName, delayCycles) 			\
+	reg [registerSize -1:0] inputName;													\
+	wire [registerSize -1:0] outputName;												\
+	delayer#(registerSize, delayCycles) delay_``inputName(clk, 1, reset, inputName, outputName);
+
+`define delayedWire(registerSize, inputName, outputName, delayCycles, assignedValue)\
+	wire [registerSize -1:0] inputName = assignedValue;									\
+	wire [registerSize -1:0] outputName;												\
+	delayer#(registerSize, delayCycles) delay_``inputName(clk, 1, reset, inputName, outputName);
+
+`define delayedWire_inputAlreadyAssigned(registerSize, inputName, outputName, delayCycles)	\
+	wire [registerSize -1:0] outputName;												\
+	delayer#(registerSize, delayCycles) delay_``inputName(clk, 1, reset, inputName, outputName);
+
+
+
+
+//green wires
 wire [nOfEdges-1:0] isInHigherThanEdge;//bitString of the form 00...0011...11
 wire [nOfEdges-1:0] isCurrentEdge;//bitString of the form      00...0010...00
+`delayedWire_inputAlreadyAssigned(totalBits_IO, in, in_r, delay_0)
+
+//blue wires
 reg [$clog2(nOfEdges):0] edgeIndex;
+wire [totalBits_IO-1:0] current_Edge = `edgePoint(edgeIndex);
+wire [totalBits_m-1:0] current_m = `m(edgeIndex);
+`delayedWire(totalBits_IO, current_q_blue, current_q, delay_1, `q(edgeIndex))
+wire in_r_signBit, current_Edge_signBit;//let's make a wire to keep track of the sign of the registers, to make the code more 
+											//readable. We'll asign it in the generate block, depending on if the signals are 
+											//signed or not
 
-reg [totalBits_IO-1:0] current_Edge;
-reg [totalBits_IO-1:0] current_q[nOfInputDelays-2:0];
-reg [totalBits_m-1:0] current_m;
-wire [totalBits_IO+2 -1:0] mx;//mx requires one more bit. It's allowed to surpass the output range, because it will be later shifted back by current_q
-
-reg [totalBits_IO+2 -1:0] out_unsaturated;
-wire current_q_signBit, in_r_signBit, current_Edge_signBit;
+//purple wires
+wire [totalBits_IO+2 -1:0] mx;//mx requires one more bit. It's allowed to surpass the output range, because it will be later 
+									//shifted back by current_q
+wire current_q_signBit;
+wire [totalBits_IO+2 -1:0] out_unsaturated = reset ? 0 : {{2{current_q_signBit}}, current_q} + mx;
 
 generate
     genvar gi;
     
     //set isInHigherThanEdge    
     if(areSignalsSigned) begin
-        assign isInHigherThanEdge[0] = $signed(in_r[0]) >= $signed(edgePoints[0]);
+        assign isInHigherThanEdge[0] = $signed(in_r[0]) >= $signed(`edgePoint(0));
         for(gi = 1; gi < nOfEdges; gi = gi + 1)begin
-            assign isInHigherThanEdge[gi] = ($signed(in_r[0]) >= $signed(edgePoints[gi])) && 
-                ($signed(edgePoints[gi]) > $signed(edgePoints[gi-1]));// if set lower or higher than the first 
+            assign isInHigherThanEdge[gi] = ($signed(in) >= $signed(`edgePoint(gi))) && 
+                ($signed(`edgePoint(gi)) > $signed(`edgePoint(gi-1)));// if set lower or higher than the first 
                                                                                     //edge, it means it is disabled
         end
-		assign current_q_signBit = current_q[nOfInputDelays-2][totalBits_IO-1];
-		assign in_r_signBit = in_r[nOfInputDelays-1][totalBits_IO-1];
+		assign current_q_signBit = current_q[totalBits_IO-1];
+		assign in_r_signBit = in_r[totalBits_IO-1];
 		assign current_Edge_signBit = current_Edge[totalBits_IO-1];
     end else begin
-        assign isInHigherThanEdge[0] = $unsigned(in_r[0]) >= $unsigned(edgePoints[0]);
+        assign isInHigherThanEdge[0] = $unsigned(in_r[0]) >= $unsigned(`edgePoint(0));
         for(gi = 1; gi < nOfEdges; gi = gi + 1)begin
-            assign isInHigherThanEdge[gi] = ($unsigned(in_r[0]) >= $unsigned(edgePoints[gi])) && 
-                ($unsigned(edgePoints[gi]) > $unsigned(edgePoints[gi-1]));// if set lower or higher than the first 
-                                                                                    //edge, it means it is disabled
+            assign isInHigherThanEdge[gi] = ($unsigned(in) >= $unsigned(`edgePoint(gi))) && 
+                ($unsigned(`edgePoint(gi)) > $unsigned(`edgePoint(gi-1)));// if set lower or higher than the first 
+                                                                            //edge, it means it is disabled
         end    
 		assign current_q_signBit = 0;
 		assign in_r_signBit = 0;
@@ -115,6 +146,20 @@ generate
     
 endgenerate
 
+//let's calculate edgeIndex (everything else is already calculated)
+integer i;
+always @(posedge clk)begin
+    if(reset)begin     
+        edgeIndex <= 0;        
+    end else begin    
+        for(i=0; i < nOfEdges; i = i + 1)begin
+            if(isCurrentEdge[i])begin
+                edgeIndex <= i;     
+            end
+        end
+    end
+end
+
 clocked_FractionalMultiplier #(
   .A_WIDTH			(totalBits_IO + 1),//stupid sum/difference between integers, which requires one more bit to not overflow... 
   .B_WIDTH			(totalBits_m),
@@ -126,51 +171,10 @@ clocked_FractionalMultiplier #(
 ) mult (
   .clk(clk),
   .clkEnable(1'b1),
-  .a({in_r_signBit,in_r[nOfInputDelays-1]} - {current_Edge_signBit,current_Edge}),
+  .a({in_r_signBit,in_r} - {current_Edge_signBit,current_Edge}),
   .b(current_m),
   .result(mx)
 );
-
-
-
-integer i;
-always @(posedge clk)begin
-    if(reset)begin
-        for(i=0; i < nOfInputDelays; i = i + 1)begin
-            in_r[i] <= 0;
-        end
-        out_unsaturated <= 0;
-        
-        edgeIndex <= 0;
-        current_Edge <= 0;
-        for(i=0; i < nOfInputDelays-2; i = i + 1)begin
-            current_q[i] <= 0;
-        end
-        current_m <= 0;
-        
-    end else begin
-        in_r[0] <= in;
-        for(i=1; i < nOfInputDelays; i = i + 1)begin
-            in_r[i] <= in_r[i-1];
-        end
-    
-        for(i=0; i < nOfEdges; i = i + 1)begin
-            if(isCurrentEdge[i])begin
-                edgeIndex <= i;     
-            end
-        end
-        
-        current_q[0] <= qs[edgeIndex];
-        current_Edge <= edgePoints[edgeIndex];
-        for(i=1; i < nOfInputDelays-1; i = i + 1)begin
-            current_q[i] <= current_q[i-1];
-        end
-        
-        current_m <= ms[edgeIndex];
-        
-        out_unsaturated <= {{2{current_q_signBit}}, current_q[nOfInputDelays-2]} + mx;
-    end
-end
 
 fixedPointShifter#(
 	.inputBitSize	(totalBits_IO+2),
@@ -190,16 +194,14 @@ fixedPointShifter#(
 
 always @(posedge clk)
 if (reset) begin
-    for(i=0; i < nOfEdges; i = i + 1)begin
-        edgePoints  [i] <= 0;
-        qs          [i] <= 0;
-        ms          [i] <= 0;
-    end
+	edgePoints	<= 0;
+	qs			<= 0;
+	ms			<= 0;
 end else if (wen) begin
 
     for(i=0; i < nOfEdges; i = i + 1)begin
-        if (addr==20'h100 + i*8)   {qs[i], edgePoints[i]} <= wdata;
-        if (addr==20'h104 + i*8)           ms[i]          <= wdata;
+        if (addr==20'h100 + i*8)  {`q(i), `edgePoint(i)} <= wdata;
+        if (addr==20'h104 + i*8)          `m(i)          <= wdata;
     end
 end
 
@@ -215,47 +217,75 @@ end else begin
     ack <= en;  
     rdata <=  32'h0;
     for(i=0; i < nOfEdges; i = i + 1)begin
-        if (addr==20'h100 + i*8)  rdata <= {qs[i], edgePoints[i]};
-        if (addr==20'h104 + i*8)  rdata <=         ms[i]         ;
+        if (addr==20'h100 + i*8)  rdata <= {`q(i), `edgePoint(i)};
+        if (addr==20'h104 + i*8)  rdata <=         `m(i)         ;
     end
 end
 
 
 endmodule
 
+module segmentedFunction_with_ramp#(
+    parameter nOfEdges = 4,
+    parameter totalBits_IO = 8,
+    parameter fracBits_IO = 0,
+    parameter totalBits_m = 2*totalBits_IO,
+    parameter fracBits_m = totalBits_m-3,
+    parameter areSignalsSigned = 1
+)(
+    input clk,
+    input reset,
+    output [totalBits_IO-1:0] out
+);
 
+reg [totalBits_IO-1:0] ramp_counter;
 
+always @(posedge clk)
+if (reset)
+    ramp_counter <= 0;
+else
+    ramp_counter <= ramp_counter + 1;
 
+segmentedFunction #(
+    .nOfEdges(nOfEdges),
+    .totalBits_IO(totalBits_IO),
+    .fracBits_IO(fracBits_IO),
+    .totalBits_m(totalBits_m),
+    .fracBits_m(fracBits_m),
+    .areSignalsSigned(areSignalsSigned)
+) segFunc_inst (
+    .clk(clk),
+    .reset(reset),
+    .in(ramp_counter),
+    .out(out)
+);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+endmodule
 
 
 
 /*
-vsim work.segmentedFunction
-add wave -position insertpoint sim:/segmentedFunction/*
-force -freeze sim:/segmentedFunction/clk 1 0, 0 {50 ps} -r 100
-force -freeze sim:/segmentedFunction/reset z1 0
-force -freeze sim:/segmentedFunction/in 20 0
-force -freeze sim:/segmentedFunction/l_edgePoints 603080 0
-force -freeze sim:/segmentedFunction/l_qs 701080 0
-force -freeze sim:/segmentedFunction/l_ms e0107f 0
+vsim work.segmentedFunction_with_ramp
+add wave -position insertpoint sim:/segmentedFunction_with_ramp/*
+add wave -position insertpoint sim:/segmentedFunction_with_ramp/segFunc_inst/*
+force -freeze sim:/segmentedFunction_with_ramp/segFunc_inst/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/segmentedFunction_with_ramp/segFunc_inst/reset z1 0
+force -freeze sim:/segmentedFunction_with_ramp/segFunc_inst/edgePoints 603080 0
+force -freeze sim:/segmentedFunction_with_ramp/segFunc_inst/qs f81080 0
+force -freeze sim:/segmentedFunction_with_ramp/segFunc_inst/ms 7ffff0001a00 0
 run
-force -freeze sim:/segmentedFunction/reset 10 0
+force -freeze sim:/segmentedFunction_with_ramp/segFunc_inst/reset 10 0
+run 40ns
+force -freeze sim:/segmentedFunction_with_ramp/segFunc_inst/in C0 0
+run
+force -freeze sim:/segmentedFunction_with_ramp/segFunc_inst/in 31 0
+run
+force -freeze sim:/segmentedFunction_with_ramp/segFunc_inst/in 72 0
+run
+force -freeze sim:/segmentedFunction_with_ramp/segFunc_inst/in f7 0
 run
 run
-
+run
+run
 
 */
