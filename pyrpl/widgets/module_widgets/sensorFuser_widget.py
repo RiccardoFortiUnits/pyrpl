@@ -174,8 +174,6 @@ class sensor_fuser_widget(ModuleWidget):
 		self.curves[0].setData(t, a)
 		t, b = b
 		self.curves[1].setData(t, b)
-		from ...hardware_modules.sensorFuser import updateSensorFuserProperty
-		updateSensorFuserProperty.alreadyUpdating = False 		
 		self.win.setHidden(False)
 
 	def updateExpectedCurves(self):

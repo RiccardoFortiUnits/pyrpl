@@ -62,6 +62,10 @@ class rampWidget(ModuleWidget):
 			sw : segmentWidget = s._create_widget()
 			add_new_tab(self.segmentTabs, sw, f"segment {i}")
 
+		self.resetButton = QtWidgets.QPushButton('reset ramp start')
+		self.resetButton.clicked.connect(self.resetRamp)
+		self.main_layout.addWidget(self.resetButton)
+
 		(self.startPoint, self.usedRamps, 
    			self.output_direct, self.idleConfiguration, self.defaultValue, 
 			self.external_trigger_pin,
@@ -69,6 +73,7 @@ class rampWidget(ModuleWidget):
 		"startPoint", "usedRamps", 
 			"output_direct", "idleConfiguration", "defaultValue", 
 			"external_trigger_pin",], self.config_layout)
+		
 		
 		self.win = pg.GraphicsLayoutWidget(title="ramp")
 		self.plot_item = self.win.addPlot(title="ramp")
@@ -87,3 +92,5 @@ class rampWidget(ModuleWidget):
 		self.discreteRamp = segmentedFunctionLine(self.plot_item, self.module, self, QtGui.QColor(self.ch_color[0]))
 	def updateRampCurve(self):
 		self.discreteRamp.updateLines(self.module.points())
+	def resetRamp(self):
+		self.module.resetOutput()

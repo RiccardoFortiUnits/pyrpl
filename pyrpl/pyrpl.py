@@ -332,7 +332,9 @@ class Pyrpl(object):
             if module.owner is None:
                 module._load_setup_attributes()
         self.show_gui()
-        
+    @property
+    def rp(self):
+        return list(self.rps.values())[0]
     def addRedPitaya(self, name = None, reloadGUI = True, **configs):
         if name is None:
             renameDevice = True
@@ -366,9 +368,6 @@ class Pyrpl(object):
         if reloadGUI:
             self._reloadGUI()
         
-    @property
-    def rp(self):
-        return list(self.rps.values())[0]
         
     def show_gui(self):
         if len(self.widgets) == 0:

@@ -205,16 +205,40 @@ class sensor_fuser(DspModule):
 		if self.updatingAllValues:
 			return
 		sf = self
+		anyError = False
 		try:
 			sf.offset_a_low		= sf.sensor_a.minValue
+		except Exception as e:
+			anyError = True
+		try:
 			sf.offset_a_med		= sf.sensor_a.transitionValue
+		except Exception as e:
+			anyError = True
+		try:
 			sf.offset_b_med		= sf.sensor_b.minValue
+		except Exception as e:
+			anyError = True
+		try:
 			sf.offset_b_high	= sf.sensor_b.transitionValue
+		except Exception as e:
+			anyError = True
+		try:
 			sf.gain_a_low		= sf.section_low / (sf.sensor_a.transitionValue - sf.sensor_a.minValue) if sf.section_low else 0
+		except Exception as e:
+			anyError = True
+		try:
 			sf.gain_a_med		= sf.section_med / (sf.sensor_a.maxValue - sf.sensor_a.transitionValue) if sf.section_med else 0
+		except Exception as e:
+			anyError = True
+		try:
 			sf.gain_b_med		= sf.section_med / (sf.sensor_b.transitionValue - sf.sensor_b.minValue) if sf.section_med else 0
+		except Exception as e:
+			anyError = True
+		try:
 			sf.gain_b_high		= sf.section_high / (sf.sensor_b.maxValue - sf.sensor_b.transitionValue) if sf.section_high else 0
 		except Exception as e:
+			anyError = True
+		if anyError:
 			print("set all the values to avoid divisions by 0")
 # 			raise(e)
 		self._emit_signal_by_name('updateExpectedCurves')
@@ -264,7 +288,7 @@ class sensor_fuser(DspModule):
 		'''
 		get the last curves obtained from the scope and fit the two sensor limits
 		'''
-		# '''# uncomment this line to have some debug signals
+		#'''# uncomment this line to have some debug signals
 		a, b = self.AskScopeForAnAcquisition()
 		'''
 		t = np.linspace(0,1,400)
@@ -300,6 +324,8 @@ class sensor_fuser(DspModule):
 		ret = super()._load_setup_attributes()
 		self.sensor_a._load_setup_attributes()
 		self.sensor_b._load_setup_attributes()
+		self.updateFPGA_valuesFromSensorValues()
+		updateSensorFuserProperty.alreadyUpdating = False
 		return ret
 
 # 		t=np.arange(len(a))

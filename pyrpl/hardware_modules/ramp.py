@@ -81,13 +81,20 @@ class voltageAndInitialBitShiftProperty(FloatProperty):
 				tau = obj.tau
 				DT = obj.DT
 				if obj.exponentialRampSign == "negative":
-					obj.normalized_DV = val / (1 - np.exp(-DT / tau))
+					try:
+						obj.normalized_DV = val / (1 - np.exp(-DT / tau))
+					except:
+						pass
 					obj.initialExponentialShift = 0
 				else:
 					#let's check how many orders of magnitude will be done
-					s = int(np.ceil(np.log2(np.e) * DT / tau))
-					obj.normalized_DV = val / (2**-(s) * (np.exp(DT / tau) - 1))
-					obj.initialExponentialShift = s
+					try:
+						s = int(np.ceil(np.log2(np.e) * DT / tau))
+						obj.normalized_DV = val / (2**-(s+.25) * (np.exp(DT / tau) - 1))
+						obj.initialExponentialShift = s
+					except:
+						pass
+				print(f'initialValue {val}, value set {obj.normalized_DV}, {obj.initialExponentialShift}')
 			else:
 				obj.normalized_DV = val
 			return ret
@@ -165,7 +172,11 @@ class segment(HardwareModule):
 	T = ExpandableProperty(T, extraFunctionToDoAfterSettingValue=lambda prop, instance, value: instance.updateDV())
 
 
-
+class timeAndVoltageArray(ArrayProperty):
+	def set_value(self, obj, val):
+		val = self.validate_and_normalize(obj, val)
+		obj.updateFromInterface(val[0], val[1])
+		return super().set_value(obj, val)
 class Ramp(DspModule, segmentedFunctionObject):
 	_widget_class = rampWidget
 	_signal_launcher = SignalLauncherRampModule
@@ -196,10 +207,15 @@ class Ramp(DspModule, segmentedFunctionObject):
 	
 	startPoint = FloatRegister(0x104, bits=14, norm=2**13, signed = True, doc="initial value of the sequence")
 
+	Ts = extractPropertiesFromSubModules("segments", "T")
+	Vs = extractPropertiesFromSubModules("segments", "V")
 	areRampsExponential = extractPropertiesFromSubModules("segments", "isExponential")
 	exponentialRampSigns = extractPropertiesFromSubModules("segments", "exponentialRampSign")
 	haltSequence = extractPropertiesFromSubModules("segments", "haltsSequence")
 	taus = extractPropertiesFromSubModules("segments", "tau")
+	rampValues = timeAndVoltageArray()
+
+	resetRamp = BoolRegister(0x100, 2+int(np.ceil(np.log2(nOfSegments) + 1)))
 	
 	def __init__(self, rp, name, index=0):
 		super().__init__(rp, name, index)
@@ -236,6 +252,13 @@ class Ramp(DspModule, segmentedFunctionObject):
 		self.usedRamps = l + 1
 	def addHoldToEnd(self, holdDuration):
 		self.addRampToEnd(holdDuration, self.segments[self.usedRamps-1])
+	def resetOutput(self, outputValue = None):
+		if outputValue is not None:
+			prevValue = self.defaultValue
+			self.defaultValue = outputValue
+		self.resetRamp = True
+		if outputValue is not None:
+			self.defaultValue = prevValue
 
 
 	#let's overwrite _load_setup_attributes, so that we also load the submodules

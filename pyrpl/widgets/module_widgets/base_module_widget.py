@@ -426,7 +426,7 @@ class segmentedFunctionLine(pg.ScatterPlotItem):
     # ------------------------
     def mousePressEvent(self, event):
         pts = self.pointsAt(event.pos())
-        if pts:
+        if pts is not None:
             self.moving_pointIndex = list(self.points()).index(pts[0])
             event.accept()
         else:
