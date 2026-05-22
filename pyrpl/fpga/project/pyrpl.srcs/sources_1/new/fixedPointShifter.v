@@ -53,3 +53,24 @@ generate
 
 endgenerate	
 endmodule
+
+module safeInverter #(
+	parameter data_size = 8
+)(
+	input [data_size -1:0]	in,
+	input 					invert,
+	output					out
+);
+localparam MIN_VAL = (1 << (data_size - 1));
+localparam MAX_VAL = MIN_VAL - 1;
+
+wire isIn_MIN_VAL = in == MIN_VAL;
+
+assign out = invert ?
+				(isIn_MIN_VAL ?
+					MAX_VAL :
+					- in
+				) :
+				in;
+	
+endmodule

@@ -218,8 +218,9 @@ end else begin
 		default   : begin adc_a_dat <= adc_a_sum[15+0 :  0];      adc_b_dat <= adc_b_sum[15+0 :  0];    real_adc_a_dat <= real_adc_a_sum[15+0 :  0];      real_adc_b_dat <= real_adc_b_sum[15+0 :  0];  end
 	endcase
 end
-assign invertible_adc_a_dat = invert_adc_a ? - adc_a_dat : adc_a_dat;
-assign invertible_adc_b_dat = invert_adc_b ? - adc_b_dat : adc_b_dat;
+
+safeInverter #(14) safeInvertAdc_a(adc_a_dat, invert_adc_a, invertible_adc_a_dat);
+safeInverter #(14) safeInvertAdc_b(adc_b_dat, invert_adc_b, invertible_adc_b_dat);
 //---------------------------------------------------------------------------------
 //  ADC buffer RAM
 

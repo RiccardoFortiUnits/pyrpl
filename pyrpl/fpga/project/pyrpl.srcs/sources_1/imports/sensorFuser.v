@@ -28,7 +28,7 @@
 	this function maps x into the range [-1,1]
 */
 module sensorFuser#(
-	parameter signalSize = 14,
+	parameter signalSize = 12,
 	parameter gainSize = 8,
 	parameter gainFractionalSize = 6,
 	parameter sectionSize = 4
@@ -78,38 +78,59 @@ fixedPointShifter#(
 	.out			({section_low_resized, section_lowPlusMed_resized})
 );
 
-
-/*	pipeline
-	0 read input and choose state and parameters
-	1 inputs - offset
-	2 ans * gain
-	3 output chosen depending on state
-	the various parameters have to be buffered for a few clock cycles
-*/
-
 localparam  s_low = 0,  
 			s_med = 1,  
 			s_high = 2,
 			s_invalid = 3;
 
-localparam	delay_sum = 1,
-			delay_mult = 1;//not sure if I should increase it
-localparam	delay_1 = 1,
-			delay_2 = delay_1 + delay_sum,
-			delay_3 = delay_2 + delay_mult;
-
-reg [1:0] 								state					[delay_3 -1:0]				;
-reg [signalSize -1:0] 					val					  /*[delay_1 -1:0]*/	[1:0]	;
-reg [signalSize -1:0] 					offset				  /*[delay_1 -1:0]*/	[1:0]	;
-reg [gainSize -1:0] 					gain					[delay_2 -1:0]		[1:0]	;
-
-localparam summedSignalSize = signalSize + 1;
-reg [summedSignalSize -1:0]	valMinusOffset											[1:0]	;
-
-wire [signalSize -1:0] 					valMinusOffsetByGain						[1:0]	;
-
 `define longRegisterFromDouble(array)\
 		{array[1], array[0]}
+
+`define delayedRegister(registerSize, inputName, outputName, delayCycles) 			\
+	reg [registerSize -1:0] inputName;													\
+	wire [registerSize -1:0] outputName;												\
+	delayer#(registerSize, delayCycles) delay_``inputName(clk, 1, reset, inputName, outputName);
+
+`define delayedWire(registerSize, inputName, outputName, delayCycles, assignedValue)\
+	wire [registerSize -1:0] inputName = assignedValue;									\
+	wire [registerSize -1:0] outputName;												\
+	delayer#(registerSize, delayCycles) delay_``inputName(clk, 1, reset, inputName, outputName);
+
+`define delayedWire_noAssignment(registerSize, inputName, outputName, delayCycles)	\
+	wire [registerSize -1:0] inputName;													\
+	wire [registerSize -1:0] outputName;												\
+	delayer#(registerSize, delayCycles) delay_``inputName(clk, 1, reset, inputName, outputName);
+
+localparam	delay_1 = 1,
+			delay_2 = 1;//for multiplication. Not sure if I should increase it
+localparam	delay_12 = delay_1 + delay_2;
+
+//green wires
+wire [signalSize -1:0] 	val		[1:0]; assign `longRegisterFromDouble(val) = {b, a};
+reg [signalSize -1:0] 	offset	[1:0];//these registers are controlled by an always(*) block, so they will behave like wires
+localparam summedSignalSize = signalSize + 1;
+reg [summedSignalSize -1:0]	valMinusOffset [1:0]; 
+
+//cyan wires
+`delayedRegister(2, state_cyan, state_blue, delay_2)
+reg [gainSize -1:0] 	gain	[1:0];
+
+//blue wires
+wire [signalSize -1:0] 	valMinusOffsetByGain	[1:0];
+
+//set offset
+always @(*) begin	
+	if($signed(a) < $signed(offset_a_med))begin
+		offset[0] <= offset_a_low;
+		offset[1] <= 1'bx;
+	end else if ($signed(b) > $signed(offset_b_high)) begin
+		offset[0] <= 1'bx;
+		offset[1] <= offset_b_high;
+	end else begin
+		offset[0] <= offset_a_med;
+		offset[1] <= offset_b_med;
+	end
+end
 
 clocked_FractionalMultiplier #(
   .A_WIDTH			(summedSignalSize),
@@ -123,7 +144,7 @@ clocked_FractionalMultiplier #(
   .clk(clk),
   .clkEnable(1'b1),
   .a(`longRegisterFromDouble(valMinusOffset)),
-  .b(`longRegisterFromDouble(gain[delay_2-1])),
+  .b(`longRegisterFromDouble(gain)),
   .result(`longRegisterFromDouble(valMinusOffsetByGain))
 );
 
@@ -155,36 +176,30 @@ integer i;
 always @(posedge clk) begin
 	if (reset) begin
 		uOut <= 1<<signalSize;
-		`setArray(state, delay_3, s_invalid)
-		`resetDouble(val)
-		`resetDouble(offset)
+		state_cyan <= s_invalid;
 		`resetDouble(valMinusOffset)
-		`resetDoubleArray(gain, delay_2)
+		`resetDouble(gain)
 	end else begin
-		`shiftArray(state, delay_3)
-		val[0] <= a;
-		val[1] <= b;
 		for (i=0;i<2;i=i+1) begin
 			valMinusOffset[i] <= {val[i][signalSize-1],val[i]} - {offset[i][signalSize-1],offset[i]};
 		end
-		`shiftDoubleArray(gain, delay_2)
 		if($signed(a) < $signed(offset_a_med))begin
-			state[0] <= s_low;
-			offset[0] <= offset_a_low;
-			gain[0][0] <= gain_a_low;
+			state_cyan <= s_low;
+			// offset[0] <= offset_a_low;//already set in an always(*) block
+			gain[0] <= gain_a_low;
 		end else if ($signed(b) > $signed(offset_b_high)) begin
-			state[0] <= s_high;
-			offset[1] <= offset_b_high;
-			gain[0][1] <= gain_b_high;
+			state_cyan <= s_high;
+			// offset[1] <= offset_b_high;
+			gain[1] <= gain_b_high;
 		end else begin
-			state[0] <= s_med;
-			offset[0] <= offset_a_med;
-			offset[1] <= offset_b_med;
-			gain[0][0] <= gain_a_med;
-			gain[0][1] <= gain_b_med;
+			state_cyan <= s_med;
+			// offset[0] <= offset_a_med;
+			// offset[1] <= offset_b_med;
+			gain[0] <= gain_a_med;
+			gain[1] <= gain_b_med;
 		end
 
-		case (state[delay_3-1])
+		case (state_blue)
 			s_low : begin
 				uOut <= valMinusOffsetByGain[0];
 			end
@@ -200,7 +215,6 @@ always @(posedge clk) begin
 		endcase
 	end
 end
-
 
 //---------------------------------------------------------------------------------
 //
@@ -250,20 +264,81 @@ always @(posedge clk) begin
 		if (addr==20'h118) rdata <= {section_med, section_low};
 	end
 end
-
-
 endmodule
 
+module sensorFuser_with_SimulatedInputs#(
+	parameter signalSize = 8,
+	parameter gainSize = 8,
+	parameter gainFractionalSize = 6,
+	parameter sectionSize = 4
+)(
+    input clk,
+    input reset,
+    output [signalSize-1:0] out
+);
+
+reg [signalSize-1:0] a;
+reg [signalSize-1:0] b;
+
+always @(posedge clk)
+if (reset)begin
+    a <= 13;
+	b <= 3;
+end else begin
+	if($signed(b) >= $signed(8'h52))begin
+		a <= 13;
+		b <= 3;
+	end else begin
+		if ($signed(a) <= $signed(8'h70)) begin
+			a <= a + 5;
+		end
+		if ($signed(a) >= $signed(8'h53)) begin
+			b <= b + 2;
+		end
+	end
+end
+sensorFuser#(
+	.signalSize			(signalSize),
+	.gainSize			(gainSize),
+	.gainFractionalSize	(gainFractionalSize),
+	.sectionSize		(sectionSize) 
+)segFus(
+	.clk				(clk),
+	.reset				(reset),
+	.a					(a),
+	.b					(b),
+	.out				(out)
+);	
+endmodule
 
 /*
+vsim work.sensorFuser_with_SimulatedInputs
+add wave -position insertpoint sim:/sensorFuser_with_SimulatedInputs/segFus/*
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/clk 1 0, 0 {50 ps} -r 100
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/reset z1 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_a_low 00d 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_b_med 003 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_a_med 0053 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_b_high 00f 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/section_low 8 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/section_med 2 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_a_low 3a 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_a_med 22 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_b_med 55 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_b_high 2d 0
+run
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/reset 10 0
+run
+run 10ns
+
 
 vsim work.sensorFuser
-add wave -position insertpoint sim:/sensorFuser/*
-add wave -position insertpoint sim:/sensorFuser/state
+add wave -position insertpoint sim:/sensorFuser/state_blue
 add wave -position insertpoint sim:/sensorFuser/val
 add wave -position insertpoint sim:/sensorFuser/offset
 add wave -position insertpoint sim:/sensorFuser/valMinusOffset
 add wave -position insertpoint sim:/sensorFuser/gain
+add wave -position insertpoint sim:/sensorFuser/*
 force -freeze sim:/sensorFuser/clk 1 0, 0 {50 ps} -r 100
 force -freeze sim:/sensorFuser/reset z1 0
 force -freeze sim:/sensorFuser/a 63d 0
