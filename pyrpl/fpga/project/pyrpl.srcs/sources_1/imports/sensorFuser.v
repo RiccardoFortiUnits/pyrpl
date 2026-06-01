@@ -62,8 +62,19 @@ reg [sectionSize -1:0] 		section_low;
 reg [sectionSize -1:0] 		section_med;
 
 //let's assume that the output is unsigned (value between 0 and 1), we'll make it signed at the end
-reg [signalSize -1:0] uOut;
-assign out = {!uOut[signalSize-1], uOut[signalSize-1 -1:0]};
+reg [signalSize+1 -1:0] uOut;
+wire [signalSize -1:0] uOut_cropped;
+fixedPointShifter#(
+	.inputBitSize	(signalSize+1),
+	.inputFracSize	(signalSize),
+	.outputBitSize	(signalSize),
+	.outputFracSize	(signalSize),
+	.isSigned		(0)
+)crop_uOut(
+	.in				(uOut),
+	.out			(uOut_cropped)
+);
+assign out = {!uOut_cropped[signalSize-1], uOut_cropped[signalSize-1 -1:0]};
 
 wire [sectionSize -1:0] section_lowPlusMed = section_low + section_med;
 wire [signalSize -1:0] section_low_resized, section_lowPlusMed_resized;
@@ -181,7 +192,9 @@ always @(posedge clk) begin
 		`resetDouble(gain)
 	end else begin
 		for (i=0;i<2;i=i+1) begin
-			valMinusOffset[i] <= {val[i][signalSize-1],val[i]} - {offset[i][signalSize-1],offset[i]};
+			valMinusOffset[i] <= $signed(val[i]) > $signed(offset[i]) ? 
+									{val[i][signalSize-1],val[i]} - {offset[i][signalSize-1],offset[i]} :
+									0;//let's clip the difference if it would be negative
 		end
 		if($signed(a) < $signed(offset_a_med))begin
 			state_cyan <= s_low;
@@ -267,7 +280,7 @@ end
 endmodule
 
 module sensorFuser_with_SimulatedInputs#(
-	parameter signalSize = 8,
+	parameter signalSize = 14,
 	parameter gainSize = 8,
 	parameter gainFractionalSize = 6,
 	parameter sectionSize = 4
@@ -278,23 +291,21 @@ module sensorFuser_with_SimulatedInputs#(
 );
 
 reg [signalSize-1:0] a;
-reg [signalSize-1:0] b;
+reg [signalSize+1-1:0] b;
 
 always @(posedge clk)
 if (reset)begin
-    a <= 13;
-	b <= 3;
+    a <= 14'h0;
+	b <= 15'h000;
 end else begin
-	if($signed(b) >= $signed(8'h52))begin
-		a <= 13;
-		b <= 3;
+	if (a != 14'h1fff) begin
+		a <= a + 1;
+	end
+	if (b != 15'h3fff) begin
+		b <= b + 1;
 	end else begin
-		if ($signed(a) <= $signed(8'h70)) begin
-			a <= a + 5;
-		end
-		if ($signed(a) >= $signed(8'h53)) begin
-			b <= b + 2;
-		end
+		a <= 14'h0;
+		b <= 15'h000;
 	end
 end
 sensorFuser#(
@@ -306,7 +317,7 @@ sensorFuser#(
 	.clk				(clk),
 	.reset				(reset),
 	.a					(a),
-	.b					(b),
+	.b					(b[signalSize+1 -1:1]),
 	.out				(out)
 );	
 endmodule
@@ -314,68 +325,26 @@ endmodule
 /*
 vsim work.sensorFuser_with_SimulatedInputs
 add wave -position insertpoint sim:/sensorFuser_with_SimulatedInputs/segFus/*
+add wave -position insertpoint sim:/sensorFuser_with_SimulatedInputs/segFus/valMinusOffsetByGain
+add wave -position insertpoint sim:/sensorFuser_with_SimulatedInputs/segFus/gain
+add wave -position insertpoint sim:/sensorFuser_with_SimulatedInputs/segFus/valMinusOffset
+add wave -position insertpoint sim:/sensorFuser_with_SimulatedInputs/segFus/offset
 force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/clk 1 0, 0 {50 ps} -r 100
 force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/reset z1 0
-force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_a_low 00d 0
-force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_b_med 003 0
-force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_a_med 0053 0
-force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_b_high 00f 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_a_low 0 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_b_med 61d 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_a_med c38 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/offset_b_high ffe 0
 force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/section_low 8 0
-force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/section_med 2 0
-force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_a_low 3a 0
-force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_a_med 22 0
-force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_b_med 55 0
-force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_b_high 2d 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/section_med 1 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_a_low 54 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_a_med 6 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_b_med d 0
+force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/gain_b_high 39 0
 run
 force -freeze sim:/sensorFuser_with_SimulatedInputs/segFus/reset 10 0
 run
-run 10ns
-
-
-vsim work.sensorFuser
-add wave -position insertpoint sim:/sensorFuser/state_blue
-add wave -position insertpoint sim:/sensorFuser/val
-add wave -position insertpoint sim:/sensorFuser/offset
-add wave -position insertpoint sim:/sensorFuser/valMinusOffset
-add wave -position insertpoint sim:/sensorFuser/gain
-add wave -position insertpoint sim:/sensorFuser/*
-force -freeze sim:/sensorFuser/clk 1 0, 0 {50 ps} -r 100
-force -freeze sim:/sensorFuser/reset z1 0
-force -freeze sim:/sensorFuser/a 63d 0
-force -freeze sim:/sensorFuser/b 428 0
-force -freeze sim:/sensorFuser/section_low 4 0
-force -freeze sim:/sensorFuser/section_med 8 0
-force -freeze sim:/sensorFuser/offset_a_low 0 0
-force -freeze sim:/sensorFuser/offset_a_med 400 0
-force -freeze sim:/sensorFuser/offset_b_med fffffc00 0
-force -freeze sim:/sensorFuser/offset_b_high fffffe67 0
-force -freeze sim:/sensorFuser/gain_a_low 400 0
-force -freeze sim:/sensorFuser/gain_a_med a00 0
-force -freeze sim:/sensorFuser/gain_b_med d55 0
-force -freeze sim:/sensorFuser/gain_b_high 471 0
-run
-force -freeze sim:/sensorFuser/reset 10 0
-run
-force -freeze sim:/sensorFuser/a 300 0
-force -freeze sim:/sensorFuser/b fffffc00 0
-run
-force -freeze sim:/sensorFuser/a 533 0
-force -freeze sim:/sensorFuser/b fffffce7 0
-run
-force -freeze sim:/sensorFuser/a 733 0
-force -freeze sim:/sensorFuser/b ffffff4d 0
-run
-force -freeze sim:/sensorFuser/a 200 0
-force -freeze sim:/sensorFuser/b fffffc00 0
-run
-force -freeze sim:/sensorFuser/a 733 0
-force -freeze sim:/sensorFuser/b 1b3 0
-run
-run
-run
-run
-run
-
+run 2000ns
 
 
 */

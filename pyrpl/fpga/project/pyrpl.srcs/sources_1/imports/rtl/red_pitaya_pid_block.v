@@ -115,19 +115,36 @@ reg [ 32-1: 0] set_filter;   // filter setting
 reg signed [ 14-1:0] out_max;
 reg signed [ 14-1:0] out_min;
 
-reg signed [ 15-1: 0] error        ;
+reg signed [ 15-1: 0] error_unfiltered        ;
+wire signed [ 15-1: 0] error        ;
 reg setSetpointfromMemory;
 wire signed [ 14-1: 0] usedSetpoint;
 assign usedSetpoint = setSetpointfromMemory ? set_sp : setpoint_i;
 
 always @(posedge clk_i) begin
    if (rstn_i == 1'b0) begin
-      error <= 15'h0 ;
+      error_unfiltered <= 15'h0 ;
    end
    else begin
-         error <= $signed(dat_i) - $signed(usedSetpoint) ;
+         error_unfiltered <= $signed(dat_i) - $signed(usedSetpoint) ;
    end
 end
+
+//--
+// lp or hp filter
+red_pitaya_lpf_block#(
+    .SHIFTBITS		(4),//shift can be from 0 to 15 bits
+    .SIGNALBITS		(14), //bitwidth of signals
+    .MINBW			(10)  //minimum allowed filter bandwidth
+)lp_hp(
+    .clk_i		(clk_i),
+    .rstn_i		(rstn_i),
+    .shift		(set_filter[3:0]), 
+    .filter_on	(set_filter[7]),
+    .highpass	(set_filter[6]),
+    .signal_i	(error_unfiltered),
+    .signal_o	(error)
+);
 
 //---------------------------------------------------------------------------------
 //  Proportional part - 1 cycle delay

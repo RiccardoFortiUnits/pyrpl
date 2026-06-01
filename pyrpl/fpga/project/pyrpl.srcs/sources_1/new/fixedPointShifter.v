@@ -44,9 +44,16 @@ generate
 	end
 
 	if(saturateOutput && outputWholeSize < inputWholeSize)begin
-		wire isSaturated = 	((in[inputBitSize-1]) & ~(&in[inputBitSize-1 -1-:inputWholeSize-outputWholeSize])) |
+		if (isSigned) begin
+			wire isSaturated = 	((in[inputBitSize-1]) & ~(&in[inputBitSize-1 -1-:inputWholeSize-outputWholeSize])) |
 									((~in[inputBitSize-1]) & (|in[inputBitSize-1 -1-:inputWholeSize-outputWholeSize]));
-		assign out = isSaturated ? {in[inputBitSize-1], {(outputBitSize - 1){~in[inputBitSize-1]}}} : out_unsaturated;
+			assign out = isSaturated ? {in[inputBitSize-1], {(outputBitSize - 1){~in[inputBitSize-1]}}} : out_unsaturated;
+		end else begin
+			wire isSaturated = |in[inputBitSize -1-:inputWholeSize-outputWholeSize];
+			assign out = isSaturated ? {outputBitSize{1'b1}} : out_unsaturated;
+		end
+		
+		
 	end else begin
 		assign out = out_unsaturated;
 	end
@@ -59,7 +66,7 @@ module safeInverter #(
 )(
 	input [data_size -1:0]	in,
 	input 					invert,
-	output					out
+	output[data_size -1:0]	out
 );
 localparam MIN_VAL = (1 << (data_size - 1));
 localparam MAX_VAL = MIN_VAL - 1;
