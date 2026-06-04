@@ -16,6 +16,9 @@ import networkx as nx
 from ...graphCalculator import greedy_clique_partition
 import time
 import threading
+
+nOfSecondaryPeaks = 4
+
 class PeakBorderLine(QtWidgets.QGraphicsLineItem):
 	def __init__(self, parent, peakLine):
 		super().__init__(0.0, 0, 0.001, 0, parent = parent)
@@ -306,16 +309,25 @@ class peak_widget(ModuleWidget):
 		if self.isVisible() and not widget.editing():
 			widget.write_attribute_value_to_widget()
 		widget = self.setpoint
-		if not widget.editing():
-				writtenSetpoint = widget.attribute_value
-				if writtenSetpoint != widget._get_widget_value():
-					# print(writtenSetpoint, widget._get_widget_value())
-					self.center.attribute_value = writtenSetpoint
-					self.line.updateGeneric()
+# 		if not widget.editing():
+# 				writtenSetpoint = widget.attribute_value
+# 				if writtenSetpoint != widget._get_widget_value():
+# 					# print(writtenSetpoint, widget._get_widget_value())
+# 					self.center.attribute_value = writtenSetpoint
+# 					self.line.updateGeneric()
 
 
 class secondaryPitaya_widget(ModuleWidget):
-	pass
+	def init_gui(self):
+		super().init_gui()
+		if self.module.index == 0:
+			self.attribute_layout.removeWidget(self.attribute_widgets["input1"])
+			self.attribute_layout.removeWidget(self.attribute_widgets["acquisitionTrigger"])
+	def hidePeakTab(self, index = -1):
+		peakTabs : QtWidgets.QTabWidget = self.scanCavityWidget.peakTabs
+		isHidden = getattr(self.module, f"hideSecondaryPeak_{index}")
+		peakTabs.setTabVisible(2 + self.module.index * nOfSecondaryPeaks + index)
+
 
 	
 	
@@ -480,9 +492,14 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 
 		# Add the whole container (header + tabs) to the main layout
 		self.main_layout.addWidget(self.secondaryPitayas_container)
-
+		
+		widget = self.module.mainPitayaHandler._create_widget()
+		widget.scanCavityWidget = self
+		add_new_tab(self.secondaryPitayasTabs, widget, self.module.mainPitayaHandler.name)
+		
 		for secondaryPitaya in self.module.secondaryPitayas:
 			widget = secondaryPitaya._create_widget()
+			widget.scanCavityWidget = self
 			add_new_tab(self.secondaryPitayasTabs, widget, secondaryPitaya.name)
 
 

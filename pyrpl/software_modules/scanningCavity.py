@@ -32,10 +32,9 @@ from ..widgets.module_widgets.scanCavity_widget import ScanCavity_widget, peak_w
 nOfSecondaryPeaks = 4
 
 class SignalLauncherPeak(SignalLauncherAcquisitionModule):
-	'''combination of the signal launchers for acquisition and pid 
-	(to have the ival widget update automatically). It's the same 
-	script as the pid signal launcher, but the parent class is 
-	SignalLauncherAcquisitionModule instead of SignalLauncher'''
+	'''
+	signal launcher for the Peak module. It updates the displayed setpoint every second, since the setpoint can be changed from outside of pyrpl
+	'''
 	update_ival = QtCore.Signal()
 	# the widget decides at the other hand if it has to be done or not
 	# depending on the visibility
@@ -53,6 +52,13 @@ class SignalLauncherPeak(SignalLauncherAcquisitionModule):
 		"""
 		self.timer_ival.stop()
 		super(SignalLauncherPeak, self)._clear()
+
+	
+
+class SignalLaunchersecondaryPitaya(SignalLauncher):
+	'''signal launcher for the secondaryPitaya module. It handles hiding the peak tabs when the properties hideSecondaryPeak_x'''
+	hidePeakTab = QtCore.Signal(list)  # This signal is emitted when
+
 
 class peakValue(FloatProperty):
 	'''property to access a specific numeric property of a peak (min time, max time...).'''
@@ -614,18 +620,27 @@ class secondaryPitaya(Module):
 	'''submodule for the handling of a secondary peak, to set some parameters that involve all the peaks of that same redpitaya'''
 	_gui_attributes = [
 					"input1",
-					"acquisitionTrigger"
-					]
+					"acquisitionTrigger",
+					] + \
+					[f'hideSecondaryPeak_{i}' for i in range(nOfSecondaryPeaks)]
 	_setup_attributes = _gui_attributes
 	_widget_class = secondaryPitaya_widget
-	def __init__(self,redpitaya, scanningCavity):
+	_signal_launcher = SignalLaunchersecondaryPitaya
+	def __init__(self,redpitaya, scanningCavity, index = -1):#index 0 is the main pitaya
 		self.rp = redpitaya
 		super().__init__(scanningCavity, name=redpitaya.name)
 		self.addToSubmodules()
+		self.index = index
 		# self.controlPeak1 = peak(self, 2, scanningCavity, f"{self.rp.name}_controlled1")
 		# scanningCavity.usedPeaks += [self.controlPeak1]
 	input1 = DynamicInstanceProperty(Scope.input1, lambda secondaryPitaya : secondaryPitaya.rp.scope)
 	acquisitionTrigger = scopeTriggerSelector()
+	
+	for i in range(nOfSecondaryPeaks):
+		locals()[f'hideSecondaryPeak_{i}'] = ExpandableProperty(BoolProperty(False), 
+					lambda secondaryPitaya, instance, value, index = i : instance._emit_signal_by_name("hidePeakTab", index = index))
+	
+	
 
 class ScanningCavity(AcquisitionModule):
 
@@ -668,6 +683,7 @@ class ScanningCavity(AcquisitionModule):
 
 	def setMainPitaya(self, pitaya):
 		self.mainPitaya = pitaya
+		self.mainPitayaHandler = secondaryPitaya(pitaya, self, 0)
 		self.mainL = peak(pitaya, 0, self, "mainL")
 		self.mainR = peak(pitaya, 1, self, "mainR")
 		self.usedPeaks.append(self.mainL)
@@ -686,7 +702,8 @@ class ScanningCavity(AcquisitionModule):
 		if pitaya in self.usedPitayas:
 			raise Exception("pitaya already used")
 		self.usedPitayas.append(pitaya)
-		self.secondaryPitayas.append(secondaryPitaya(pitaya, self))
+		secPitaya = secondaryPitaya(pitaya, self, len(self.secondaryPitayas)+1)
+		self.secondaryPitayas.append(secPitaya)
 		for i in range(nOfSecondaryPeaks):
 			self.addSecondaryPeak(peak(pitaya, i + 2, self, f"{pitaya.name}_secondary{i}"))
 		#the peak detectors require the trigger to be "armed". Let's arm it
@@ -698,6 +715,7 @@ class ScanningCavity(AcquisitionModule):
 			raise Exception("peak already used")
 		self.usedPeaks.append(newPeak)
 		self.secondaryPeaks.append(newPeak)
+
 			
 	def removeSecondaryPeak(self, peakToRemove):
 		self.usedPeaks.remove(peakToRemove)
