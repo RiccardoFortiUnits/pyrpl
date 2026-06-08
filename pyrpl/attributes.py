@@ -633,7 +633,7 @@ class ArrayProperty(BaseProperty):
 				 len = 1, fixedLength = False,
 				 **kwargs):
 		self.len = len
-		self.fixedLength = False
+		self.fixedLength = fixedLength
 		BaseProperty.__init__(self, **kwargs)
 
 	def _create_widget(self, module, widget_name=None):

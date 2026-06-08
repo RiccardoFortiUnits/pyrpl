@@ -57,7 +57,7 @@ class SignalLauncherPeak(SignalLauncherAcquisitionModule):
 
 class SignalLaunchersecondaryPitaya(SignalLauncher):
 	'''signal launcher for the secondaryPitaya module. It handles hiding the peak tabs when the properties hideSecondaryPeak_x'''
-	hidePeakTab = QtCore.Signal(list)  # This signal is emitted when
+	hidePeakTab = QtCore.Signal()  # This signal is emitted when
 
 
 class peakValue(FloatProperty):
@@ -414,6 +414,23 @@ class extendedOutputSelectorProperty(SelectProperty):
 		elif value == "out2":
 			obj.pid.output_direct = "out2"
 		return super().set_value(obj, value)
+	
+class hidePeakProperty(BoolProperty):
+	'''property for the secondaryPitaya class, to completely disable a peak and hide it from the interface'''
+	def __init__(self, index, default=False, doc="", ignore_errors=False, call_setup=False, **kwargs):
+		super().__init__(default, doc, ignore_errors, call_setup, **kwargs)
+		self.index = index
+	def set_value(self, obj, val):
+		if val:
+			#obj is a secondaryPitaya
+			p = obj.peaks[self.index]
+			p.enabled = False
+			p.alwaysActive = False
+			p.locking = False
+		super().set_value(obj, val)
+		obj._emit_signal_by_name("hidePeakTab")
+
+
 class peak(Module):
 	'''submodule for the handling of a peak detection and lockin. it can be used for both the main peaks and secondary peaks. 
 	The peak is specified with the parent redPitaya and the peak index. Index 0 is for the left main peak, 1 for the right 
@@ -449,7 +466,9 @@ class peak(Module):
 	_widget_class = peak_widget
 
 	_signal_launcher = SignalLauncherPeak
-	def __init__(self, redpitaya, index, scanningCavity, name=None, onlyReset = False):
+	def __init__(self, redpitayaHandler, index, scanningCavity, name=None, onlyReset = False):
+		redpitaya = redpitayaHandler.rp
+		redpitayaHandler.addPeak(self, index)
 		super().__init__(redpitaya, name)
 		self.scanningCavity = scanningCavity
 		self.index = index
@@ -637,9 +656,14 @@ class secondaryPitaya(Module):
 	acquisitionTrigger = scopeTriggerSelector()
 	
 	for i in range(nOfSecondaryPeaks):
-		locals()[f'hideSecondaryPeak_{i}'] = ExpandableProperty(BoolProperty(False), 
-					lambda secondaryPitaya, instance, value, index = i : instance._emit_signal_by_name("hidePeakTab", index = index))
-	
+		locals()[f'hideSecondaryPeak_{i}'] = hidePeakProperty(i)
+	@property
+	def nOfSecondaryPeaks(self):
+		return nOfSecondaryPeaks if self.index > 0 else nOfSecondaryPeaks - 2
+	def addPeak(self, peak, index):
+		if not hasattr(self, "peaks"):
+			self.peaks = {}
+		self.peaks[index-2] = peak
 	
 
 class ScanningCavity(AcquisitionModule):
@@ -684,18 +708,18 @@ class ScanningCavity(AcquisitionModule):
 	def setMainPitaya(self, pitaya):
 		self.mainPitaya = pitaya
 		self.mainPitayaHandler = secondaryPitaya(pitaya, self, 0)
-		self.mainL = peak(pitaya, 0, self, "mainL")
-		self.mainR = peak(pitaya, 1, self, "mainR")
+		self.mainL = peak(self.mainPitayaHandler, 0, self, "mainL")
+		self.mainR = peak(self.mainPitayaHandler, 1, self, "mainR")
 		self.usedPeaks.append(self.mainL)
 		self.usedPeaks.append(self.mainR)
 		self.usedPitayas = [pitaya]
 		#we won't be able to use 2 secondary peaks on the first pitaya (not enough outputs), so let's just use one, 
 		# and let's keep the 2nd pid free for the mainR peak, which does not require a pid, but it can still be useful
-		for i in range(0, nOfSecondaryPeaks-2):
-			self.addSecondaryPeak(peak(pitaya, i + 2, self, f"{pitaya.name}_secondary{i}"))
+		for i in range(0, self.mainPitayaHandler.nOfSecondaryPeaks):
+			self.addSecondaryPeak(peak(self.mainPitayaHandler, i + 2, self, f"{pitaya.name}_secondary{i}"))
 		#let's define the unused peaks, just so that they won't annoy us 
-		peak(pitaya, nOfSecondaryPeaks , self, f"{pitaya.name}_secondary{nOfSecondaryPeaks - 2}", onlyReset= True)
-		peak(pitaya, nOfSecondaryPeaks + 1, self, f"{pitaya.name}_secondary{nOfSecondaryPeaks - 1}", onlyReset= True)
+		peak(self.mainPitayaHandler, nOfSecondaryPeaks , self, f"{pitaya.name}_secondary{nOfSecondaryPeaks - 2}", onlyReset= True)
+		peak(self.mainPitayaHandler, nOfSecondaryPeaks + 1, self, f"{pitaya.name}_secondary{nOfSecondaryPeaks - 1}", onlyReset= True)
 
 		self.mainPitaya.hk.input1 = "alltriggers"
 	def addPitaya(self, pitaya):
@@ -705,7 +729,7 @@ class ScanningCavity(AcquisitionModule):
 		secPitaya = secondaryPitaya(pitaya, self, len(self.secondaryPitayas)+1)
 		self.secondaryPitayas.append(secPitaya)
 		for i in range(nOfSecondaryPeaks):
-			self.addSecondaryPeak(peak(pitaya, i + 2, self, f"{pitaya.name}_secondary{i}"))
+			self.addSecondaryPeak(peak(secPitaya, i + 2, self, f"{pitaya.name}_secondary{i}"))
 		#the peak detectors require the trigger to be "armed". Let's arm it
 		pitaya.scope._start_trace_acquisition()
 		pitaya.hk.input1 = "alltriggers"

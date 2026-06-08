@@ -122,6 +122,12 @@ class PeakLine(QtWidgets.QGraphicsLineItem):
 		self.updateBarPositions()
 	def updateSetpoint(self):
 		self.peak.setpoint.attribute_value = (self.line().x1() + self.line().x2()) / 2
+	def setVisible(self, isVisible):
+		self.centerLine.setVisible(isVisible)
+		self.leftEdgeLine.setVisible(isVisible)
+		self.rightEdgeLine.setVisible(isVisible)
+		self.targetLine.setVisible(isVisible)
+		super().setVisible(isVisible)
 
 
 	@property
@@ -321,12 +327,23 @@ class secondaryPitaya_widget(ModuleWidget):
 	def init_gui(self):
 		super().init_gui()
 		if self.module.index == 0:
-			self.attribute_layout.removeWidget(self.attribute_widgets["input1"])
-			self.attribute_layout.removeWidget(self.attribute_widgets["acquisitionTrigger"])
-	def hidePeakTab(self, index = -1):
+			# self.attribute_layout.removeWidget(self.attribute_widgets["input1"])
+			# self.attribute_layout.removeWidget(self.attribute_widgets["acquisitionTrigger"])			
+			self.attribute_widgets["input1"].setVisible(False)
+			self.attribute_widgets["acquisitionTrigger"].setVisible(False)
+			self.attribute_widgets["hideSecondaryPeak_2"].setVisible(False)
+			self.attribute_widgets["hideSecondaryPeak_3"].setVisible(False)
+	def hidePeakTab(self):
 		peakTabs : QtWidgets.QTabWidget = self.scanCavityWidget.peakTabs
-		isHidden = getattr(self.module, f"hideSecondaryPeak_{index}")
-		peakTabs.setTabVisible(2 + self.module.index * nOfSecondaryPeaks + index)
+		peakList = self.scanCavityWidget.peakList
+		for i in range(self.module.nOfSecondaryPeaks):
+			isHidden = getattr(self.module, f"hideSecondaryPeak_{i}")
+			tabIndex = self.module.index * nOfSecondaryPeaks + i + (2 if self.module.index == 0 else 0)
+			print(f"tab {tabIndex} set to {isHidden}")
+			peakTabs.setTabVisible(tabIndex, not isHidden)
+			p : peak_widget = peakList[tabIndex]
+			p.line.setVisible(not isHidden)
+
 
 
 	
@@ -482,7 +499,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 			)
 		)
 		_h_layout.addWidget(self._secondary_toggle)
-		_h_layout.addWidget(QtWidgets.QLabel("Secondary Pitayas"))
+		_h_layout.addWidget(QtWidgets.QLabel("RedPitaya settings"))
 		_h_layout.addStretch(1)
 		header.setLayout(_h_layout)
 
@@ -500,6 +517,7 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		for secondaryPitaya in self.module.secondaryPitayas:
 			widget = secondaryPitaya._create_widget()
 			widget.scanCavityWidget = self
+			widget.hidePeakTab()
 			add_new_tab(self.secondaryPitayasTabs, widget, secondaryPitaya.name)
 
 
@@ -772,11 +790,12 @@ class ScanCavity_widget(AcquisitionModuleWidget):
 		sc = self.module
 		peaks = sc.usedPeaks
 		self.peakGroups, self.unusablePeaks = ScanCavity_widget.getGroupsOfNonOverlapping(peaks)
-		self.currentGroupIndex = np.random.randint(len(self.peakGroups))#let's randomize the first group, 
-				# so that if we have very fast updates of the peaks (example, while dragging a peak around), 
-				# we won't end up controlling only the first group
-		for p in peaks:
-			p.inCurrentPeakGroup = p in self.peakGroups[self.currentGroupIndex]
+		if len(self.peakGroups) != 0:
+			self.currentGroupIndex = np.random.randint(len(self.peakGroups))#let's randomize the first group, 
+					# so that if we have very fast updates of the peaks (example, while dragging a peak around), 
+					# we won't end up controlling only the first group
+			for p in peaks:
+				p.inCurrentPeakGroup = p in self.peakGroups[self.currentGroupIndex]
 		for i in range(1, len(self.curves)):
 			self.curves[i].setVisible(False)
 		for p in self.unusablePeaks:
