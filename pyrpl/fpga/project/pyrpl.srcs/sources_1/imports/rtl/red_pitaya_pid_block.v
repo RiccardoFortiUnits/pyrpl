@@ -134,7 +134,7 @@ end
 // lp or hp filter
 red_pitaya_lpf_block#(
     .SHIFTBITS		(4),//shift can be from 0 to 15 bits
-    .SIGNALBITS		(14), //bitwidth of signals
+    .SIGNALBITS		(15), //bitwidth of signals
     .MINBW			(10)  //minimum allowed filter bandwidth
 )lp_hp(
     .clk_i		(clk_i),

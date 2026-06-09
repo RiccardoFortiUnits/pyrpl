@@ -288,6 +288,7 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
     input [$clog2(maxPeriods+1) -1:0] nOfPeriodsInactive,
     input [$clog2(maxPeriods+1) -1:0] phase,//this value should be lower (in absolute 
                 //value) than half of nOfPeriodsActive, but it can be both positive and negative
+	input skipHalfPulses,
     output out1,
     output out2
 );
@@ -311,6 +312,9 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
 	//first pin: Half active period, inactive period, other half of active period
 	wire [(timingSize * 3) -1:0] pin1_loopTimings = {a_2p, i, a_2};
 	wire [(valueSize * 3) -1:0] pin1_loopValues = 4'b101;
+
+	wire [(timingSize * 3) -1:0] pin1_noHalfStart_loopTimings = {a, i_2, i_2p};
+	wire [(valueSize * 3) -1:0] pin1_noHalfStart_loopValues = 4'b100;
 	multiTimingCounter#(
 		.nOfTimings		(3),
 		.nofOutputs		(1),
@@ -319,8 +323,8 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
     	.clk					(clk),
     	.reset					(reset),
 		.trigger				(delayedTrigger),
-		.timings				(pin1_loopTimings),
-		.requestedOutputValues	(pin1_loopValues),
+		.timings				(skipHalfPulses ? pin1_noHalfStart_loopTimings : pin1_loopTimings),
+		.requestedOutputValues	(skipHalfPulses ? pin1_noHalfStart_loopValues : pin1_loopValues),
 		.defaultOutputValue		(0),
 		.outputs				(out1)
 	);
@@ -329,6 +333,9 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
 		//slightly the length of the 2 inactive periods	
 	wire [(timingSize * 3) -1:0] pin2_loopTimings = {i_2p - d, a, i_2 + d};
 	wire [(valueSize * 3) -1:0] pin2_loopValues = 4'b010;
+	
+	wire [(timingSize * 3) -1:0] pin2_noHalfStart_loopTimings = {i_2p + a_2 - d, a, i_2 - a_2p + d};
+	wire [(valueSize * 3) -1:0] pin2_noHalfStart_loopValues = 4'b010;
 	multiTimingCounter#(
 		.nOfTimings		(3),
 		.nofOutputs		(1),
@@ -337,8 +344,8 @@ module doubleFastSwitcher_HalfStart_doubleFreqTimers#(
     	.clk					(clk),
     	.reset					(reset),
 		.trigger				(delayedTrigger),
-		.timings				(pin2_loopTimings),
-		.requestedOutputValues	(pin2_loopValues),
+		.timings				(skipHalfPulses ? pin2_noHalfStart_loopTimings : pin2_loopTimings),
+		.requestedOutputValues	(skipHalfPulses ? pin2_noHalfStart_loopValues : pin2_loopValues),
 		.defaultOutputValue		(0),
 		.outputs				(out2)
 	);

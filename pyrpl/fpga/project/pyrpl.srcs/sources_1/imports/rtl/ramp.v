@@ -538,7 +538,6 @@ localparam delay_123 = delay_12 + delay_3;
 	delayer#(registerSize, delayCycles) delay_``inputName(clk, isRunning, reset, inputName, outputName);
 
 `define delayedWire_noAssignment(registerSize, inputName, outputName, delayCycles)	\
-	wire [registerSize -1:0] inputName;													\
 	wire [registerSize -1:0] outputName;												\
 	delayer#(registerSize, delayCycles) delay_``inputName(clk, isRunning, reset, inputName, outputName);
 
@@ -585,7 +584,7 @@ wire [coefficientSize+data_size+1 -1:0] exp_s_unshifted;
 wire [data_size+1 -1:0] exp_s;
 `delayedWire(1, isExponential, isExponential_forDenomitatorChoice, delay_2, isExponentials[currentRamp_cyan])
 wire [data_size+1 -1:0] s = isExponential ? exp_s : DV;
-`delayedWire($clog2(nOfRamps+1), currentRamp_cyan_copy, currentRamp_blue, delay_2, currentRamp_cyan)
+`delayedWire_noAssignment($clog2(nOfRamps+1), currentRamp_cyan, currentRamp_blue, delay_2)
 reg override_ns;
 reg [time_size+data_size+1 -1:0] newValueFor_ns;
 
@@ -598,6 +597,19 @@ reg [time_size+data_size+1 -1:0] ns;//will store n*s
 //purple lines
 wire [data_size+1 -1:0] mt;
 reg [data_size -1:0] V0;
+
+wire [data_size+1 -1:0] V0_plus_mt_uncropped = {V0[data_size-1],V0} + mt;
+wire [data_size -1:0] V0_plus_mt;
+fixedPointShifter#(
+	.inputBitSize	(data_size+1),
+	.inputFracSize	(data_size),
+	.outputBitSize	(data_size),
+	.outputFracSize	(data_size),
+	.isSigned		(1)
+)crop_V0_plus_mt(
+	.in				(V0_plus_mt_uncropped),
+	.out			(V0_plus_mt)
+);
 
 
 
@@ -664,16 +676,11 @@ fractionalDivider #(//dividers take 5 clock cycles to generate the output
 );
 
 reg restartCalculations;
-wire shouldStopSoon = endOfRamp & (isLastRamp | doesNextRampWaitForTrigger);
-// always @(posedge clk) begin
-// 	if (reset) begin
-// 		restartCalculations <= 0;
-// 	end else begin
-// 		if(restartCalculations)begin
-// 			restartCalculations <= 0;
-// 		end
-// 	end
-// end
+// wire shouldStopSoon = endOfRamp & (isLastRamp | doesNextRampWaitForTrigger);
+wire shouldStopSoon = (endOfRamp & doesNextRampWaitForTrigger) || n==0;//instead of checking endOfRamp,
+	//we delay it, because in case of the end of the sequence, we actually want to continue the ramp 
+	//for one more clock cycle, since we might need to set the idle value at the end of the ramp.
+
 
 enablersForDelayedProcedures#(
 	.delay 					(delay_123-1)
@@ -717,7 +724,7 @@ always @(posedge clk)begin
 			ns <= override_ns ? newValueFor_ns : ns + {{time_size{s[data_size+1-1]}},s};
 			case (selectWhichV0_blue)
 				swv0_noChange: V0 <= V0;
-				swv0_outputValue: V0 <= {V0[data_size-1], V0} + mt;
+				swv0_outputValue: V0 <= V0_plus_mt;
 				swv0_overrideValue: V0 <= overrideV0_blue; 
 				default: V0 <= 0;
 			endcase
@@ -886,7 +893,7 @@ force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_SectionLengths} 00
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/startValue} 0 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/usedRamps} 4 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/defaultValue} aa 0
-force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/idleConfig} 2 0
+force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/idleConfig} 0 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/doesNextRampWaitForTriggers} 0 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/isExponentials} f 0
 force -freeze {sim:/red_pitaya_dsp/genblk6/genblk1[5]/rmp/exp_directions} c 0

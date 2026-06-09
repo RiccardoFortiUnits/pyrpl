@@ -90,7 +90,7 @@ class voltageAndInitialBitShiftProperty(FloatProperty):
 					#let's check how many orders of magnitude will be done
 					try:
 						s = int(np.ceil(np.log2(np.e) * DT / tau))
-						obj.normalized_DV = val / (2**-(s+.25) * (np.exp(DT / tau) - 1))
+						obj.normalized_DV = val / (2**-(s+1) * (np.exp(DT / tau) - 1))
 						obj.initialExponentialShift = s
 					except:
 						pass

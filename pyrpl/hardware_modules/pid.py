@@ -244,6 +244,8 @@ class Pid(FilterModule):
 						 "useGenericTrigger",
 						 "setpoint_signal",
 						 "setpoint_source",
+						 "filterShift",
+						 "filterType",
 						 ]
 	_gui_attributes = _setup_attributes + ["ival"]
 
@@ -291,6 +293,10 @@ class Pid(FilterModule):
 	#                  doc="pid derivative unity-gain frequency [Hz]. Off
 	# when 0.")
 	
+	filterShift = IntRegister(0x120, 4, signed = False)
+	filterType = SelectRegister(0x120, startBit=6, options={"off" : 0b00, "low-pass" : 0b10, "high-pass" : 0b11})
+
+
 	pause_gains = SelectRegister(0x12C,
 								 options=sorted_dict(
 									   off=0,

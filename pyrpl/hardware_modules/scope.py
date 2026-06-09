@@ -211,7 +211,6 @@ class extendableDurationProperty(DurationProperty):
     With a set duration lower than the specified lowerEffectiveDuration, an acquisition with duration 
     lowerEffectiveDuration is done, and only a fraction of the acquired data is shown'''
     def __init__(self, options, lowerEffectiveDuration, **kwargs):
-        '''Warning! returns itself and an usedAcquisitionRatioProperty'''
         super().__init__(options, **kwargs)
         self.lowerEffectiveDuration = lowerEffectiveDuration
         self.usedAcquisitionRatio = usedAcquisitionRatioProperty()
@@ -234,7 +233,7 @@ class extendableDurationProperty(DurationProperty):
         if oldUsedAcquisitionRatio != newUsedAcquisitionRatio:
             # let's re-shape the peak ranges, if the usedAcquisitionRatio has changed. 
             # Since the peak indexes follow the decimation, they automatically scale 
-            # with the new duration. But if the go lower than the lower decimation, 
+            # with the new duration. But if we go lower than the lower decimation, 
             # we have to manually scale them
             regList = list(obj.peakRangeRegisters.values())
             if newUsedAcquisitionRatio < oldUsedAcquisitionRatio:#let's update the values in the opposite order. 
@@ -589,7 +588,7 @@ class Scope(HardwareModule, AcquisitionModule):
 
     duration = extendableDurationProperty(options=extraDurations + durations, lowerEffectiveDuration = durations[0])
     #in some cases we need the duration that is actually implemented
-    effectiveDuration : extendableDurationProperty = duration
+    effectiveDuration : DurationProperty = duration
     usedAcquisitionRatio = duration.usedAcquisitionRatio
     _write_pointer_current = IntRegister(0x18,
                                          doc="current write pointer "
@@ -679,7 +678,10 @@ class Scope(HardwareModule, AcquisitionModule):
             np.roll(self._rawdata_ch1, - (self._write_pointer_trigger +
                                           self._trigger_delay_register + 1)),
             dtype=float) / 2 ** 13
-        totalAcquisition = totalAcquisition[:self.data_length]
+        dl = self.data_length
+        if len(totalAcquisition) != dl:
+            startIndex = (len(totalAcquisition) - dl) // 2
+            totalAcquisition = totalAcquisition[startIndex:startIndex+self.data_length]
         return totalAcquisition
 
     @property
@@ -689,7 +691,10 @@ class Scope(HardwareModule, AcquisitionModule):
             np.roll(self._rawdata_ch2, - (self._write_pointer_trigger +
                                           self._trigger_delay_register + 1)),
             dtype=float) / 2 ** 13
-        totalAcquisition = totalAcquisition[:self.data_length]
+        dl = self.data_length
+        if len(totalAcquisition) != dl:
+            startIndex = (len(totalAcquisition) - dl) // 2
+            totalAcquisition = totalAcquisition[startIndex:startIndex+self.data_length]
         return totalAcquisition
 
     @property
